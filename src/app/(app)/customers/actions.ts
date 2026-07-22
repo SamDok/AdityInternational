@@ -5,16 +5,34 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+// Turns an empty/blank field into null before number coercion, so a blank box
+// stays empty instead of becoming 0.
+const optionalNumber = (max?: number) =>
+  z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? null : v),
+    z.coerce.number().min(0).max(max ?? Number.MAX_SAFE_INTEGER).nullable().optional(),
+  );
+
 const CustomerSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   company: z.string().trim().optional(),
+  contactPerson: z.string().trim().optional(),
   email: z.string().trim().optional(),
   phone: z.string().trim().optional(),
+  altPhone: z.string().trim().optional(),
   address: z.string().trim().optional(),
   country: z.string().trim().optional(),
+  shippingAddress: z.string().trim().optional(),
+  destinationPort: z.string().trim().optional(),
+  incoterms: z.string().trim().optional(),
   gstin: z.string().trim().optional(),
+  taxId: z.string().trim().optional(),
   currency: z.string().trim().min(1).default("INR"),
   paymentTerms: z.string().trim().optional(),
+  creditLimit: optionalNumber(),
+  defaultDiscount: optionalNumber(100),
+  category: z.string().trim().optional(),
+  salespersonId: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
 

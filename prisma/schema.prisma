@@ -17,12 +17,13 @@ datasource db {
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
-  name         String?
-  passwordHash String
-  role         String    @default("member") // "owner" or "member"
-  sessions     Session[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  name              String?
+  passwordHash      String
+  role              String     @default("member") // "owner" or "member"
+  sessions          Session[]
+  assignedCustomers Customer[] // customers this teammate is responsible for
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }
 
 // A logged-in session (one per browser sign-in).
@@ -37,18 +38,36 @@ model Session {
 
 // A customer / party we sell to.
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  company   String?
-  email     String?
-  phone     String?
-  address   String?
-  country   String?
-  gstin        String? // GST number (India)
-  currency     String  @default("INR") // default billing currency, e.g. USD, EUR, INR
-  paymentTerms String? // e.g. "Net 30", "Advance", "LC at sight"
-  notes        String?
-  orders       Order[]
+  id            String  @id @default(cuid())
+  name          String
+  company       String?
+  contactPerson String? // named person at the company
+  email         String?
+  phone         String?
+  altPhone      String? // alternate phone / WhatsApp
+  address       String? // billing address
+  country       String?
+
+  // Shipping / export
+  shippingAddress String? // ship-to / consignee, if different from billing
+  destinationPort String? // port of discharge, e.g. "New York"
+  incoterms       String? // EXW, FOB, CFR, CIF, DAP, DDP
+
+  // Tax & payment
+  gstin           String? // GST number (India)
+  taxId           String? // generic tax / VAT number (foreign buyers)
+  currency        String  @default("INR") // default billing currency
+  paymentTerms    String? // e.g. "Net 30", "Advance", "LC at sight"
+  creditLimit     Float? // max outstanding allowed, in the customer's currency
+  defaultDiscount Float? // standing discount %, 0-100
+
+  // Relationship
+  category      String? // Distributor, Retailer, Agent, Wholesaler, Direct
+  salesperson   User?   @relation(fields: [salespersonId], references: [id], onDelete: SetNull)
+  salespersonId String?
+
+  notes     String?
+  orders    Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -26,6 +26,7 @@ export default async function CustomerDetailPage({
   const customer = await prisma.customer.findUnique({
     where: { id },
     include: {
+      salesperson: true,
       orders: { orderBy: { orderDate: "desc" }, take: 20, include: { items: true } },
     },
   });
@@ -47,13 +48,23 @@ export default async function CustomerDetailPage({
 
       <div className="space-y-4 p-4">
         <section className="card divide-y divide-gray-50">
+          <Row label="Contact person" value={customer.contactPerson} />
           <Row label="Phone" value={customer.phone} />
+          <Row label="Alt phone" value={customer.altPhone} />
           <Row label="Email" value={customer.email} />
-          <Row label="Address" value={customer.address} />
+          <Row label="Category" value={customer.category} />
+          <Row label="Salesperson" value={customer.salesperson ? customer.salesperson.name || customer.salesperson.email : null} />
+          <Row label="Billing address" value={customer.address} />
           <Row label="Country" value={customer.country} />
+          <Row label="Shipping address" value={customer.shippingAddress} />
+          <Row label="Destination port" value={customer.destinationPort} />
+          <Row label="Incoterms" value={customer.incoterms} />
           <Row label="Currency" value={customer.currency} />
           <Row label="Payment terms" value={customer.paymentTerms} />
+          <Row label="Credit limit" value={customer.creditLimit != null ? formatMoney(customer.creditLimit, customer.currency) : null} />
+          <Row label="Default discount" value={customer.defaultDiscount != null ? `${customer.defaultDiscount}%` : null} />
           <Row label="GST number" value={customer.gstin} />
+          <Row label="Tax ID / VAT" value={customer.taxId} />
           <Row label="Notes" value={customer.notes} />
         </section>
 

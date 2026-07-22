@@ -13,7 +13,10 @@ export default async function EditCustomerPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const customer = await prisma.customer.findUnique({ where: { id } });
+  const [customer, teammates] = await Promise.all([
+    prisma.customer.findUnique({ where: { id } }),
+    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
+  ]);
   if (!customer) notFound();
 
   const update = updateCustomer.bind(null, id);
@@ -22,7 +25,7 @@ export default async function EditCustomerPage({
   return (
     <div>
       <PageHeader title="Edit customer" backHref={`/customers/${id}`} />
-      <CustomerForm initial={customer} action={update} submitLabel="Save changes" />
+      <CustomerForm initial={customer} teammates={teammates} action={update} submitLabel="Save changes" />
       <div className="p-4">
         <DeleteButton action={remove} label="Delete customer" confirmMessage={`Delete ${customer.name}? This can't be undone.`} />
       </div>
