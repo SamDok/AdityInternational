@@ -4,6 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { isBareDialCode } from "@/lib/dialCodes";
+
+// A phone that is blank or only an auto-filled dial code becomes empty.
+const phoneField = z.preprocess((v) => {
+  const s = String(v ?? "").trim();
+  return s === "" || isBareDialCode(s) ? undefined : s;
+}, z.string().optional());
 
 // Turns an empty/blank field into null before number coercion, so a blank box
 // stays empty instead of becoming 0.
@@ -20,8 +27,8 @@ const CustomerSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.string().trim().email("Please enter a valid email address").optional(),
   ),
-  phone: z.string().trim().optional(),
-  altPhone: z.string().trim().optional(),
+  phone: phoneField,
+  altPhone: phoneField,
   address: z.string().trim().optional(),
   country: z.string().trim().optional(),
   shippingAddress: z.string().trim().optional(),

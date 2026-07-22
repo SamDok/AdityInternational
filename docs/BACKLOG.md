@@ -20,24 +20,6 @@ Priority key: 🔴 essential soon · 🟡 strong improvement · 🟢 nice-to-hav
 
 ## Customers
 
-### 🟡 Phone country codes (make international numbers easy)
-**Why:** This is an export business — most numbers are international. Without a
-country code, WhatsApp links (`wa.me`) are unreliable and numbers are ambiguous.
-**Easy logic (no extra typing for the user):**
-- Add `src/lib/dialCodes.ts` — a map of country name → dial code
-  (e.g. `{ "Germany": "+49", "United States": "+1", "India": "+91", ... }`),
-  keyed to the same country names already in `src/lib/countries.ts`.
-- In `src/app/(app)/customers/CustomerForm.tsx`, the country is already tracked
-  in state (`country`). When it changes, if **Phone** (or **Alt phone**) is
-  empty, prefill it with the dial code + a space (e.g. `"+49 "`). Never overwrite
-  a number the user already started — only prefill blanks.
-- Result: pick "Germany" → phone shows `+49 ` → user types the local part.
-- Bonus: this makes the existing `wa.me/<digits>` link on the detail page
-  (`src/app/(app)/customers/[id]/page.tsx`) work correctly worldwide.
-**Optional upgrade:** a small dial-code `<select>` glued to the left of the phone
-input for manual override, defaulting from the country.
-**Effort:** small. No schema change (phone stays a single string field).
-
 ### 🔴 Export customers to CSV/Excel
 **Why:** We can import but not export — you should be able to get your own data
 out (backups, reporting, sharing). Avoids lock-in.
@@ -49,16 +31,6 @@ clause so "export what I'm looking at" works.
 trigger a download via a Blob (same technique as the template download in
 `src/app/(app)/customers/import/ImportClient.tsx`).
 **Effort:** small.
-
-### 🟡 List: sorting + "last order" recency
-**Why:** Right now the list only sorts A–Z. Sorting by most recent, most orders,
-or credit exposure — and showing each customer's **last order date** — makes it
-easy to spot your best and your dormant customers.
-**Where:** `src/app/(app)/customers/page.tsx` (add a `sort` search param to the
-`orderBy`), `src/app/(app)/customers/CustomerFilters.tsx` (a sort dropdown).
-For last-order date, include `orders: { orderBy: { orderDate: "desc" }, take: 1 }`
-in the query and show it in the row.
-**Effort:** small–medium.
 
 ### 🔴 Pagination / lazy loading (before ~500 customers)
 **Why:** The list currently loads *every* customer at once. Fine for now, slow

@@ -9,11 +9,19 @@ type Props = {
   country: string;
   category: string;
   salesperson: string;
+  sort: string;
   showArchived: boolean;
   countries: string[];
   categories: string[];
   salespeople: { id: string; label: string }[];
 };
+
+const SORT_OPTIONS = [
+  { value: "name", label: "Name (A–Z)" },
+  { value: "recent", label: "Recently added" },
+  { value: "orders", label: "Most orders" },
+  { value: "lastorder", label: "Last order" },
+];
 
 export default function CustomerFilters(props: Props) {
   const router = useRouter();
@@ -29,6 +37,7 @@ export default function CustomerFilters(props: Props) {
       country: props.country,
       category: props.category,
       salesperson: props.salesperson,
+      sort: props.sort === "name" ? "" : props.sort,
       archived: props.showArchived ? "1" : "",
       ...overrides,
     };
@@ -77,6 +86,9 @@ export default function CustomerFilters(props: Props) {
         <select value={props.salesperson} onChange={(e) => apply({ salesperson: e.target.value })} className={selectClass}>
           <option value="">All salespeople</option>
           {props.salespeople.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+        <select value={props.sort} onChange={(e) => apply({ sort: e.target.value === "name" ? "" : e.target.value })} className={selectClass}>
+          {SORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>Sort: {s.label}</option>)}
         </select>
         <label className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 ring-1 ring-inset ring-gray-200">
           <input

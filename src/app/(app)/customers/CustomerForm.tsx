@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CURRENCIES } from "@/lib/format";
 import { COUNTRIES } from "@/lib/countries";
 import { portsForCountry } from "@/lib/ports";
+import { DIAL_CODES } from "@/lib/dialCodes";
 
 type CustomerValues = {
   name?: string | null;
@@ -50,9 +51,21 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [country, setCountry] = useState(initial?.country ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [altPhone, setAltPhone] = useState(initial?.altPhone ?? "");
   const router = useRouter();
 
   const portSuggestions = portsForCountry(country);
+
+  // Picking a country prefills empty phone fields with its dial code, so the
+  // user only types the local number (and WhatsApp links work worldwide).
+  function onCountryChange(value: string) {
+    setCountry(value);
+    const code = DIAL_CODES[value];
+    if (!code) return;
+    setPhone((p) => (p.trim() === "" ? `${code} ` : p));
+    setAltPhone((p) => (p.trim() === "" ? `${code} ` : p));
+  }
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -86,12 +99,12 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="field-label" htmlFor="phone">Phone</label>
-            <input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""}
+            <input id="phone" name="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
               className="field-input" placeholder="Phone" />
           </div>
           <div>
             <label className="field-label" htmlFor="altPhone">Alt phone / WhatsApp</label>
-            <input id="altPhone" name="altPhone" type="tel" defaultValue={initial?.altPhone ?? ""}
+            <input id="altPhone" name="altPhone" type="tel" value={altPhone} onChange={(e) => setAltPhone(e.target.value)}
               className="field-input" placeholder="Alternate number" />
           </div>
         </div>
@@ -137,7 +150,7 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
         <div>
           <label className="field-label" htmlFor="country">Country</label>
           <input id="country" name="country" list="country-options"
-            value={country} onChange={(e) => setCountry(e.target.value)}
+            value={country} onChange={(e) => onCountryChange(e.target.value)}
             className="field-input" placeholder="Start typing a country…" autoComplete="off" />
           <datalist id="country-options">
             {COUNTRIES.map((c) => <option key={c} value={c} />)}

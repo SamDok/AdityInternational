@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import CustomerFilters from "./CustomerFilters";
+import { formatDate } from "@/lib/format";
 import { UsersIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function CustomersPage({
   const country = sp.country ?? "";
   const category = sp.category ?? "";
   const salesperson = sp.salesperson ?? "";
+  const sort = sp.sort ?? "name";
   const showArchived = sp.archived === "1";
 
   const where: Prisma.CustomerWhereInput = {
@@ -37,15 +39,35 @@ export default async function CustomersPage({
       : {}),
   };
 
-  const [customers, allForOptions, users] = await Promise.all([
+  const orderBy: Prisma.CustomerOrderByWithRelationInput =
+    sort === "recent"
+      ? { createdAt: "desc" }
+      : sort === "orders"
+        ? { orders: { _count: "desc" } }
+        : { name: "asc" }; // "name" and "lastorder" fetch by name, then re-sort if needed
+
+  const [rawCustomers, allForOptions, users] = await Promise.all([
     prisma.customer.findMany({
       where,
-      orderBy: { name: "asc" },
-      include: { _count: { select: { orders: true } } },
+      orderBy,
+      include: {
+        _count: { select: { orders: true } },
+        orders: { orderBy: { orderDate: "desc" }, take: 1, select: { orderDate: true } },
+      },
     }),
     prisma.customer.findMany({ select: { country: true, category: true } }),
     prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
   ]);
+
+  // "Last order" sorts by each customer's most recent order date (no-orders last).
+  const customers =
+    sort === "lastorder"
+      ? [...rawCustomers].sort((a, b) => {
+          const da = a.orders[0]?.orderDate?.getTime() ?? 0;
+          const db = b.orders[0]?.orderDate?.getTime() ?? 0;
+          return db - da;
+        })
+      : rawCustomers;
 
   const totalCustomers = allForOptions.length;
   const countries = [...new Set(allForOptions.map((c) => c.country).filter(Boolean))].sort() as string[];
@@ -85,6 +107,7 @@ export default async function CustomersPage({
             country={country}
             category={category}
             salesperson={salesperson}
+            sort={sort}
             showArchived={showArchived}
             countries={countries}
             categories={categories}
@@ -118,6 +141,7 @@ export default async function CustomersPage({
                       <p className="truncate text-sm text-gray-500">
                         {[c.code, c.contactPerson || c.country || c.phone].filter(Boolean).join(" · ") || "—"}
                         {c._count.orders > 0 && ` · ${c._count.orders} order${c._count.orders > 1 ? "s" : ""}`}
+                        {c.orders[0] && ` · last ${formatDate(c.orders[0].orderDate)}`}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
