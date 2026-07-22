@@ -1,0 +1,17 @@
+{
+  "name": "Aditya International ERP",
+  "short_name": "Aditya ERP",
+  "description": "Run your business — customers, products, and orders — from any device.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#3563e9",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

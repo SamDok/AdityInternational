@@ -1,0 +1,76 @@
+// Aditya International ERP — data model
+// SQLite for local dev. For production, switch `provider` to "postgresql"
+// and set DATABASE_URL to your hosted Postgres connection string.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A customer / party we sell to.
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  address   String?
+  country   String?
+  gstin     String?  // GST number (India)
+  currency  String   @default("INR") // default billing currency, e.g. USD, EUR, INR
+  notes     String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A product / stock item we sell (e.g. a fabric, measured in metres).
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  sku         String?     // internal code
+  description String?
+  unit        String      @default("mtr") // mtr, pcs, kg, etc.
+  salePrice   Float       @default(0)
+  currency    String      @default("INR")
+  stockQty    Float       @default(0) // quantity on hand
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// A sales order placed by a customer.
+// `status` is one of: DRAFT, CONFIRMED, IN_PRODUCTION, SHIPPED, COMPLETED, CANCELLED
+// (stored as text because SQLite has no native enum; validated in app code).
+model Order {
+  id         String      @id @default(cuid())
+  number     Int         @unique // human-facing order no., assigned in app code
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  customerId String
+  status     String      @default("DRAFT")
+  currency   String      @default("INR")
+  orderDate  DateTime    @default(now())
+  dueDate    DateTime?
+  notes      String?
+  items      OrderItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+// A single line on a sales order.
+model OrderItem {
+  id          String   @id @default(cuid())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   String
+  description String?  // e.g. colour / spec for this line
+  quantity    Float    @default(0)
+  unit        String   @default("mtr")
+  rate        Float    @default(0) // price per unit in the order currency
+  createdAt   DateTime @default(now())
+}
