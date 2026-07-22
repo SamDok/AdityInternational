@@ -36,9 +36,8 @@ That's the database done. You never have to touch it again.
    - **Name:** `DATABASE_URL`
    - **Value:** paste the Neon connection string from Part 1
    - Click **Add**.
-5. **Branch:** if Vercel asks which branch to deploy, choose
-   **`claude/business-erp-system-s214ms`** (that's where the app is).
-   *(Or, tell me and I'll merge it into `main` first so this step is automatic.)*
+5. Leave everything else on its defaults (the app is on your `main` branch,
+   which Vercel deploys automatically — nothing to change).
 6. Click **Deploy**. Wait ~2 minutes while it builds. ✅
 
 When it finishes, Vercel shows a link like `https://adity-international.vercel.app`.
