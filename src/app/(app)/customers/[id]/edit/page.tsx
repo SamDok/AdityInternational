@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import CustomerForm from "../../CustomerForm";
 import { updateCustomer, deleteCustomer } from "../../actions";
 import DeleteButton from "@/components/DeleteButton";
+import ArchiveButton from "../../ArchiveButton";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,8 @@ export default async function EditCustomerPage({
     <div>
       <PageHeader title="Edit customer" backHref={`/customers/${id}`} />
       <CustomerForm initial={customer} teammates={teammates} action={update} submitLabel="Save changes" />
-      <div className="p-4">
+      <div className="space-y-2 p-4">
+        <ArchiveButton id={customer.id} archived={customer.archived} />
         <DeleteButton action={remove} label="Delete customer" confirmMessage={`Delete ${customer.name}? This can't be undone.`} />
       </div>
     </div>

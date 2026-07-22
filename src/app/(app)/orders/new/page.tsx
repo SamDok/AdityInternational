@@ -5,16 +5,31 @@ import { createOrder } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewOrderPage() {
+export default async function NewOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customerId?: string }>;
+}) {
+  const { customerId } = await searchParams;
   const [customers, products] = await Promise.all([
-    prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, currency: true } }),
+    prisma.customer.findMany({
+      where: { archived: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, currency: true },
+    }),
     prisma.product.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, unit: true, salePrice: true } }),
   ]);
 
   return (
     <div>
       <PageHeader title="New order" backHref="/orders" />
-      <OrderForm customers={customers} products={products} action={createOrder} submitLabel="Save order" />
+      <OrderForm
+        customers={customers}
+        products={products}
+        defaultCustomerId={customerId}
+        action={createOrder}
+        submitLabel="Save order"
+      />
     </div>
   );
 }

@@ -33,6 +33,7 @@ type Props = {
   customers: CustomerOpt[];
   products: ProductOpt[];
   initial?: InitialOrder;
+  defaultCustomerId?: string;
   action: (input: OrderInput) => Promise<{ error?: string } | void>;
   submitLabel: string;
 };
@@ -48,13 +49,16 @@ function emptyLine(): Line {
   return { key: newKey(), productId: "", description: "", quantity: "", unit: "mtr", rate: "" };
 }
 
-export default function OrderForm({ customers, products, initial, action, submitLabel }: Props) {
+export default function OrderForm({ customers, products, initial, defaultCustomerId, action, submitLabel }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
-  const [currency, setCurrency] = useState(initial?.currency ?? "INR");
+  const startCustomerId = initial?.customerId ?? defaultCustomerId ?? "";
+  const [customerId, setCustomerId] = useState(startCustomerId);
+  const [currency, setCurrency] = useState(
+    initial?.currency ?? customers.find((c) => c.id === startCustomerId)?.currency ?? "INR",
+  );
   const [status, setStatus] = useState<string>(initial?.status ?? "DRAFT");
   const [orderDate, setOrderDate] = useState(initial?.orderDate?.slice(0, 10) ?? todayStr());
   const [dueDate, setDueDate] = useState(initial?.dueDate?.slice(0, 10) ?? "");

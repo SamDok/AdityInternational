@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { formatMoney, formatDate, STATUS_LABELS, STATUS_COLORS, type OrderStatus } from "@/lib/format";
-import { ChevronRightIcon } from "@/components/Icons";
+import { ChevronRightIcon, PlusIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +33,14 @@ export default async function CustomerDetailPage({
 
   if (!customer) notFound();
 
+  const subtitleParts = [customer.code, customer.contactPerson].filter(Boolean);
+  const waDigits = (customer.altPhone || customer.phone || "").replace(/[^\d]/g, "");
+
   return (
     <div>
       <PageHeader
         title={customer.name}
-        subtitle={customer.contactPerson ?? undefined}
+        subtitle={subtitleParts.length ? subtitleParts.join(" · ") : undefined}
         backHref="/customers"
         action={
           <Link href={`/customers/${customer.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
@@ -47,6 +50,28 @@ export default async function CustomerDetailPage({
       />
 
       <div className="space-y-4 p-4">
+        {customer.archived && (
+          <div className="rounded-xl bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+            This customer is archived. Unarchive from Edit to use them again.
+          </div>
+        )}
+
+        {/* Quick actions */}
+        <div className="flex flex-wrap gap-2">
+          {customer.phone && (
+            <a href={`tel:${customer.phone}`} className="btn-secondary flex-1 !py-2 text-sm">Call</a>
+          )}
+          {waDigits && (
+            <a href={`https://wa.me/${waDigits}`} target="_blank" rel="noopener noreferrer" className="btn-secondary flex-1 !py-2 text-sm">WhatsApp</a>
+          )}
+          {customer.email && (
+            <a href={`mailto:${customer.email}`} className="btn-secondary flex-1 !py-2 text-sm">Email</a>
+          )}
+        </div>
+        <Link href={`/orders/new?customerId=${customer.id}`} className="btn-primary w-full">
+          <PlusIcon className="h-5 w-5" /> New order for this customer
+        </Link>
+
         <section className="card divide-y divide-gray-50">
           <Row label="Contact person" value={customer.contactPerson} />
           <Row label="Phone" value={customer.phone} />

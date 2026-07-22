@@ -39,6 +39,8 @@ model Session {
 // A customer / party we sell to.
 model Customer {
   id            String  @id @default(cuid())
+  code          String? @unique // human reference, e.g. "CUST-001" (auto-assigned)
+  archived      Boolean @default(false) // hidden from the main list when true
   name          String
   company       String?
   contactPerson String? // named person at the company
