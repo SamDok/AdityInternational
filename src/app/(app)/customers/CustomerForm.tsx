@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CURRENCIES } from "@/lib/format";
+import { COUNTRIES } from "@/lib/countries";
+import { portsForCountry } from "@/lib/ports";
 
 type CustomerValues = {
   name?: string | null;
@@ -47,7 +49,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function CustomerForm({ initial, teammates, action, submitLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [country, setCountry] = useState(initial?.country ?? "");
   const router = useRouter();
+
+  const portSuggestions = portsForCountry(country);
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -131,8 +136,12 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
         </div>
         <div>
           <label className="field-label" htmlFor="country">Country</label>
-          <input id="country" name="country" defaultValue={initial?.country ?? ""}
-            className="field-input" placeholder="Country" />
+          <input id="country" name="country" list="country-options"
+            value={country} onChange={(e) => setCountry(e.target.value)}
+            className="field-input" placeholder="Start typing a country…" autoComplete="off" />
+          <datalist id="country-options">
+            {COUNTRIES.map((c) => <option key={c} value={c} />)}
+          </datalist>
         </div>
         <div>
           <label className="field-label" htmlFor="shippingAddress">Shipping / consignee address</label>
@@ -142,8 +151,12 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="field-label" htmlFor="destinationPort">Destination port</label>
-            <input id="destinationPort" name="destinationPort" defaultValue={initial?.destinationPort ?? ""}
-              className="field-input" placeholder="e.g. New York" />
+            <input id="destinationPort" name="destinationPort" list="port-options"
+              defaultValue={initial?.destinationPort ?? ""}
+              className="field-input" placeholder={country ? "Pick or type a port" : "e.g. New York"} autoComplete="off" />
+            <datalist id="port-options">
+              {portSuggestions.map((p) => <option key={p} value={p} />)}
+            </datalist>
           </div>
           <div>
             <label className="field-label" htmlFor="incoterms">Incoterms</label>
