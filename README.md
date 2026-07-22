@@ -53,22 +53,28 @@ src/
   lib/               # prisma client + formatting helpers
 ```
 
-## What works today (Phase 1)
+## What works today
 
+- **Login** — individual accounts (email + password). The first account created is
+  the owner; the owner adds teammates from Settings. Every page is private.
 - **Home dashboard** — counts and recent orders at a glance
 - **Customers** — add, view, edit, delete; per-customer currency and order history
 - **Products** — add, view, edit, delete; price, unit, and stock on hand
-- **Orders** — browse orders and line items (creation lands in Phase 2)
+- **Orders** — create and edit with product lines, live totals, multi-currency,
+  and a one-tap status flow (Draft → Confirmed → In production → Shipped → Completed)
+- **Settings** — change your password, add/remove teammates (owner only)
 - **Installable** on phones (PWA) and fully responsive
 
 ## Roadmap
 
 1. ✅ Foundation + Customers + Products
-2. Sales order entry (add lines, pick products, live totals, multi-currency)
-3. Inventory movements & per-customer price lists
-4. Invoicing & payment tracking (receivables)
-5. Dashboard & reports (sales by month, top customers, stock alerts)
-6. Optional: accounting export / sync (e.g. to Tally) if needed later
+2. ✅ Sales order entry (add lines, pick products, live totals, multi-currency)
+3. ✅ Login & individual accounts (owner + teammates)
+4. Deploy so it's live on every device (hosted database + hosting)
+5. Inventory movements & per-customer price lists
+6. Invoicing & payment tracking (receivables)
+7. Dashboard & reports (sales by month, top customers, stock alerts)
+8. Optional: accounting export / sync (e.g. to Tally) if needed later
 
 ## Deploying (so it's live for everyone)
 

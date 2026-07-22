@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { UsersIcon, BoxIcon, CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
+import { getCurrentUser } from "@/lib/auth";
+import { UsersIcon, BoxIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon } from "@/components/Icons";
 import { formatMoney, formatDate, STATUS_LABELS, STATUS_COLORS, type OrderStatus } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+function firstName(user: { name: string | null; email: string } | null): string {
+  if (!user) return "";
+  if (user.name) return user.name.split(" ")[0];
+  return user.email.split("@")[0];
+}
+
 export default async function HomePage() {
+  const user = await getCurrentUser();
   const [customerCount, productCount, orders] = await Promise.all([
     prisma.customer.count(),
     prisma.product.count(),
@@ -22,9 +30,16 @@ export default async function HomePage() {
 
   return (
     <div className="p-4">
-      <header className="mb-6 pt-4">
-        <p className="text-sm font-medium text-gray-500">Welcome to</p>
-        <h1 className="text-2xl font-bold text-gray-900">Aditya International</h1>
+      <header className="mb-6 flex items-start justify-between pt-4">
+        <div>
+          <p className="text-sm font-medium text-gray-500">
+            {firstName(user) ? `Hi ${firstName(user)}, welcome to` : "Welcome to"}
+          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Aditya International</h1>
+        </div>
+        <Link href="/settings" aria-label="Settings" className="-mr-1 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <GearIcon className="h-6 w-6" />
+        </Link>
       </header>
 
       {/* Stat tiles */}

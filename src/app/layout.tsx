@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import BottomNav from "@/components/BottomNav";
 
 export const metadata: Metadata = {
   title: "Aditya International ERP",
@@ -26,10 +25,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>
-        <div className="mx-auto min-h-screen max-w-2xl pb-20">{children}</div>
-        <BottomNav />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
