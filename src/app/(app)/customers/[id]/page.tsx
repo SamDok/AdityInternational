@@ -52,6 +52,7 @@ export default async function CustomerDetailPage({
           <Row label="Address" value={customer.address} />
           <Row label="Country" value={customer.country} />
           <Row label="Currency" value={customer.currency} />
+          <Row label="Payment terms" value={customer.paymentTerms} />
           <Row label="GST number" value={customer.gstin} />
           <Row label="Notes" value={customer.notes} />
         </section>

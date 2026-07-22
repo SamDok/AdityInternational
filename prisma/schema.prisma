@@ -44,10 +44,11 @@ model Customer {
   phone     String?
   address   String?
   country   String?
-  gstin     String?  // GST number (India)
-  currency  String   @default("INR") // default billing currency, e.g. USD, EUR, INR
-  notes     String?
-  orders    Order[]
+  gstin        String? // GST number (India)
+  currency     String  @default("INR") // default billing currency, e.g. USD, EUR, INR
+  paymentTerms String? // e.g. "Net 30", "Advance", "LC at sight"
+  notes        String?
+  orders       Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

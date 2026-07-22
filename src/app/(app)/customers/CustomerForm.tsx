@@ -13,6 +13,7 @@ type CustomerValues = {
   country?: string | null;
   gstin?: string | null;
   currency?: string | null;
+  paymentTerms?: string | null;
   notes?: string | null;
 };
 
@@ -93,6 +94,24 @@ export default function CustomerForm({ initial, action, submitLabel }: Props) {
         <label className="field-label" htmlFor="gstin">GST number</label>
         <input id="gstin" name="gstin" defaultValue={initial?.gstin ?? ""}
           className="field-input" placeholder="GSTIN (optional)" />
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="paymentTerms">Payment terms</label>
+        <input id="paymentTerms" name="paymentTerms" list="payment-terms-options"
+          defaultValue={initial?.paymentTerms ?? ""}
+          className="field-input" placeholder="e.g. Net 30" />
+        <datalist id="payment-terms-options">
+          <option value="Advance" />
+          <option value="On delivery" />
+          <option value="Net 15" />
+          <option value="Net 30" />
+          <option value="Net 45" />
+          <option value="Net 60" />
+          <option value="Net 90" />
+          <option value="LC at sight" />
+          <option value="50% advance, 50% on delivery" />
+        </datalist>
       </div>
 
       <div>

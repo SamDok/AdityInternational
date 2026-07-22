@@ -14,6 +14,7 @@ const CustomerSchema = z.object({
   country: z.string().trim().optional(),
   gstin: z.string().trim().optional(),
   currency: z.string().trim().min(1).default("INR"),
+  paymentTerms: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
 
