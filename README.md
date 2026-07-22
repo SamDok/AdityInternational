@@ -65,6 +65,11 @@ src/
 - **Settings** — change your password, add/remove teammates (owner only)
 - **Installable** on phones (PWA) and fully responsive
 
+## Backlog
+
+Ideas we've discussed but deferred — each with where and how to build it — live
+in [`docs/BACKLOG.md`](docs/BACKLOG.md).
+
 ## Roadmap
 
 1. ✅ Foundation + Customers + Products
