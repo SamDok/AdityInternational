@@ -46,7 +46,7 @@ export default async function CustomersPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-gray-900">{c.name}</p>
                   <p className="truncate text-sm text-gray-500">
-                    {c.company || c.country || c.phone || "—"}
+                    {c.contactPerson || c.country || c.phone || "—"}
                     {c._count.orders > 0 && ` · ${c._count.orders} order${c._count.orders > 1 ? "s" : ""}`}
                   </p>
                 </div>

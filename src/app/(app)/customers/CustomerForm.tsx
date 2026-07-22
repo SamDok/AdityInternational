@@ -6,7 +6,6 @@ import { CURRENCIES } from "@/lib/format";
 
 type CustomerValues = {
   name?: string | null;
-  company?: string | null;
   contactPerson?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -70,14 +69,9 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
 
       <Section title="Basics">
         <div>
-          <label className="field-label" htmlFor="name">Name *</label>
+          <label className="field-label" htmlFor="name">Company name *</label>
           <input id="name" name="name" required defaultValue={initial?.name ?? ""}
             className="field-input" placeholder="e.g. Classic Textile" autoFocus />
-        </div>
-        <div>
-          <label className="field-label" htmlFor="company">Company</label>
-          <input id="company" name="company" defaultValue={initial?.company ?? ""}
-            className="field-input" placeholder="Company name (optional)" />
         </div>
         <div>
           <label className="field-label" htmlFor="contactPerson">Contact person</label>

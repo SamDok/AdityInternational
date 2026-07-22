@@ -15,7 +15,6 @@ const optionalNumber = (max?: number) =>
 
 const CustomerSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
-  company: z.string().trim().optional(),
   contactPerson: z.string().trim().optional(),
   email: z.string().trim().optional(),
   phone: z.string().trim().optional(),

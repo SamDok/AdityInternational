@@ -37,7 +37,7 @@ export default async function CustomerDetailPage({
     <div>
       <PageHeader
         title={customer.name}
-        subtitle={customer.company ?? undefined}
+        subtitle={customer.contactPerson ?? undefined}
         backHref="/customers"
         action={
           <Link href={`/customers/${customer.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
