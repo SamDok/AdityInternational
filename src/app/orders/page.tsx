@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
-import { CartIcon, ChevronRightIcon } from "@/components/Icons";
+import { CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 import { formatMoney, formatDate, STATUS_LABELS, STATUS_COLORS, type OrderStatus } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -15,19 +15,23 @@ export default async function OrdersPage() {
 
   return (
     <div>
-      <PageHeader title="Orders" subtitle={orders.length ? `${orders.length} total` : undefined} />
-
-      <div className="px-4 pt-3">
-        <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
-          Creating and editing orders arrives in the next step. For now you can browse orders here.
-        </div>
-      </div>
+      <PageHeader
+        title="Orders"
+        subtitle={orders.length ? `${orders.length} total` : undefined}
+        action={
+          <Link href="/orders/new" aria-label="New order" className="btn-primary !px-3 !py-2">
+            <PlusIcon className="h-5 w-5" />
+          </Link>
+        }
+      />
 
       {orders.length === 0 ? (
         <EmptyState
           icon={<CartIcon className="h-8 w-8" />}
           title="No orders yet"
-          message="Once order entry is enabled, your sales orders will appear here."
+          message="Create your first sales order — pick a customer and add the products."
+          actionLabel="Create your first order"
+          actionHref="/orders/new"
         />
       ) : (
         <ul className="space-y-2 p-4">

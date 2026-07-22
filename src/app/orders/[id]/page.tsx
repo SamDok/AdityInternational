@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatMoney, formatDate, STATUS_LABELS, STATUS_COLORS, type OrderStatus } from "@/lib/format";
+import StatusPicker from "../StatusPicker";
+import { formatMoney, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -22,18 +23,29 @@ export default async function OrderDetailPage({
 
   return (
     <div>
-      <PageHeader title={`Order #${order.number}`} subtitle={order.customer.name} backHref="/orders" />
+      <PageHeader
+        title={`Order #${order.number}`}
+        subtitle={order.customer.name}
+        backHref="/orders"
+        action={
+          <Link href={`/orders/${order.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
+            Edit
+          </Link>
+        }
+      />
 
       <div className="space-y-4 p-4">
-        <div className="card flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">Placed {formatDate(order.orderDate)}</p>
-            {order.dueDate && <p className="text-sm text-gray-500">Due {formatDate(order.dueDate)}</p>}
-          </div>
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_COLORS[order.status as OrderStatus] ?? "bg-gray-100 text-gray-700"}`}>
-            {STATUS_LABELS[order.status as OrderStatus] ?? order.status}
-          </span>
+        <div className="card">
+          <p className="text-sm text-gray-500">Placed {formatDate(order.orderDate)}</p>
+          {order.dueDate && <p className="text-sm text-gray-500">Due {formatDate(order.dueDate)}</p>}
+          <p className="mt-1 text-sm text-gray-500">
+            <Link href={`/customers/${order.customerId}`} className="font-medium text-brand-600 hover:underline">
+              {order.customer.name}
+            </Link>
+          </p>
         </div>
+
+        <StatusPicker orderId={order.id} current={order.status} />
 
         <section>
           <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Items</h2>

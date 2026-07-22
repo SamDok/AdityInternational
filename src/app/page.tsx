@@ -47,8 +47,13 @@ export default async function HomePage() {
       </div>
 
       {/* Quick actions */}
+      <div className="mb-3">
+        <Link href="/orders/new" className="btn-primary w-full">
+          <PlusIcon className="h-5 w-5" /> New order
+        </Link>
+      </div>
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <Link href="/customers/new" className="btn-primary">
+        <Link href="/customers/new" className="btn-secondary">
           <PlusIcon className="h-5 w-5" /> Customer
         </Link>
         <Link href="/products/new" className="btn-secondary">
