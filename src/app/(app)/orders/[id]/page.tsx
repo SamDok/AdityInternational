@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import StatusPicker from "../StatusPicker";
 import { formatMoney, formatDate } from "@/lib/format";
+import { DocumentIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +39,14 @@ export default async function OrderDetailPage({
         subtitle={order.customer.name}
         backHref="/orders"
         action={
-          <Link href={`/orders/${order.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
-            Edit
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/proforma/${order.id}`} className="btn-secondary !px-3 !py-2 text-sm" aria-label="Proforma invoice">
+              <DocumentIcon className="h-5 w-5" />
+            </Link>
+            <Link href={`/orders/${order.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
+              Edit
+            </Link>
+          </div>
         }
       />
 

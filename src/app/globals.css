@@ -39,3 +39,20 @@ body {
     @apply w-full rounded-xl border-0 bg-gray-50 px-4 py-3 text-base text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none;
   }
 }
+
+/* Printing (proforma invoice): drop the app chrome and backgrounds, keep colours. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .proforma {
+    box-shadow: none !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

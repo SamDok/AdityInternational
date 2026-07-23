@@ -13,6 +13,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// The exporter's own details — a single row (id = "default") used as the
+// letterhead on proforma invoices. All fields optional; the PDF shows what's set.
+model CompanyProfile {
+  id             String   @id @default("default")
+  legalName      String?
+  address        String? // multi-line billing/registered address
+  gstin          String?
+  phone          String?
+  email          String?
+  website        String?
+  logoData       String? // downscaled logo as a base64 data URL
+  // Bank details, so a buyer can arrange payment / an LC.
+  bankName       String?
+  bankAccountName String?
+  bankAccountNo  String?
+  bankSwift      String?
+  bankIfsc       String?
+  bankBranch     String?
+  // Footer
+  signatureName  String? // "Authorised Signatory" name
+  footerNote     String? // standing terms / thank-you line
+  updatedAt      DateTime @updatedAt @default(now())
+}
+
 // A person who can log in to the ERP.
 model User {
   id           String    @id @default(cuid())
