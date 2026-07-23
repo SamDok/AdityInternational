@@ -6,6 +6,7 @@ import { CURRENCIES, UNITS } from "@/lib/format";
 
 type Values = {
   width?: string | null;
+  colour?: string | null;
   gsm?: number | null;
   costPrice?: number | null;
   salePrice?: number | null;
@@ -51,10 +52,16 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
           </datalist>
         </div>
         <div>
-          <label className="field-label" htmlFor="gsm">GSM</label>
-          <input id="gsm" name="gsm" type="number" step="0.01" min="0" inputMode="decimal"
-            defaultValue={num(initial?.gsm)} className="field-input" placeholder="Weight" />
+          <label className="field-label" htmlFor="colour">Colour</label>
+          <input id="colour" name="colour" defaultValue={initial?.colour ?? ""}
+            className="field-input" placeholder="e.g. Gold (optional)" />
         </div>
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="gsm">GSM</label>
+        <input id="gsm" name="gsm" type="number" step="0.01" min="0" inputMode="decimal"
+          defaultValue={num(initial?.gsm)} className="field-input" placeholder="Weight" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -64,11 +71,14 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
             defaultValue={num(initial?.costPrice)} className="field-input" placeholder="What it costs us" />
         </div>
         <div>
-          <label className="field-label" htmlFor="salePrice">Sale price</label>
+          <label className="field-label" htmlFor="salePrice">Default price</label>
           <input id="salePrice" name="salePrice" type="number" step="0.01" min="0" inputMode="decimal"
-            defaultValue={initial?.salePrice ?? 0} className="field-input" placeholder="0.00" />
+            defaultValue={initial?.salePrice ?? 0} className="field-input" placeholder="Optional fallback" />
         </div>
       </div>
+      <p className="-mt-2 px-1 text-xs text-gray-400">
+        Default price is only a fallback. Each customer's own price is set in their price list.
+      </p>
 
       <div className="grid grid-cols-2 gap-3">
         <div>

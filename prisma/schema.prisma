@@ -70,8 +70,24 @@ model Customer {
 
   notes     String?
   orders    Order[]
+  prices    CustomerPrice[] // this customer's agreed prices per width-variant
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// A customer's negotiated price for a specific width-variant (Product).
+model CustomerPrice {
+  id         String   @id @default(cuid())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  price      Float
+  currency   String   @default("INR")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, productId])
 }
 
 // The managed "main product type" list, e.g. Silk Dupion, Boucle, Furnishing.
@@ -109,20 +125,22 @@ model Product {
   id          String      @id @default(cuid())
   design      Design?     @relation(fields: [designId], references: [id])
   designId    String?
-  name        String // auto-set to "<design code> · <width>"
-  sku         String? // optional barcode / internal code
-  width       String? // e.g. 44", 58", 150 cm
-  gsm         Float? // grams per square metre
-  description String?
-  unit        String      @default("mtr")
-  costPrice   Float? // what this width costs us
-  salePrice   Float       @default(0) // list/selling price
-  currency    String      @default("INR")
-  stockQty    Float       @default(0) // quantity on hand
-  archived    Boolean     @default(false)
-  orderItems  OrderItem[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  name           String // auto-set to "<design code> · <width>[· <colour>]"
+  sku            String? // optional barcode / internal code
+  width          String? // e.g. 44", 58", 150 cm
+  colour         String? // e.g. Gold, Silver (affects cost for hand embroidery)
+  gsm            Float? // grams per square metre
+  description    String?
+  unit           String          @default("mtr")
+  costPrice      Float? // what this width costs us
+  salePrice      Float           @default(0) // optional default/fallback selling price
+  currency       String          @default("INR")
+  stockQty       Float           @default(0) // quantity on hand
+  archived       Boolean         @default(false)
+  orderItems     OrderItem[]
+  customerPrices CustomerPrice[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 // A sales order placed by a customer.

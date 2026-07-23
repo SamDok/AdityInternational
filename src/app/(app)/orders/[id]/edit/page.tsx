@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../../OrderForm";
 import { updateOrder, deleteOrder } from "../../actions";
-import { getProductOptions } from "../../productOptions";
+import { getProductOptions, getPricesByCustomer } from "../../productOptions";
 import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +14,11 @@ export default async function EditOrderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [order, customers, products] = await Promise.all([
+  const [order, customers, products, pricesByCustomer] = await Promise.all([
     prisma.order.findUnique({ where: { id }, include: { items: true } }),
     prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, currency: true } }),
     getProductOptions(),
+    getPricesByCustomer(),
   ]);
 
   if (!order) notFound();
@@ -44,7 +45,7 @@ export default async function EditOrderPage({
   return (
     <div>
       <PageHeader title={`Edit order #${order.number}`} backHref={`/orders/${id}`} />
-      <OrderForm customers={customers} products={products} initial={initial} action={update} submitLabel="Save changes" />
+      <OrderForm customers={customers} products={products} pricesByCustomer={pricesByCustomer} initial={initial} action={update} submitLabel="Save changes" />
       <div className="p-4 pt-0">
         <DeleteButton action={remove} label="Delete order" confirmMessage={`Delete order #${order.number}? This can't be undone.`} />
       </div>

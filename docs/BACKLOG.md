@@ -109,6 +109,21 @@ tap-to-open Maps link on the detail page. Weigh against added form length.
 
 ---
 
+## Products & pricing
+
+Per-customer price lists and colour-per-width are **built**. Follow-ups:
+- **🟡 Save a typed order rate as the customer's price.** On the order form,
+  when a rate is entered for a customer+variant, offer a one-tap "save as this
+  customer's price" (upsert via `setCustomerPrice` in
+  `src/app/(app)/customers/actions.ts`).
+- **🟢 Price history / effective dates.** Keep past prices instead of
+  overwriting on the `CustomerPrice` upsert.
+- **🟢 Colour-based reporting** once Reports exists (cost/margin by colour).
+- **🟡 Product CSV import/export & images**, and **low-stock alerts** (the
+  same treatment Customers got).
+- Note: the order form loads a `pricesByCustomer` map
+  (`orders/productOptions.ts`); move it to an on-demand fetch if it grows large.
+
 ## Ties to future modules (parked until that module exists)
 
 ### 🔴 Credit-limit enforcement & outstanding balance

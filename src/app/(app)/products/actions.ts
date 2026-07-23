@@ -147,6 +147,7 @@ export async function deleteDesign(id: string) {
 
 const VariantSchema = z.object({
   width: z.string().trim().min(1, "Width is required"),
+  colour: str(),
   gsm: optionalNumber(),
   costPrice: optionalNumber(),
   salePrice: z.coerce.number().min(0).default(0),
@@ -157,8 +158,8 @@ const VariantSchema = z.object({
 });
 
 // Human-readable name for a variant, used on order lines.
-function variantName(code: string, width: string) {
-  return `${code} · ${width}`;
+function variantName(code: string, width: string, colour?: string | null) {
+  return `${code} · ${width}${colour ? ` · ${colour}` : ""}`;
 }
 
 export async function createVariant(designId: string, formData: FormData) {
@@ -170,8 +171,9 @@ export async function createVariant(designId: string, formData: FormData) {
   await prisma.product.create({
     data: {
       designId,
-      name: variantName(design.code, d.width),
+      name: variantName(design.code, d.width, d.colour),
       width: d.width,
+      colour: d.colour || null,
       gsm: d.gsm ?? null,
       costPrice: d.costPrice ?? null,
       salePrice: d.salePrice,
@@ -198,8 +200,9 @@ export async function updateVariant(id: string, formData: FormData) {
   await prisma.product.update({
     where: { id },
     data: {
-      name: code ? variantName(code, d.width) : d.width,
+      name: code ? variantName(code, d.width, d.colour) : d.width,
       width: d.width,
+      colour: d.colour || null,
       gsm: d.gsm ?? null,
       costPrice: d.costPrice ?? null,
       salePrice: d.salePrice,

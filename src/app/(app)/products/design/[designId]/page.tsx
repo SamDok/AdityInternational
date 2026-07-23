@@ -78,7 +78,7 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
                 <li key={v.id}>
                   <Link href={`/products/width/${v.id}/edit`} className="card flex items-center gap-3 hover:bg-gray-50">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900">{v.width || "—"}</p>
+                      <p className="font-semibold text-gray-900">{v.width || "—"}{v.colour ? ` · ${v.colour}` : ""}</p>
                       <p className="truncate text-sm text-gray-500">
                         {v.gsm != null ? `${v.gsm} GSM · ` : ""}{v.stockQty} {v.unit} in stock
                         {v.costPrice != null ? ` · cost ${formatMoney(v.costPrice, v.currency)}` : ""}

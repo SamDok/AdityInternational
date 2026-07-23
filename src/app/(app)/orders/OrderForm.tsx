@@ -32,6 +32,7 @@ type InitialOrder = {
 type Props = {
   customers: CustomerOpt[];
   products: ProductOpt[];
+  pricesByCustomer: Record<string, Record<string, number>>;
   initial?: InitialOrder;
   defaultCustomerId?: string;
   action: (input: OrderInput) => Promise<{ error?: string } | void>;
@@ -49,7 +50,7 @@ function emptyLine(): Line {
   return { key: newKey(), productId: "", description: "", quantity: "", unit: "mtr", rate: "" };
 }
 
-export default function OrderForm({ customers, products, initial, defaultCustomerId, action, submitLabel }: Props) {
+export default function OrderForm({ customers, products, pricesByCustomer, initial, defaultCustomerId, action, submitLabel }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -89,10 +90,22 @@ export default function OrderForm({ customers, products, initial, defaultCustome
     return [...map.entries()];
   }, [products]);
 
+  // Price for a product & customer: the customer's agreed price wins, then the
+  // product's optional default price, else blank.
+  function rateFor(productId: string, custId: string): string {
+    if (!productId) return "";
+    const agreed = pricesByCustomer[custId]?.[productId];
+    if (agreed != null) return String(agreed);
+    const p = products.find((x) => x.id === productId);
+    return p && p.salePrice > 0 ? String(p.salePrice) : "";
+  }
+
   function onCustomerChange(id: string) {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
     if (c) setCurrency(c.currency); // default to the customer's currency
+    // Re-price existing lines for the new customer.
+    setLines((prev) => prev.map((l) => (l.productId ? { ...l, rate: rateFor(l.productId, id) } : l)));
   }
 
   function updateLine(key: string, patch: Partial<Line>) {
@@ -104,7 +117,7 @@ export default function OrderForm({ customers, products, initial, defaultCustome
     updateLine(key, {
       productId,
       unit: p?.unit ?? "mtr",
-      rate: p ? String(p.salePrice) : "",
+      rate: rateFor(productId, customerId),
     });
   }
 

@@ -205,3 +205,31 @@ export async function deleteCustomer(id: string) {
   revalidatePath("/customers");
   redirect("/customers");
 }
+
+// ----------------------------------------------------- Per-customer price list
+
+const PriceSchema = z.object({
+  productId: z.string().trim().min(1, "Please choose a product"),
+  price: z.coerce.number().min(0),
+  currency: z.string().trim().min(1).default("INR"),
+});
+
+// Set (or update) this customer's price for a width-variant. Upserts on the
+// unique (customerId, productId), so re-setting a variant edits its price.
+export async function setCustomerPrice(customerId: string, formData: FormData) {
+  const r = PriceSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!r.success) return { error: r.error.issues[0]?.message ?? "Invalid input" };
+  const { productId, price, currency } = r.data;
+  await prisma.customerPrice.upsert({
+    where: { customerId_productId: { customerId, productId } },
+    create: { customerId, productId, price, currency },
+    update: { price, currency },
+  });
+  revalidatePath(`/customers/${customerId}/prices`);
+  return { ok: true };
+}
+
+export async function removeCustomerPrice(id: string) {
+  const p = await prisma.customerPrice.delete({ where: { id }, select: { customerId: true } });
+  revalidatePath(`/customers/${p.customerId}/prices`);
+}

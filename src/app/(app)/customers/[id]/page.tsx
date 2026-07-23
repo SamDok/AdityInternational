@@ -71,6 +71,9 @@ export default async function CustomerDetailPage({
         <Link href={`/orders/new?customerId=${customer.id}`} className="btn-primary w-full">
           <PlusIcon className="h-5 w-5" /> New order for this customer
         </Link>
+        <Link href={`/customers/${customer.id}/prices`} className="btn-secondary w-full">
+          Price list
+        </Link>
 
         <section className="card divide-y divide-gray-50">
           <Row label="Contact person" value={customer.contactPerson} />
