@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, UsersIcon, BoxIcon, CartIcon } from "./Icons";
+import { HomeIcon, UsersIcon, BoxIcon, CartIcon, MoreIcon } from "./Icons";
 
 const tabs = [
   { href: "/", label: "Home", icon: HomeIcon, match: (p: string) => p === "/" },
   { href: "/customers", label: "Customers", icon: UsersIcon, match: (p: string) => p.startsWith("/customers") },
   { href: "/products", label: "Products", icon: BoxIcon, match: (p: string) => p.startsWith("/products") },
   { href: "/orders", label: "Orders", icon: CartIcon, match: (p: string) => p.startsWith("/orders") },
+  {
+    href: "/more",
+    label: "More",
+    icon: MoreIcon,
+    match: (p: string) => p.startsWith("/more") || p.startsWith("/vendors") || p.startsWith("/jobs") || p.startsWith("/settings"),
+  },
 ];
 
 export default function BottomNav() {

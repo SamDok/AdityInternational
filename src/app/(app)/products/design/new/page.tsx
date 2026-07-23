@@ -11,16 +11,19 @@ export default async function NewDesignPage({
   searchParams: Promise<{ category?: string }>;
 }) {
   const { category } = await searchParams;
-  const categories = await prisma.productCategory.findMany({
-    where: { archived: false },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true },
-  });
+  const [categories, vendors] = await Promise.all([
+    prisma.productCategory.findMany({
+      where: { archived: false },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true },
+    }),
+    prisma.vendor.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
 
   return (
     <div>
       <PageHeader title="New design" backHref="/products" />
-      <DesignForm categories={categories} initial={{ categoryId: category }} action={createDesign} submitLabel="Save design" />
+      <DesignForm categories={categories} vendors={vendors} initial={{ categoryId: category }} action={createDesign} submitLabel="Save design" />
     </div>
   );
 }

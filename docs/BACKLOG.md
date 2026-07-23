@@ -137,6 +137,19 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
 balance, warn when a new order would exceed their credit limit, and auto-apply
 `defaultDiscount` to new order lines. Belongs with the **Invoicing** phase.
 
+### 🟡 Vendor payables & the rest of inventory
+Vendors (kaarigars/suppliers), design sourcing, and job-work/purchase **receiving
+(stock-in)** are built. Follow-ups:
+- **Vendor payables/ledger** — total owed per vendor from job `rate × qty`,
+  payments against it, and statements (pairs with the Invoicing phase).
+- **Push job cost into `Product.costPrice`** (making charge + base material).
+- **Base material issued to a kaarigar** (material out) if you want to track the
+  fabric you hand over.
+- **Order-side auto stock-deduct on Shipped** + a **stock-movement history**
+  (who/when/why) — the outbound half that, with receiving, completes real
+  inventory. Still a separate, not-yet-approved step.
+- **Edit a job** (currently create + receive + cancel/delete only).
+
 ### Salesperson performance
 With orders + invoicing, report sales grouped by `salespersonId`. Belongs with
 the **Reports** phase.

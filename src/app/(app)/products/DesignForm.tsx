@@ -11,18 +11,22 @@ type Values = {
   hsnCode?: string | null;
   description?: string | null;
   imageData?: string | null;
+  sourcingType?: string | null;
+  vendorId?: string | null;
 };
 
 type Category = { id: string; name: string };
+type Vendor = { id: string; name: string };
 
 type Props = {
   categories: Category[];
+  vendors: Vendor[];
   initial?: Values;
   action: (formData: FormData) => Promise<{ error?: string } | void>;
   submitLabel: string;
 };
 
-export default function DesignForm({ categories, initial, action, submitLabel }: Props) {
+export default function DesignForm({ categories, vendors, initial, action, submitLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [imageData, setImageData] = useState(initial?.imageData ?? "");
@@ -95,6 +99,24 @@ export default function DesignForm({ categories, initial, action, submitLabel }:
         <label className="field-label" htmlFor="hsnCode">HSN code</label>
         <input id="hsnCode" name="hsnCode" defaultValue={initial?.hsnCode ?? ""}
           className="field-input" placeholder="Defaults from the type if left blank" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="field-label" htmlFor="sourcingType">Sourcing</label>
+          <select id="sourcingType" name="sourcingType" defaultValue={initial?.sourcingType ?? ""} className="field-input">
+            <option value="">—</option>
+            <option value="JOB_WORK">Job work</option>
+            <option value="TRADING">Trading</option>
+          </select>
+        </div>
+        <div>
+          <label className="field-label" htmlFor="vendorId">Kaarigar / supplier</label>
+          <select id="vendorId" name="vendorId" defaultValue={initial?.vendorId ?? ""} className="field-input">
+            <option value="">Unassigned</option>
+            {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </div>
       </div>
 
       <div>

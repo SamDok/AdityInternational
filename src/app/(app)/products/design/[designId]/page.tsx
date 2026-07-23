@@ -26,10 +26,14 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
     where: { id: designId },
     include: {
       category: true,
+      vendor: true,
       variants: { orderBy: { width: "asc" } },
     },
   });
   if (!design) notFound();
+
+  const sourcingLabel =
+    design.sourcingType === "JOB_WORK" ? "Job work" : design.sourcingType === "TRADING" ? "Trading" : null;
 
   return (
     <div>
@@ -58,6 +62,8 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
           <Row label="Type" value={design.category.name} />
           <Row label="Composition" value={design.composition} />
           <Row label="HSN code" value={design.hsnCode} />
+          <Row label="Sourcing" value={sourcingLabel} />
+          <Row label="Kaarigar / supplier" value={design.vendor?.name} />
           <Row label="Notes" value={design.description} />
         </section>
 

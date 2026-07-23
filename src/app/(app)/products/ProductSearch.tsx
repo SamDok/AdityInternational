@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SearchIcon } from "@/components/Icons";
 
-export default function ProductSearch({ q }: { q: string }) {
+export default function ProductSearch({ q, placeholder }: { q: string; placeholder?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const [value, setValue] = useState(q);
@@ -28,7 +28,7 @@ export default function ProductSearch({ q }: { q: string }) {
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Search design code, name, composition…"
+        placeholder={placeholder ?? "Search design code, name, composition…"}
         className="w-full rounded-xl border-0 bg-gray-50 py-3 pl-10 pr-4 text-base text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none"
       />
     </div>

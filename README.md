@@ -65,6 +65,9 @@ src/
   and stock. Order lines pick a specific design + width.
 - **Orders** — create and edit with product lines, live totals, multi-currency,
   and a one-tap status flow (Draft → Confirmed → In production → Shipped → Completed)
+- **Vendors & Jobs** (under "More") — a directory of **kaarigars & suppliers**;
+  each design tagged as **Job work** or **Trading** with an assigned maker; and
+  **jobs** (assign → receive) where receiving finished goods **adds stock in**.
 - **Settings** — change your password, add/remove teammates (owner only)
 - **Installable** on phones (PWA) and fully responsive
 

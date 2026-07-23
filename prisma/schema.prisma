@@ -113,10 +113,16 @@ model Design {
   hsnCode     String? // defaults from the category, editable
   description String?
   imageData   String? // downscaled JPEG as a base64 data URL
-  archived    Boolean         @default(false)
-  variants    Product[] // its width-variants
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+
+  // Supply side — nothing is made in-house.
+  sourcingType String? // "JOB_WORK" or "TRADING"
+  vendor       Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  vendorId     String? // assigned kaarigar (job work) or supplier (trading)
+
+  archived  Boolean   @default(false)
+  variants  Product[] // its width-variants
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 // One width-variant of a design — the actual sellable & stockable unit that
@@ -141,8 +147,59 @@ model Product {
   archived       Boolean         @default(false)
   orderItems     OrderItem[]
   customerPrices CustomerPrice[]
+  jobItems       JobItem[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+// A party we buy from / give job work to: kaarigars (makers) and suppliers.
+model Vendor {
+  id        String   @id @default(cuid())
+  code      String?  @unique // "VEND-001", auto-assigned
+  name      String
+  kind      String   @default("KAARIGAR") // "KAARIGAR" | "SUPPLIER" | "BOTH"
+  phone     String?
+  email     String?
+  address   String?
+  country   String?
+  notes     String?
+  archived  Boolean  @default(false)
+  designs   Design[]
+  jobs      Job[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// An inbound document: a job-work order to a kaarigar, or a purchase from a
+// supplier. Receiving its items brings finished goods into stock.
+model Job {
+  id        String    @id @default(cuid())
+  number    Int       @unique // human-facing job no., assigned in app code
+  vendor    Vendor    @relation(fields: [vendorId], references: [id])
+  vendorId  String
+  kind      String    @default("JOB_WORK") // "JOB_WORK" | "PURCHASE"
+  status    String    @default("OPEN") // OPEN | PARTIAL | RECEIVED | CANCELLED
+  issueDate DateTime  @default(now())
+  dueDate   DateTime?
+  notes     String?
+  items     JobItem[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// A line on a job: a width-variant, quantity assigned and received, and the rate
+// (making charge for job work, purchase price for trading) paid to the vendor.
+model JobItem {
+  id          String   @id @default(cuid())
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId       String
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   String
+  qtyOrdered  Float    @default(0)
+  qtyReceived Float    @default(0)
+  rate        Float? // making charge / purchase price per unit
+  unit        String   @default("mtr")
+  createdAt   DateTime @default(now())
 }
 
 // A sales order placed by a customer.

@@ -73,6 +73,8 @@ const DesignSchema = z.object({
   hsnCode: str(),
   description: str(),
   imageData: str(),
+  sourcingType: str(),
+  vendorId: str(),
 });
 
 async function designCodeTaken(code: string, exceptId?: string) {
@@ -104,6 +106,8 @@ export async function createDesign(formData: FormData) {
       hsnCode: hsn,
       description: d.description || null,
       imageData: d.imageData || null,
+      sourcingType: d.sourcingType || null,
+      vendorId: d.vendorId || null,
     },
   });
   revalidatePath("/products");
@@ -125,6 +129,8 @@ export async function updateDesign(id: string, formData: FormData) {
       hsnCode: d.hsnCode || null,
       description: d.description || null,
       imageData: d.imageData || null,
+      sourcingType: d.sourcingType || null,
+      vendorId: d.vendorId || null,
     },
   });
   revalidatePath("/products");
