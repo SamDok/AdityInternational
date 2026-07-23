@@ -16,7 +16,11 @@ export default async function NewOrderPage({
     prisma.customer.findMany({
       where: { archived: false },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, currency: true },
+      select: {
+        id: true, name: true, company: true, currency: true, address: true,
+        gstin: true, taxId: true, shippingAddress: true, destinationPort: true,
+        incoterms: true, paymentTerms: true,
+      },
     }),
     getProductOptions(),
     getPricesByCustomer(),

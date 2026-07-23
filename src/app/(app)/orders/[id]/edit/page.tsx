@@ -16,7 +16,14 @@ export default async function EditOrderPage({
   const { id } = await params;
   const [order, customers, products, pricesByCustomer] = await Promise.all([
     prisma.order.findUnique({ where: { id }, include: { items: true } }),
-    prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, currency: true } }),
+    prisma.customer.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true, name: true, company: true, currency: true, address: true,
+        gstin: true, taxId: true, shippingAddress: true, destinationPort: true,
+        incoterms: true, paymentTerms: true,
+      },
+    }),
     getProductOptions(),
     getPricesByCustomer(),
   ]);
@@ -33,10 +40,19 @@ export default async function EditOrderPage({
     orderDate: order.orderDate.toISOString(),
     dueDate: order.dueDate?.toISOString() ?? null,
     notes: order.notes,
+    billToName: order.billToName,
+    billToAddress: order.billToAddress,
+    billToTaxId: order.billToTaxId,
+    shipToName: order.shipToName,
+    shipToAddress: order.shipToAddress,
+    destinationPort: order.destinationPort,
+    incoterms: order.incoterms,
+    paymentTerms: order.paymentTerms,
     items: order.items.map((it) => ({
       productId: it.productId,
       description: it.description,
       quantity: it.quantity,
+      pieces: it.pieces,
       unit: it.unit,
       rate: it.rate,
     })),

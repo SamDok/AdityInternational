@@ -8,7 +8,19 @@ import { PlusIcon, TrashIcon } from "@/components/Icons";
 import ProductPicker from "./ProductPicker";
 import type { OrderInput } from "./actions";
 
-type CustomerOpt = { id: string; name: string; currency: string };
+type CustomerOpt = {
+  id: string;
+  name: string;
+  currency: string;
+  company?: string | null;
+  address?: string | null;
+  gstin?: string | null;
+  taxId?: string | null;
+  shippingAddress?: string | null;
+  destinationPort?: string | null;
+  incoterms?: string | null;
+  paymentTerms?: string | null;
+};
 type ProductOpt = { id: string; label: string; group: string; unit: string; salePrice: number };
 
 type Line = {
@@ -16,8 +28,21 @@ type Line = {
   productId: string;
   description: string;
   quantity: string;
+  pieces: string;
   unit: string;
   rate: string;
+};
+
+// The frozen customer-detail snapshot the order carries onto its PDF.
+type Snapshot = {
+  billToName: string;
+  billToAddress: string;
+  billToTaxId: string;
+  shipToName: string;
+  shipToAddress: string;
+  destinationPort: string;
+  incoterms: string;
+  paymentTerms: string;
 };
 
 type InitialOrder = {
@@ -27,8 +52,8 @@ type InitialOrder = {
   orderDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
-  items: { productId: string; description?: string | null; quantity: number; unit: string; rate: number }[];
-};
+  items: { productId: string; description?: string | null; quantity: number; pieces?: number | null; unit: string; rate: number }[];
+} & Partial<Record<keyof Snapshot, string | null>>;
 
 type Props = {
   customers: CustomerOpt[];
@@ -48,8 +73,29 @@ function todayStr() {
 }
 
 function emptyLine(): Line {
-  return { key: newKey(), productId: "", description: "", quantity: "", unit: "mtr", rate: "" };
+  return { key: newKey(), productId: "", description: "", quantity: "", pieces: "", unit: "mtr", rate: "" };
 }
+
+const EMPTY_SNAPSHOT: Snapshot = {
+  billToName: "", billToAddress: "", billToTaxId: "", shipToName: "",
+  shipToAddress: "", destinationPort: "", incoterms: "", paymentTerms: "",
+};
+
+// Pull a fresh snapshot off a customer record (what goes on the PDF).
+function snapshotFromCustomer(c: CustomerOpt): Snapshot {
+  return {
+    billToName: c.company || c.name || "",
+    billToAddress: c.address || "",
+    billToTaxId: c.gstin || c.taxId || "",
+    shipToName: "", // consignee — filled only if it differs from bill-to
+    shipToAddress: c.shippingAddress || "",
+    destinationPort: c.destinationPort || "",
+    incoterms: c.incoterms || "",
+    paymentTerms: c.paymentTerms || "",
+  };
+}
+
+const INCOTERMS = ["", "EXW", "FOB", "CFR", "CIF", "DAP", "DDP"];
 
 export default function OrderForm({ customers, products, pricesByCustomer, initial, defaultCustomerId, action, submitLabel }: Props) {
   const router = useRouter();
@@ -65,6 +111,27 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   const [orderDate, setOrderDate] = useState(initial?.orderDate?.slice(0, 10) ?? todayStr());
   const [dueDate, setDueDate] = useState(initial?.dueDate?.slice(0, 10) ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+
+  // Customer-detail snapshot: from the saved order when editing, else prefilled
+  // from the chosen customer on a new order.
+  const [snap, setSnap] = useState<Snapshot>(() => {
+    if (initial) {
+      return {
+        billToName: initial.billToName ?? "",
+        billToAddress: initial.billToAddress ?? "",
+        billToTaxId: initial.billToTaxId ?? "",
+        shipToName: initial.shipToName ?? "",
+        shipToAddress: initial.shipToAddress ?? "",
+        destinationPort: initial.destinationPort ?? "",
+        incoterms: initial.incoterms ?? "",
+        paymentTerms: initial.paymentTerms ?? "",
+      };
+    }
+    const c = customers.find((x) => x.id === startCustomerId);
+    return c ? snapshotFromCustomer(c) : { ...EMPTY_SNAPSHOT };
+  });
+  const setSnapField = (k: keyof Snapshot, v: string) => setSnap((p) => ({ ...p, [k]: v }));
+
   const [lines, setLines] = useState<Line[]>(
     initial?.items.length
       ? initial.items.map((it) => ({
@@ -72,6 +139,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
           productId: it.productId,
           description: it.description ?? "",
           quantity: String(it.quantity),
+          pieces: it.pieces != null ? String(it.pieces) : "",
           unit: it.unit,
           rate: String(it.rate),
         }))
@@ -94,7 +162,12 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   function onCustomerChange(id: string) {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
-    if (c) setCurrency(c.currency); // default to the customer's currency
+    if (c) {
+      setCurrency(c.currency); // default to the customer's currency
+      setSnap(snapshotFromCustomer(c)); // refresh the PDF snapshot from this customer
+    } else {
+      setSnap({ ...EMPTY_SNAPSHOT });
+    }
     // Re-price existing lines for the new customer.
     setLines((prev) => prev.map((l) => (l.productId ? { ...l, rate: rateFor(l.productId, id) } : l)));
   }
@@ -138,10 +211,19 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
       orderDate,
       dueDate: dueDate || null,
       notes: notes || null,
+      billToName: snap.billToName || null,
+      billToAddress: snap.billToAddress || null,
+      billToTaxId: snap.billToTaxId || null,
+      shipToName: snap.shipToName || null,
+      shipToAddress: snap.shipToAddress || null,
+      destinationPort: snap.destinationPort || null,
+      incoterms: snap.incoterms || null,
+      paymentTerms: snap.paymentTerms || null,
       items: cleanLines.map((l) => ({
         productId: l.productId,
         description: l.description || null,
         quantity: Number(l.quantity),
+        pieces: l.pieces === "" ? null : Number(l.pieces),
         unit: l.unit,
         rate: Number(l.rate),
       })),
@@ -200,6 +282,56 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
         </div>
       </div>
 
+      {/* Customer details snapshot — what prints on the proforma PDF */}
+      {customerId && (
+        <details className="card" open>
+          <summary className="cursor-pointer list-none font-semibold text-gray-900">
+            Customer details on the PDF
+            <span className="ml-1 text-xs font-normal text-gray-400">— prefilled, edit if needed</span>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="field-label">Bill to (name)</label>
+              <input value={snap.billToName} onChange={(e) => setSnapField("billToName", e.target.value)} className="field-input" placeholder="Company / customer name" />
+            </div>
+            <div>
+              <label className="field-label">Bill-to address</label>
+              <textarea value={snap.billToAddress} onChange={(e) => setSnapField("billToAddress", e.target.value)} rows={2} className="field-input" placeholder="Billing address" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="field-label">GST / Tax ID</label>
+                <input value={snap.billToTaxId} onChange={(e) => setSnapField("billToTaxId", e.target.value)} className="field-input" placeholder="GSTIN / VAT" />
+              </div>
+              <div>
+                <label className="field-label">Payment terms</label>
+                <input value={snap.paymentTerms} onChange={(e) => setSnapField("paymentTerms", e.target.value)} className="field-input" placeholder="e.g. Advance, Net 30" />
+              </div>
+            </div>
+            <div>
+              <label className="field-label">Consignee / ship-to name <span className="text-gray-400">(if different)</span></label>
+              <input value={snap.shipToName} onChange={(e) => setSnapField("shipToName", e.target.value)} className="field-input" placeholder="Leave blank if same as bill-to" />
+            </div>
+            <div>
+              <label className="field-label">Ship-to address</label>
+              <textarea value={snap.shipToAddress} onChange={(e) => setSnapField("shipToAddress", e.target.value)} rows={2} className="field-input" placeholder="Delivery / consignee address" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="field-label">Destination port</label>
+                <input value={snap.destinationPort} onChange={(e) => setSnapField("destinationPort", e.target.value)} className="field-input" placeholder="e.g. New York" />
+              </div>
+              <div>
+                <label className="field-label">Incoterms</label>
+                <select value={snap.incoterms} onChange={(e) => setSnapField("incoterms", e.target.value)} className="field-input">
+                  {INCOTERMS.map((t) => <option key={t} value={t}>{t || "—"}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        </details>
+      )}
+
       {/* Product lines */}
       <div>
         <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Products</h2>
@@ -224,10 +356,14 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                   <label className="field-label">Description</label>
                   <input value={l.description} onChange={(e) => updateLine(l.key, { description: e.target.value })} className="field-input" placeholder="e.g. colour / spec (optional)" />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="field-label">Qty</label>
                     <input value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} className="field-input" type="number" inputMode="decimal" step="0.01" min="0" placeholder="0" />
+                  </div>
+                  <div>
+                    <label className="field-label">Pieces</label>
+                    <input value={l.pieces} onChange={(e) => updateLine(l.key, { pieces: e.target.value })} className="field-input" type="number" inputMode="numeric" step="1" min="0" placeholder="e.g. 10" />
                   </div>
                   <div>
                     <label className="field-label">Unit</label>

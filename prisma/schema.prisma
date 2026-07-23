@@ -232,6 +232,19 @@ model Order {
   dueDate    DateTime?
   notes      String?
   stockDeducted Boolean  @default(false) // whether this order's stock has been taken out
+
+  // Snapshot of the customer's details at order time, frozen so a sent PDF never
+  // changes if the customer is later edited. Prefilled from the customer,
+  // editable per order (e.g. a different consignee for this shipment).
+  billToName      String?
+  billToAddress   String?
+  billToTaxId     String? // GSTIN (India) or foreign tax/VAT id
+  shipToName      String? // consignee, if different from bill-to
+  shipToAddress   String?
+  destinationPort String?
+  incoterms       String? // EXW, FOB, CFR, CIF, DAP, DDP
+  paymentTerms    String?
+
   items      OrderItem[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
@@ -246,6 +259,8 @@ model OrderItem {
   productId   String
   description String?  // e.g. colour / spec for this line
   quantity    Float    @default(0)
+  pieces      Int? // number of pieces / thans on this line (metres stay the priced qty)
+  shippedQty  Float    @default(0) // metres shipped so far (item-wise fulfillment)
   unit        String   @default("mtr")
   rate        Float    @default(0) // price per unit in the order currency
   createdAt   DateTime @default(now())

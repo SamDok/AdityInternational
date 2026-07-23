@@ -32,9 +32,12 @@ const ItemSchema = z.object({
   productId: z.string().min(1),
   description: z.string().optional().nullable(),
   quantity: z.coerce.number().min(0),
+  pieces: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
   unit: z.string().min(1),
   rate: z.coerce.number().min(0),
 });
+
+const nullableStr = () => z.string().optional().nullable();
 
 const OrderSchema = z.object({
   customerId: z.string().min(1, "Please choose a customer"),
@@ -43,6 +46,15 @@ const OrderSchema = z.object({
   orderDate: z.string().optional(),
   dueDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // Snapshot of the customer's details (frozen on the order for the PDF).
+  billToName: nullableStr(),
+  billToAddress: nullableStr(),
+  billToTaxId: nullableStr(),
+  shipToName: nullableStr(),
+  shipToAddress: nullableStr(),
+  destinationPort: nullableStr(),
+  incoterms: nullableStr(),
+  paymentTerms: nullableStr(),
   items: z.array(ItemSchema).min(1, "Add at least one product line"),
 });
 
@@ -52,6 +64,32 @@ function toDate(value?: string | null): Date | undefined {
   if (!value) return undefined;
   const d = new Date(value);
   return isNaN(d.getTime()) ? undefined : d;
+}
+
+// The frozen customer-detail snapshot columns, pulled from validated input.
+function snapshotFields(d: z.infer<typeof OrderSchema>) {
+  return {
+    billToName: d.billToName || null,
+    billToAddress: d.billToAddress || null,
+    billToTaxId: d.billToTaxId || null,
+    shipToName: d.shipToName || null,
+    shipToAddress: d.shipToAddress || null,
+    destinationPort: d.destinationPort || null,
+    incoterms: d.incoterms || null,
+    paymentTerms: d.paymentTerms || null,
+  };
+}
+
+// Build the OrderItem create payload from validated line input.
+function itemCreate(items: z.infer<typeof ItemSchema>[]) {
+  return items.map((it) => ({
+    productId: it.productId,
+    description: it.description || null,
+    quantity: it.quantity,
+    pieces: it.pieces ?? null,
+    unit: it.unit,
+    rate: it.rate,
+  }));
 }
 
 async function nextOrderNumber(): Promise<number> {
@@ -78,15 +116,8 @@ export async function createOrder(input: OrderInput) {
       dueDate: toDate(d.dueDate) ?? null,
       notes: d.notes || null,
       stockDeducted: shipped,
-      items: {
-        create: d.items.map((it) => ({
-          productId: it.productId,
-          description: it.description || null,
-          quantity: it.quantity,
-          unit: it.unit,
-          rate: it.rate,
-        })),
-      },
+      ...snapshotFields(d),
+      items: { create: itemCreate(d.items) },
     },
   });
 
@@ -135,15 +166,8 @@ export async function updateOrder(id: string, input: OrderInput) {
         dueDate: toDate(d.dueDate) ?? null,
         notes: d.notes || null,
         stockDeducted: newShipped,
-        items: {
-          create: d.items.map((it) => ({
-            productId: it.productId,
-            description: it.description || null,
-            quantity: it.quantity,
-            unit: it.unit,
-            rate: it.rate,
-          })),
-        },
+        ...snapshotFields(d),
+        items: { create: itemCreate(d.items) },
       },
     }),
   ]);
