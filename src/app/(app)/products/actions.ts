@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyMovements } from "@/lib/stock";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireUser } from "@/lib/auth";
 
 const str = () => z.string().trim().optional();
 const optionalNumber = () =>
@@ -27,6 +27,7 @@ const CategorySchema = z.object({
 });
 
 export async function createCategory(formData: FormData) {
+  await requireUser();
   const r = CategorySchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return issue(r);
   const exists = await prisma.productCategory.findFirst({
@@ -43,6 +44,7 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function updateCategory(id: string, formData: FormData) {
+  await requireUser();
   const r = CategorySchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return issue(r);
   const clash = await prisma.productCategory.findFirst({
@@ -60,6 +62,7 @@ export async function updateCategory(id: string, formData: FormData) {
 }
 
 export async function setCategoryArchived(id: string, archived: boolean) {
+  await requireUser();
   await prisma.productCategory.update({ where: { id }, data: { archived } });
   revalidatePath("/products");
   revalidatePath("/products/manage-types");
@@ -88,6 +91,7 @@ async function designCodeTaken(code: string, exceptId?: string) {
 }
 
 export async function createDesign(formData: FormData) {
+  await requireUser();
   const r = DesignSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return issue(r);
   const d = r.data;
@@ -117,6 +121,7 @@ export async function createDesign(formData: FormData) {
 }
 
 export async function updateDesign(id: string, formData: FormData) {
+  await requireUser();
   const r = DesignSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return issue(r);
   const d = r.data;
@@ -141,12 +146,14 @@ export async function updateDesign(id: string, formData: FormData) {
 }
 
 export async function setDesignArchived(id: string, archived: boolean) {
+  await requireUser();
   await prisma.design.update({ where: { id }, data: { archived } });
   revalidatePath("/products");
   revalidatePath(`/products/design/${id}`);
 }
 
 export async function deleteDesign(id: string) {
+  await requireUser();
   const variants = await prisma.product.count({ where: { designId: id } });
   if (variants > 0) return { error: "Remove this design's widths before deleting it." };
   await prisma.design.delete({ where: { id } });
@@ -174,6 +181,7 @@ function variantName(code: string, width: string, colour?: string | null) {
 }
 
 export async function createVariant(designId: string, formData: FormData) {
+  await requireUser();
   const r = VariantSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return issue(r);
   const design = await prisma.design.findUnique({ where: { id: designId }, select: { code: true } });
@@ -200,6 +208,7 @@ export async function createVariant(designId: string, formData: FormData) {
 }
 
 export async function updateVariant(id: string, formData: FormData) {
+  await requireUser();
   const r = VariantSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return issue(r);
   const d = r.data;
@@ -229,8 +238,13 @@ export async function updateVariant(id: string, formData: FormData) {
 }
 
 export async function deleteVariant(id: string) {
-  const used = await prisma.orderItem.count({ where: { productId: id } });
+  await requireUser();
+  const [used, jobbed] = await Promise.all([
+    prisma.orderItem.count({ where: { productId: id } }),
+    prisma.jobItem.count({ where: { productId: id } }),
+  ]);
   if (used > 0) return { error: "This width is used in orders and can't be deleted." };
+  if (jobbed > 0) return { error: "This width is used on a job and can't be deleted." };
   const v = await prisma.product.findUnique({ where: { id }, select: { designId: true } });
   await prisma.product.delete({ where: { id } });
   revalidatePath("/products");
@@ -248,6 +262,7 @@ export async function createVariantsBulk(
   designId: string,
   rows: { width?: string; colour?: string; gsm?: string; costPrice?: string; stockQty?: string; unit?: string }[],
 ) {
+  await requireUser();
   const design = await prisma.design.findUnique({ where: { id: designId }, select: { code: true } });
   if (!design) return { error: "Design not found." };
   let created = 0;
@@ -276,6 +291,7 @@ export async function createVariantsBulk(
 
 // Clone a design and all its widths under a new, unique code (stock reset to 0).
 export async function duplicateDesign(id: string) {
+  await requireUser();
   const src = await prisma.design.findUnique({ where: { id }, include: { variants: true } });
   if (!src) return { error: "Design not found." };
   const base = `${src.code}-COPY`;
@@ -318,6 +334,7 @@ export async function duplicateDesign(id: string) {
 
 // Add to / subtract from a variant's stock (never below zero for manual edits).
 export async function adjustStock(variantId: string, delta: number) {
+  await requireUser();
   const v = await prisma.product.findUnique({ where: { id: variantId }, select: { stockQty: true, designId: true } });
   if (!v) return { error: "Not found." };
   // Clamp at zero, but log the delta that was actually applied.
@@ -334,6 +351,7 @@ export async function adjustStock(variantId: string, delta: number) {
 
 // Whole-catalogue CSV export (one row per width-variant).
 export async function exportProductsCsv(): Promise<string> {
+  await requireUser();
   const rows = await prisma.product.findMany({
     include: { design: { include: { category: true } } },
     orderBy: { name: "asc" },
@@ -355,6 +373,7 @@ export async function exportProductsCsv(): Promise<string> {
 
 // Bulk-import designs + widths from parsed spreadsheet rows.
 export async function importProducts(rows: Record<string, string>[]) {
+  await requireUser();
   const cats = await prisma.productCategory.findMany({ select: { id: true, name: true, sortOrder: true } });
   const catByName = new Map(cats.map((c) => [c.name.trim().toLowerCase(), c.id]));
   let maxSort = cats.reduce((m, c) => Math.max(m, c.sortOrder), 0);

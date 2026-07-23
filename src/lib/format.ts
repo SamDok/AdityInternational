@@ -15,10 +15,13 @@ export function formatMoney(amount: number, currency: string): string {
 
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
+  // Dates are entered as calendar dates (YYYY-MM-DD → UTC midnight); format in UTC
+  // so a due date shows the same day for every viewer, regardless of timezone.
   return d.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

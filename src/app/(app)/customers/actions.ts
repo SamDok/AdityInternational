@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { isBareDialCode } from "@/lib/dialCodes";
+import { requireUser } from "@/lib/auth";
 
 // A phone that is blank or only an auto-filled dial code becomes empty.
 const phoneField = z.preprocess((v) => {
@@ -101,6 +102,7 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // and rows whose name already exists (case-insensitive), and drops invalid
 // emails rather than failing the whole row.
 export async function importCustomers(rows: Record<string, string>[]) {
+  await requireUser();
   const textFields = [
     "contactPerson", "email", "phone", "altPhone", "address", "country",
     "shippingAddress", "destinationPort", "incoterms", "gstin", "taxId",
@@ -158,6 +160,7 @@ export async function importCustomers(rows: Record<string, string>[]) {
 }
 
 export async function createCustomer(formData: FormData) {
+  await requireUser();
   const result = parse(formData);
   if (!result.success) {
     return { error: result.error.issues[0]?.message ?? "Invalid input" };
@@ -174,6 +177,7 @@ export async function createCustomer(formData: FormData) {
 }
 
 export async function updateCustomer(id: string, formData: FormData) {
+  await requireUser();
   const result = parse(formData);
   if (!result.success) {
     return { error: result.error.issues[0]?.message ?? "Invalid input" };
@@ -191,12 +195,14 @@ export async function updateCustomer(id: string, formData: FormData) {
 }
 
 export async function setCustomerArchived(id: string, archived: boolean) {
+  await requireUser();
   await prisma.customer.update({ where: { id }, data: { archived } });
   revalidatePath("/customers");
   revalidatePath(`/customers/${id}`);
 }
 
 export async function deleteCustomer(id: string) {
+  await requireUser();
   const orderCount = await prisma.order.count({ where: { customerId: id } });
   if (orderCount > 0) {
     return { error: "This customer has orders and can't be deleted." };
@@ -217,6 +223,7 @@ const PriceSchema = z.object({
 // Set (or update) this customer's price for a width-variant. Upserts on the
 // unique (customerId, productId), so re-setting a variant edits its price.
 export async function setCustomerPrice(customerId: string, formData: FormData) {
+  await requireUser();
   const r = PriceSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!r.success) return { error: r.error.issues[0]?.message ?? "Invalid input" };
   const { productId, price, currency } = r.data;
@@ -230,6 +237,7 @@ export async function setCustomerPrice(customerId: string, formData: FormData) {
 }
 
 export async function removeCustomerPrice(id: string) {
+  await requireUser();
   const p = await prisma.customerPrice.delete({ where: { id }, select: { customerId: true } });
   revalidatePath(`/customers/${p.customerId}/prices`);
 }
@@ -243,6 +251,7 @@ export async function saveCustomerRegularPrice(
   price: number,
   currency: string,
 ) {
+  await requireUser();
   if (!customerId || !productId || !(price >= 0)) return { error: "Invalid price." };
   await prisma.customerPrice.upsert({
     where: { customerId_productId: { customerId, productId } },

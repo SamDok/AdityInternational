@@ -10,6 +10,7 @@ export type ProcLine = {
   shortfall: number; // needed minus what stock + existing linked jobs already cover
   dueDate: Date | null;
   rate: number | null; // variant cost — the making/purchase rate to seed the job
+  currency: string; // the variant's cost currency
   unit: string;
 };
 
@@ -88,6 +89,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
       shortfall,
       dueDate: it.dueDate ?? order.dueDate,
       rate: prod.costPrice ?? null,
+      currency: prod.currency,
       unit: prod.unit,
     };
 

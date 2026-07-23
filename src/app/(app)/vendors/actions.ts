@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { requireUser } from "@/lib/auth";
 
 const VENDOR_KINDS = ["KAARIGAR", "SUPPLIER", "BOTH"] as const;
 
@@ -59,6 +60,7 @@ function clean(d: z.infer<typeof VendorSchema>) {
 }
 
 export async function createVendor(formData: FormData) {
+  await requireUser();
   const r = parse(formData);
   if (!r.success) return { error: r.error.issues[0]?.message ?? "Invalid input" };
   if (await nameTaken(r.data.name)) return { error: `A vendor named "${r.data.name}" already exists.` };
@@ -69,6 +71,7 @@ export async function createVendor(formData: FormData) {
 }
 
 export async function updateVendor(id: string, formData: FormData) {
+  await requireUser();
   const r = parse(formData);
   if (!r.success) return { error: r.error.issues[0]?.message ?? "Invalid input" };
   if (await nameTaken(r.data.name, id)) return { error: `Another vendor named "${r.data.name}" already exists.` };
@@ -79,12 +82,14 @@ export async function updateVendor(id: string, formData: FormData) {
 }
 
 export async function setVendorArchived(id: string, archived: boolean) {
+  await requireUser();
   await prisma.vendor.update({ where: { id }, data: { archived } });
   revalidatePath("/vendors");
   revalidatePath(`/vendors/${id}`);
 }
 
 export async function deleteVendor(id: string) {
+  await requireUser();
   const [jobs, designs] = await Promise.all([
     prisma.job.count({ where: { vendorId: id } }),
     prisma.design.count({ where: { vendorId: id } }),

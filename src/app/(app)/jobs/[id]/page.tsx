@@ -71,11 +71,11 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                     </p>
                     <p className="mt-1 text-sm text-gray-500">
                       {it.qtyReceived}/{it.qtyOrdered} {it.unit} received
-                      {it.rate != null ? ` · ${formatMoney(it.rate, "INR")}/${it.unit}` : ""}
+                      {it.rate != null ? ` · ${formatMoney(it.rate, job.currency)}/${it.unit}` : ""}
                     </p>
                   </div>
                   {it.rate != null && (
-                    <p className="shrink-0 text-sm font-semibold text-gray-900">{formatMoney(it.rate * it.qtyOrdered, "INR")}</p>
+                    <p className="shrink-0 text-sm font-semibold text-gray-900">{formatMoney(it.rate * it.qtyOrdered, job.currency)}</p>
                   )}
                 </div>
               </li>
@@ -85,7 +85,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
         <div className="card flex items-center justify-between">
           <span className="text-base font-semibold text-gray-700">Job value</span>
-          <span className="text-xl font-bold text-gray-900">{formatMoney(total, "INR")}</span>
+          <span className="text-xl font-bold text-gray-900">{formatMoney(total, job.currency)}</span>
         </div>
 
         {job.notes && (

@@ -24,6 +24,7 @@ const ProfileSchema = z.object({
 
 // The single company-profile row, created empty on first read.
 export async function getCompanyProfile() {
+  await requireUser();
   return prisma.companyProfile.upsert({
     where: { id: PROFILE_ID },
     update: {},
@@ -37,6 +38,7 @@ export async function getBankAccounts(): Promise<Record<string, {
   swift: string | null; ifsc: string | null; iban: string | null;
   branch: string | null; bankAddress: string | null;
 }>> {
+  await requireUser();
   const rows = await prisma.bankAccount.findMany();
   const map: Record<string, ReturnType<typeof pick>> = {};
   for (const r of rows) map[r.currency] = pick(r);

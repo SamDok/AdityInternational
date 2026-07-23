@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
+import { CURRENCIES } from "@/lib/format";
 import ProductPicker from "../orders/ProductPicker";
 import type { JobInput } from "./actions";
 
@@ -34,6 +35,7 @@ export default function JobForm({
   const [isPending, startTransition] = useTransition();
   const [vendorId, setVendorId] = useState(defaultVendorId ?? "");
   const [kind, setKind] = useState("JOB_WORK");
+  const [currency, setCurrency] = useState("INR");
   const [issueDate, setIssueDate] = useState(todayStr());
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -55,7 +57,7 @@ export default function JobForm({
     const clean = lines.filter((l) => l.productId && parseFloat(l.qty) > 0);
     if (clean.length === 0) return setError("Add at least one product with a quantity.");
     const input: JobInput = {
-      vendorId, kind: kind as "JOB_WORK" | "PURCHASE", issueDate, dueDate: dueDate || null, notes: notes || null,
+      vendorId, kind: kind as "JOB_WORK" | "PURCHASE", currency, issueDate, dueDate: dueDate || null, notes: notes || null,
       items: clean.map((l) => ({ productId: l.productId, qtyOrdered: Number(l.qty), rate: l.rate === "" ? null : Number(l.rate), unit: l.unit })),
     };
     startTransition(async () => {
@@ -87,12 +89,20 @@ export default function JobForm({
             {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
         </div>
-        <div>
-          <label className="field-label" htmlFor="kind">Type</label>
-          <select id="kind" value={kind} onChange={(e) => setKind(e.target.value)} className="field-input">
-            <option value="JOB_WORK">Job work</option>
-            <option value="PURCHASE">Purchase (trading)</option>
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="field-label" htmlFor="kind">Type</label>
+            <select id="kind" value={kind} onChange={(e) => setKind(e.target.value)} className="field-input">
+              <option value="JOB_WORK">Job work</option>
+              <option value="PURCHASE">Purchase (trading)</option>
+            </select>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="currency">Currency</label>
+            <select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className="field-input">
+              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 

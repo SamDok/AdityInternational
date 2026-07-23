@@ -169,9 +169,15 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   const noCustomers = customers.length === 0;
   const noProducts = products.length === 0;
 
+  // Locally-saved regular prices this session (so the hint updates without a
+  // full reload, and without mutating the pricesByCustomer prop).
+  const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>({});
+
   // The customer's saved regular price for a product, if any (else null).
   function savedPriceFor(productId: string, custId: string): number | null {
     if (!productId || !custId) return null;
+    const override = savedOverrides[`${custId}:${productId}`];
+    if (override != null) return override;
     const p = pricesByCustomer[custId]?.[productId];
     return p != null ? p : null;
   }
@@ -234,7 +240,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
       setSavingKey(null);
       if (!res?.error) {
         // Reflect it locally so the "one-off" hint clears immediately.
-        (pricesByCustomer[customerId] ??= {})[l.productId] = price;
+        setSavedOverrides((o) => ({ ...o, [`${customerId}:${l.productId}`]: price }));
         setSavedKeys((prev) => new Set(prev).add(l.key));
       }
     });

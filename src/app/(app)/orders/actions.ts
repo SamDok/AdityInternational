@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { ORDER_STAGES } from "@/lib/format";
 import { applyMovements, type StockMove } from "@/lib/stock";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireUser } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
@@ -93,6 +93,7 @@ async function nextOrderNumber(): Promise<number> {
 }
 
 export async function createOrder(input: OrderInput) {
+  await requireUser();
   const parsed = OrderSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid order" };
@@ -121,6 +122,7 @@ export async function createOrder(input: OrderInput) {
 }
 
 export async function updateOrder(id: string, input: OrderInput) {
+  await requireUser();
   const parsed = OrderSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid order" };
@@ -129,7 +131,7 @@ export async function updateOrder(id: string, input: OrderInput) {
 
   const current = await prisma.order.findUnique({
     where: { id },
-    select: { items: { select: { id: true, shippedQty: true } } },
+    select: { items: { select: { id: true, productId: true, shippedQty: true } } },
   });
   if (!current) return { error: "Order not found." };
 
@@ -146,6 +148,9 @@ export async function updateOrder(id: string, input: OrderInput) {
     const ex = it.id ? existingById.get(it.id) : undefined;
     if (ex && it.quantity < ex.shippedQty) {
       return { error: `A line's quantity can't be less than what's already shipped (${ex.shippedQty}).` };
+    }
+    if (ex && ex.shippedQty > 0 && it.productId !== ex.productId) {
+      return { error: "A line that's already been shipped can't have its product changed. Un-ship it first." };
     }
   }
 
@@ -188,6 +193,7 @@ export async function updateOrder(id: string, input: OrderInput) {
 // Set the commercial stage (Draft / Confirmed / Cancelled). No stock effect —
 // shipping is tracked per line via recordShipment.
 export async function updateOrderStage(id: string, stage: string) {
+  await requireUser();
   if (!ORDER_STAGES.includes(stage as never)) return { error: "Unknown stage" };
   await prisma.order.update({ where: { id }, data: { status: stage } });
   revalidatePath("/orders");
@@ -198,9 +204,10 @@ export async function updateOrderStage(id: string, stage: string) {
 // Record a shipment: add to each line's shippedQty and take that much out of
 // stock, logged as ORDER_SHIP. Mirrors receiveJob for the inbound side.
 export async function recordShipment(orderId: string, lines: { itemId: string; ship: number }[]) {
+  await requireUser();
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { status: true, items: { select: { id: true, productId: true } } },
+    select: { status: true, items: { select: { id: true, productId: true, quantity: true, shippedQty: true } } },
   });
   if (!order) return { error: "Order not found." };
   if (order.status === "CANCELLED") return { error: "This order is cancelled." };
@@ -211,8 +218,11 @@ export async function recordShipment(orderId: string, lines: { itemId: string; s
   for (const l of lines) {
     const it = byId.get(l.itemId);
     if (!it || !(l.ship > 0)) continue;
-    ops.push(prisma.orderItem.update({ where: { id: it.id }, data: { shippedQty: { increment: l.ship } } }));
-    moves.push({ productId: it.productId, delta: -l.ship, reason: "ORDER_SHIP", orderId });
+    // Never ship more than what's left on the line.
+    const ship = Math.min(l.ship, it.quantity - it.shippedQty);
+    if (ship <= 0) continue;
+    ops.push(prisma.orderItem.update({ where: { id: it.id }, data: { shippedQty: { increment: ship } } }));
+    moves.push({ productId: it.productId, delta: -ship, reason: "ORDER_SHIP", orderId });
   }
   if (ops.length === 0) return { error: "Enter a quantity to ship." };
   await prisma.$transaction(ops);
@@ -230,6 +240,7 @@ export async function recordShipment(orderId: string, lines: { itemId: string; s
 // Undo a line's shipment (correction): restore its shippedQty to 0 and add the
 // stock back, logged as ORDER_UNSHIP.
 export async function unshipLine(itemId: string) {
+  await requireUser();
   const it = await prisma.orderItem.findUnique({
     where: { id: itemId },
     select: { shippedQty: true, productId: true, orderId: true },
@@ -252,6 +263,10 @@ export async function unshipLine(itemId: string) {
 // tampered with, and tops up only what isn't already covered by stock or existing
 // jobs for this order.
 export async function generateProcurement(orderId: string) {
+  await requireUser();
+  const ord = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
+  if (!ord) return { error: "Order not found." };
+  if (ord.status !== "CONFIRMED") return { error: "Confirm the order before generating jobs." };
   const plan = await planProcurement(orderId);
   if (!plan) return { error: "Order not found." };
   if (plan.groups.length === 0) {
@@ -267,6 +282,7 @@ export async function generateProcurement(orderId: string) {
         vendorId: g.vendorId,
         kind: g.kind,
         status: "OPEN",
+        currency: g.lines[0]?.currency ?? "INR",
         dueDate: g.jobDueDate ?? null,
         orderId,
         notes: `Auto-generated from order #${plan.orderNumber}`,
@@ -296,6 +312,7 @@ async function nextJobNumber(): Promise<number> {
 }
 
 export async function deleteOrder(id: string) {
+  await requireUser();
   const shipped = await prisma.orderItem.count({ where: { orderId: id, shippedQty: { gt: 0 } } });
   if (shipped > 0) {
     return { error: "This order has shipped items — un-ship them before deleting." };

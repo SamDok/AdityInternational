@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyMovements, type StockMove } from "@/lib/stock";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireUser } from "@/lib/auth";
 
 const ItemSchema = z.object({
   productId: z.string().min(1),
@@ -17,6 +17,7 @@ const ItemSchema = z.object({
 const JobSchema = z.object({
   vendorId: z.string().min(1, "Please choose a vendor"),
   kind: z.enum(["JOB_WORK", "PURCHASE"]).default("JOB_WORK"),
+  currency: z.string().min(1).default("INR"),
   issueDate: z.string().optional(),
   dueDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -37,6 +38,7 @@ async function nextJobNumber() {
 }
 
 export async function createJob(input: JobInput) {
+  await requireUser();
   const parsed = JobSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid job" };
   const d = parsed.data;
@@ -46,6 +48,7 @@ export async function createJob(input: JobInput) {
       number,
       vendorId: d.vendorId,
       kind: d.kind,
+      currency: d.currency,
       issueDate: toDate(d.issueDate) ?? new Date(),
       dueDate: toDate(d.dueDate) ?? null,
       notes: d.notes || null,
@@ -66,6 +69,7 @@ export async function createJob(input: JobInput) {
 // Record received quantities (deltas) per line: add to stock and to qtyReceived,
 // then recompute the job status.
 export async function receiveJob(jobId: string, receipts: { itemId: string; received: number }[]) {
+  await requireUser();
   const job = await prisma.job.findUnique({ where: { id: jobId }, include: { items: true } });
   if (!job) return { error: "Job not found." };
   if (job.status === "CANCELLED") return { error: "This job is cancelled." };
@@ -99,12 +103,14 @@ export async function receiveJob(jobId: string, receipts: { itemId: string; rece
 }
 
 export async function cancelJob(id: string) {
+  await requireUser();
   await prisma.job.update({ where: { id }, data: { status: "CANCELLED" } });
   revalidatePath(`/jobs/${id}`);
   revalidatePath("/jobs");
 }
 
 export async function deleteJob(id: string) {
+  await requireUser();
   await prisma.job.delete({ where: { id } }); // items cascade; stock already added stays
   revalidatePath("/jobs");
   redirect("/jobs");

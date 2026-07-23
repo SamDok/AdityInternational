@@ -229,6 +229,7 @@ model Job {
   vendorId  String
   kind      String    @default("JOB_WORK") // "JOB_WORK" | "PURCHASE"
   status    String    @default("OPEN") // OPEN | PARTIAL | RECEIVED | CANCELLED
+  currency  String    @default("INR") // currency of the rates paid to the vendor
   issueDate DateTime  @default(now())
   dueDate   DateTime?
   notes     String?
