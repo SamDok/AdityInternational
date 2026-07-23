@@ -334,10 +334,10 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
 
       {/* Customer details snapshot — what prints on the proforma PDF */}
       {customerId && (
-        <details className="card" open>
+        <details className="card">
           <summary className="cursor-pointer list-none font-semibold text-gray-900">
             Customer details on the PDF
-            <span className="ml-1 text-xs font-normal text-gray-400">— prefilled, edit if needed</span>
+            <span className="ml-1 text-xs font-normal text-gray-400">— prefilled, tap to edit</span>
           </summary>
           <div className="mt-4 space-y-4">
             <div>

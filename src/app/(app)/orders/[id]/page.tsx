@@ -78,14 +78,11 @@ export default async function OrderDetailPage({
           </p>
         </div>
 
-        <div className="flex items-start justify-between gap-3">
-          <StagePicker orderId={order.id} current={order.status} />
-          <div className="pt-6">
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${FULFILLMENT_COLORS[fulfillment]}`}>
-              {FULFILLMENT_LABELS[fulfillment]}
-            </span>
-          </div>
-        </div>
+        <StagePicker
+          orderId={order.id}
+          current={order.status}
+          fulfillment={order.status !== "CANCELLED" ? { label: FULFILLMENT_LABELS[fulfillment], className: FULFILLMENT_COLORS[fulfillment] } : undefined}
+        />
 
         {order.status !== "CANCELLED" && <ShipForm orderId={order.id} items={shipItems} />}
 

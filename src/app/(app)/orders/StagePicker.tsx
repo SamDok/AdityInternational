@@ -4,7 +4,15 @@ import { useState, useTransition } from "react";
 import { ORDER_STAGES, STAGE_LABELS, STAGE_COLORS, type OrderStage } from "@/lib/format";
 import { updateOrderStage } from "./actions";
 
-export default function StagePicker({ orderId, current }: { orderId: string; current: string }) {
+export default function StagePicker({
+  orderId,
+  current,
+  fulfillment,
+}: {
+  orderId: string;
+  current: string;
+  fulfillment?: { label: string; className: string };
+}) {
   const [stage, setStage] = useState(current);
   const [isPending, startTransition] = useTransition();
 
@@ -20,7 +28,12 @@ export default function StagePicker({ orderId, current }: { orderId: string; cur
 
   return (
     <div>
-      <p className="mb-2 px-1 text-sm font-semibold text-gray-500">Stage {isPending && "…"}</p>
+      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+        <p className="text-sm font-semibold text-gray-500">Stage {isPending && "…"}</p>
+        {fulfillment && (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${fulfillment.className}`}>{fulfillment.label}</span>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         {ORDER_STAGES.map((s) => {
           const active = s === stage;
