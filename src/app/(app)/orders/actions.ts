@@ -7,6 +7,7 @@ import { z } from "zod";
 import { ORDER_STAGES } from "@/lib/format";
 import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser } from "@/lib/auth";
+import { planProcurement } from "./procurement";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -244,6 +245,54 @@ export async function unshipLine(itemId: string) {
   revalidatePath("/products");
   revalidatePath("/");
   return { ok: true };
+}
+
+// Review-then-generate: create one job (kaarigar) / purchase order (supplier) per
+// vendor for the order's shortfall. Recomputes the plan server-side so it can't be
+// tampered with, and tops up only what isn't already covered by stock or existing
+// jobs for this order.
+export async function generateProcurement(orderId: string) {
+  const plan = await planProcurement(orderId);
+  if (!plan) return { error: "Order not found." };
+  if (plan.groups.length === 0) {
+    return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
+  }
+
+  let number = await nextJobNumber();
+  const createdIds: string[] = [];
+  for (const g of plan.groups) {
+    const job = await prisma.job.create({
+      data: {
+        number,
+        vendorId: g.vendorId,
+        kind: g.kind,
+        status: "OPEN",
+        dueDate: g.jobDueDate ?? null,
+        orderId,
+        notes: `Auto-generated from order #${plan.orderNumber}`,
+        items: {
+          create: g.lines.map((l) => ({
+            productId: l.productId,
+            qtyOrdered: l.shortfall,
+            rate: l.rate ?? null,
+            unit: l.unit,
+          })),
+        },
+      },
+    });
+    createdIds.push(job.id);
+    number += 1;
+  }
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/jobs");
+  revalidatePath("/");
+  return { ok: true, count: createdIds.length };
+}
+
+async function nextJobNumber(): Promise<number> {
+  const last = await prisma.job.findFirst({ orderBy: { number: "desc" } });
+  return last ? last.number + 1 : 1;
 }
 
 export async function deleteOrder(id: string) {

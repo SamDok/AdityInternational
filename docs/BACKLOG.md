@@ -145,13 +145,15 @@ balance, warn when a new order would exceed their credit limit, and auto-apply
 
 ### 🟡 Vendor payables & the rest of inventory
 Vendors (kaarigars/suppliers), design sourcing, job-work/purchase **receiving
-(stock-in)**, and **item-wise order shipping** (per-line `shippedQty`, stock out
-per shipment via `recordShipment`, derived Stage + fulfillment, full
-`StockMovement` audit log) are built — inventory balances on both sides and orders
-ship in parts. Follow-ups:
-- **🔴 Phase C — auto-generate jobs/POs from a confirmed order** (review-then-
-  generate, shortfall-only, grouped per kaarigar/supplier, each job inheriting the
-  order line's due date). Design sourcing + per-line due dates are already in place.
+(stock-in)**, **item-wise order shipping** (per-line `shippedQty`, stock out per
+shipment via `recordShipment`, derived Stage + fulfillment, full `StockMovement`
+audit log), and **auto-generated procurement** (a confirmed order's shortfall
+becomes one job/PO per kaarigar/supplier via `planProcurement` +
+`generateProcurement`, linked back through `Job.orderId`) are built — the full
+make→receive→ship loop closes. Follow-ups:
+- **Regenerate granularity** — `generateProcurement` tops up only the uncovered
+  shortfall (idempotent), but there's no UI to edit an auto-job before it's saved
+  or to split a group across vendors; both are manual for now.
 - **Vendor payables/ledger** — total owed per vendor from job `rate × qty`,
   payments against it, and statements (pairs with the Invoicing phase).
 - **Per-shipment record / packing list** — currently shipments bump `shippedQty`

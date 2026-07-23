@@ -5,8 +5,12 @@ import PageHeader from "@/components/PageHeader";
 import StagePicker from "../StagePicker";
 import ShipForm from "../ShipForm";
 import UnshipButton from "../UnshipButton";
+import GenerateProcurement from "../GenerateProcurement";
+import { planProcurement } from "../procurement";
 import { formatMoney, formatDate, fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS } from "@/lib/format";
-import { DocumentIcon } from "@/components/Icons";
+import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
+
+const JOB_STATUS_LABEL: Record<string, string> = { OPEN: "Open", PARTIAL: "Partial", RECEIVED: "Received", CANCELLED: "Cancelled" };
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +39,8 @@ export default async function OrderDetailPage({
     shippedQty: it.shippedQty,
     unit: it.unit,
   }));
+
+  const plan = await planProcurement(id);
 
   // Prefer the frozen snapshot; fall back to the live customer for older orders.
   const billToName = order.billToName || order.customer.company || order.customer.name;
@@ -104,6 +110,65 @@ export default async function OrderDetailPage({
         </div>
         {order.paymentTerms && (
           <p className="px-1 text-sm text-gray-500">Payment terms: <span className="font-medium text-gray-700">{order.paymentTerms}</span></p>
+        )}
+
+        {/* Procurement — make/buy the shortfall from kaarigars & suppliers */}
+        {order.status === "DRAFT" && plan && (plan.groups.length > 0 || plan.unassigned.length > 0) && (
+          <p className="px-1 text-xs text-gray-400">Confirm this order to generate its kaarigar / supplier jobs.</p>
+        )}
+        {plan && order.status !== "CANCELLED" && (plan.existingJobs.length > 0 || (order.status === "CONFIRMED" && (plan.groups.length > 0 || plan.unassigned.length > 0))) && (
+          <section className="card space-y-3">
+            <h2 className="text-sm font-semibold text-gray-900">Procurement</h2>
+
+            {plan.existingJobs.length > 0 && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-gray-500">Jobs raised for this order</p>
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl ring-1 ring-inset ring-gray-100">
+                  {plan.existingJobs.map((j) => (
+                    <li key={j.id}>
+                      <Link href={`/jobs/${j.id}`} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50">
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">Job #{j.number} · {j.vendorName}</span>
+                        <span className="shrink-0 text-xs text-gray-500">{j.kind === "JOB_WORK" ? "Job work" : "Purchase"} · {JOB_STATUS_LABEL[j.status] ?? j.status}</span>
+                        <ChevronRightIcon className="h-4 w-4 shrink-0 text-gray-300" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {order.status === "CONFIRMED" && plan.groups.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500">{plan.existingJobs.length > 0 ? "Still to make / buy:" : "To fulfil this order, make / buy the shortfall:"}</p>
+                {plan.groups.map((g) => (
+                  <div key={g.vendorId + g.kind} className="rounded-xl bg-gray-50 p-3">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {g.vendorName}
+                      <span className="text-xs font-normal text-gray-400"> · {g.kind === "JOB_WORK" ? "Job work" : "Purchase"}{g.jobDueDate ? ` · due ${formatDate(g.jobDueDate)}` : ""}</span>
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {g.lines.map((l) => (
+                        <li key={l.productId} className="text-xs text-gray-600">
+                          {l.name} — <span className="font-medium text-gray-800">{l.shortfall} {l.unit}</span>
+                          <span className="text-gray-400"> (need {l.needed}, {l.available} in stock)</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                <GenerateProcurement orderId={order.id} label={plan.existingJobs.length > 0 ? "Generate remaining jobs" : "Generate jobs & purchase orders"} />
+              </div>
+            )}
+
+            {plan.unassigned.length > 0 && (
+              <p className="text-xs text-amber-600">
+                {plan.unassigned.length} line{plan.unassigned.length > 1 ? "s" : ""} need a kaarigar/supplier set on the design (sourcing) before a job can be generated.
+              </p>
+            )}
+            {order.status === "CONFIRMED" && plan.groups.length === 0 && plan.existingJobs.length === 0 && plan.unassigned.length === 0 && (
+              <p className="text-sm text-gray-500">Everything is covered by stock — no jobs needed.</p>
+            )}
+          </section>
         )}
 
         <section>

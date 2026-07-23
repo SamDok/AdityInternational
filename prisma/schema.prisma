@@ -232,6 +232,9 @@ model Job {
   issueDate DateTime  @default(now())
   dueDate   DateTime?
   notes     String?
+  // The sales order this job was auto-generated from, if any.
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId   String?
   items     JobItem[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -279,6 +282,7 @@ model Order {
   paymentTerms    String?
 
   items      OrderItem[]
+  jobs       Job[] // job-work / purchase orders auto-generated from this order
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 }

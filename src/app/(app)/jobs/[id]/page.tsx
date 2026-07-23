@@ -21,7 +21,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   const { id } = await params;
   const job = await prisma.job.findUnique({
     where: { id },
-    include: { vendor: true, items: { include: { product: true } } },
+    include: { vendor: true, order: true, items: { include: { product: true } } },
   });
   if (!job) notFound();
 
@@ -41,6 +41,11 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
             <p className="mt-1 text-sm">
               <Link href={`/vendors/${job.vendorId}`} className="font-medium text-brand-600 hover:underline">{job.vendor.name}</Link>
             </p>
+            {job.order && (
+              <p className="mt-1 text-sm text-gray-500">
+                From <Link href={`/orders/${job.orderId}`} className="font-medium text-brand-600 hover:underline">order #{job.order.number}</Link>
+              </p>
+            )}
           </div>
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${s.cls}`}>{s.label}</span>
         </div>
