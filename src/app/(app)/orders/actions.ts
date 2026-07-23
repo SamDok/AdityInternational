@@ -207,24 +207,42 @@ export async function recordShipment(orderId: string, lines: { itemId: string; s
   await requireUser();
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { status: true, items: { select: { id: true, productId: true, quantity: true, shippedQty: true } } },
+    select: {
+      status: true,
+      items: { select: { id: true, productId: true, unit: true, product: { select: { stockQty: true, name: true } } } },
+    },
   });
   if (!order) return { error: "Order not found." };
   if (order.status === "CANCELLED") return { error: "This order is cancelled." };
 
   const byId = new Map(order.items.map((i) => [i.id, i]));
-  const ops = [];
-  const moves: StockMove[] = [];
+
+  // Gather the valid requests and tally demand per product. You may ship MORE
+  // than was ordered, but never more of a product than is physically in stock.
+  const requests: { it: (typeof order.items)[number]; ship: number }[] = [];
+  const wantByProduct = new Map<string, number>();
   for (const l of lines) {
     const it = byId.get(l.itemId);
     if (!it || !(l.ship > 0)) continue;
-    // Never ship more than what's left on the line.
-    const ship = Math.min(l.ship, it.quantity - it.shippedQty);
-    if (ship <= 0) continue;
+    requests.push({ it, ship: l.ship });
+    wantByProduct.set(it.productId, (wantByProduct.get(it.productId) ?? 0) + l.ship);
+  }
+  if (requests.length === 0) return { error: "Enter a quantity to ship." };
+
+  for (const [productId, want] of wantByProduct) {
+    const it = order.items.find((i) => i.productId === productId)!;
+    const stock = it.product.stockQty;
+    if (want > stock + 1e-9) {
+      return { error: `Only ${stock} ${it.unit} of ${it.product.name} in stock — receive more before shipping that much.` };
+    }
+  }
+
+  const ops = [];
+  const moves: StockMove[] = [];
+  for (const { it, ship } of requests) {
     ops.push(prisma.orderItem.update({ where: { id: it.id }, data: { shippedQty: { increment: ship } } }));
     moves.push({ productId: it.productId, delta: -ship, reason: "ORDER_SHIP", orderId });
   }
-  if (ops.length === 0) return { error: "Enter a quantity to ship." };
   await prisma.$transaction(ops);
 
   const userId = (await getCurrentUser())?.id ?? null;

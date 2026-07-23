@@ -38,6 +38,7 @@ export default async function OrderDetailPage({
     quantity: it.quantity,
     shippedQty: it.shippedQty,
     unit: it.unit,
+    stockQty: it.product.stockQty,
   }));
 
   const plan = await planProcurement(id);

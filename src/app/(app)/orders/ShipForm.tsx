@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { recordShipment } from "./actions";
 
-type Item = { id: string; label: string; quantity: number; shippedQty: number; unit: string };
+type Item = { id: string; label: string; quantity: number; shippedQty: number; unit: string; stockQty: number };
 
 export default function ShipForm({ orderId, items }: { orderId: string; items: Item[] }) {
   const [open, setOpen] = useState(false);
@@ -11,8 +11,9 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Only lines with something left to ship are worth showing.
-  const pendingItems = items.filter((it) => it.quantity - it.shippedQty > 1e-9);
+  // Show a line if there's still something to ship, or stock on hand to send
+  // (you can ship more than ordered, as long as it's in stock).
+  const pendingItems = items.filter((it) => it.quantity - it.shippedQty > 1e-9 || it.stockQty > 1e-9);
 
   function submit() {
     setError(null);
@@ -36,7 +37,7 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
   return (
     <div className="card space-y-3">
       <h3 className="font-semibold text-gray-900">Record shipment</h3>
-      <p className="text-xs text-gray-500">Enter how much is going out now. This reduces stock and marks the line shipped.</p>
+      <p className="text-xs text-gray-500">Enter how much is going out now — you can send more than ordered if it&apos;s in stock. This reduces stock and marks the line shipped.</p>
       {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-700">{error}</p>}
       <ul className="space-y-2">
         {pendingItems.map((it) => {
@@ -45,7 +46,9 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
             <li key={it.id} className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-gray-900">{it.label}</p>
-                <p className="text-xs text-gray-500">{it.shippedQty}/{it.quantity} {it.unit} shipped · {remaining} left</p>
+                <p className="text-xs text-gray-500">
+                  {it.shippedQty}/{it.quantity} {it.unit} shipped · {remaining} left · <span className={it.stockQty > 0 ? "text-gray-500" : "text-amber-600"}>{it.stockQty} in stock</span>
+                </p>
               </div>
               <input
                 value={vals[it.id] ?? ""}
