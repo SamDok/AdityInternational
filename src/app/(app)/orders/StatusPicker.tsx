@@ -38,6 +38,10 @@ export default function StatusPicker({ orderId, current }: { orderId: string; cu
           );
         })}
       </div>
+      <p className="mt-2 px-1 text-xs text-gray-400">
+        Marking an order <span className="font-medium">Shipped</span> takes its quantities out of stock;
+        moving it back adds them in again.
+      </p>
     </div>
   );
 }

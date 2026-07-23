@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { applyMovements, type StockMove } from "@/lib/stock";
+import { getCurrentUser } from "@/lib/auth";
 
 const ItemSchema = z.object({
   productId: z.string().min(1),
@@ -69,16 +71,19 @@ export async function receiveJob(jobId: string, receipts: { itemId: string; rece
   if (job.status === "CANCELLED") return { error: "This job is cancelled." };
 
   const ops = [];
+  const moves: StockMove[] = [];
   for (const r of receipts) {
     const item = job.items.find((i) => i.id === r.itemId);
     if (!item || !r.received || r.received <= 0) continue;
-    ops.push(
-      prisma.jobItem.update({ where: { id: item.id }, data: { qtyReceived: { increment: r.received } } }),
-      prisma.product.update({ where: { id: item.productId }, data: { stockQty: { increment: r.received } } }),
-    );
+    ops.push(prisma.jobItem.update({ where: { id: item.id }, data: { qtyReceived: { increment: r.received } } }));
+    moves.push({ productId: item.productId, delta: r.received, reason: "JOB_RECEIVE", jobId });
   }
   if (ops.length === 0) return { error: "Enter a quantity to receive." };
   await prisma.$transaction(ops);
+
+  // Bring received goods into stock and log each as a movement (JOB_RECEIVE).
+  const userId = (await getCurrentUser())?.id ?? null;
+  await applyMovements(moves.map((m) => ({ ...m, userId })));
 
   // Recompute status from fresh totals.
   const items = await prisma.jobItem.findMany({ where: { jobId } });

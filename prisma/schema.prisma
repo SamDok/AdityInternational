@@ -148,8 +148,24 @@ model Product {
   orderItems     OrderItem[]
   customerPrices CustomerPrice[]
   jobItems       JobItem[]
+  movements      StockMovement[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+// An audit log of every stock change (in or out). Reference ids are plain
+// strings (no FKs) so the history survives if the order/job is later deleted.
+model StockMovement {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  delta     Float // +in / -out
+  reason    String // JOB_RECEIVE | ORDER_SHIP | ORDER_UNSHIP | MANUAL_ADJUST
+  note      String?
+  orderId   String?
+  jobId     String?
+  userId    String?
+  createdAt DateTime @default(now())
 }
 
 // A party we buy from / give job work to: kaarigars (makers) and suppliers.
@@ -215,6 +231,7 @@ model Order {
   orderDate  DateTime    @default(now())
   dueDate    DateTime?
   notes      String?
+  stockDeducted Boolean  @default(false) // whether this order's stock has been taken out
   items      OrderItem[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt

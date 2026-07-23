@@ -124,8 +124,14 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
   picker are **built**. Remaining:
   - **🟢 Object storage for images** (beyond base64-in-DB) once photos get large
     or numerous — swap `Design.imageData` for an uploaded URL + a storage bucket.
-  - **🟢 Stock-movement history / audit** — log each `adjustStock` change
-    (who, when, why) instead of only keeping the running total.
+  - **🟡 Global recent-movements view** — the per-variant stock history is built
+    (shown on `products/width/[id]/edit`, powered by the `StockMovement` log). A
+    catalogue-wide "recent stock movements" feed and a per-variant stock report
+    would round it out.
+  - **🟢 Reserve on Confirmed vs deduct on Shipped** — stock currently leaves at
+    **Shipped** (`SHIPPED_SET` in `src/app/(app)/orders/actions.ts`). If the
+    workflow ever needs reservations, add a "reserved" concept that holds stock
+    from **Confirmed** and converts to a true deduction on Shipped.
 - Note: the order form loads a `pricesByCustomer` map
   (`orders/productOptions.ts`); move it to an on-demand fetch if it grows large.
 
@@ -138,16 +144,15 @@ balance, warn when a new order would exceed their credit limit, and auto-apply
 `defaultDiscount` to new order lines. Belongs with the **Invoicing** phase.
 
 ### 🟡 Vendor payables & the rest of inventory
-Vendors (kaarigars/suppliers), design sourcing, and job-work/purchase **receiving
-(stock-in)** are built. Follow-ups:
+Vendors (kaarigars/suppliers), design sourcing, job-work/purchase **receiving
+(stock-in)**, and **order-side stock-out** (deduct on Shipped, restore on
+reversal, with a full `StockMovement` audit log) are built — inventory now
+balances on both sides. Follow-ups:
 - **Vendor payables/ledger** — total owed per vendor from job `rate × qty`,
   payments against it, and statements (pairs with the Invoicing phase).
 - **Push job cost into `Product.costPrice`** (making charge + base material).
 - **Base material issued to a kaarigar** (material out) if you want to track the
   fabric you hand over.
-- **Order-side auto stock-deduct on Shipped** + a **stock-movement history**
-  (who/when/why) — the outbound half that, with receiving, completes real
-  inventory. Still a separate, not-yet-approved step.
 - **Edit a job** (currently create + receive + cancel/delete only).
 
 ### Salesperson performance

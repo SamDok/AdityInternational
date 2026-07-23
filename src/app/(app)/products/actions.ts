@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { applyMovements } from "@/lib/stock";
+import { getCurrentUser } from "@/lib/auth";
 
 const str = () => z.string().trim().optional();
 const optionalNumber = () =>
@@ -319,12 +321,17 @@ export async function duplicateDesign(id: string) {
   redirect(`/products/design/${copy.id}/edit`);
 }
 
-// Add to / subtract from a variant's stock (never below zero).
+// Add to / subtract from a variant's stock (never below zero for manual edits).
 export async function adjustStock(variantId: string, delta: number) {
   const v = await prisma.product.findUnique({ where: { id: variantId }, select: { stockQty: true, designId: true } });
   if (!v) return { error: "Not found." };
+  // Clamp at zero, but log the delta that was actually applied.
   const stockQty = Math.max(0, v.stockQty + delta);
-  await prisma.product.update({ where: { id: variantId }, data: { stockQty } });
+  const applied = stockQty - v.stockQty;
+  if (applied !== 0) {
+    const userId = (await getCurrentUser())?.id ?? null;
+    await applyMovements([{ productId: variantId, delta: applied, reason: "MANUAL_ADJUST", userId }]);
+  }
   if (v.designId) revalidatePath(`/products/design/${v.designId}`);
   revalidatePath("/products/low-stock");
   return { ok: true, stockQty };
