@@ -10,17 +10,19 @@ export const dynamic = "force-dynamic";
 export default async function ProformaPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
-  const [order, company] = await Promise.all([
-    prisma.order.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        items: { include: { product: { include: { design: true } } } },
-      },
-    }),
-    getCompanyProfile(),
-  ]);
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: {
+      customer: true,
+      items: { include: { product: { include: { design: true } } } },
+    },
+  });
   if (!order) notFound();
+
+  const [company, bankAccount] = await Promise.all([
+    getCompanyProfile(),
+    prisma.bankAccount.findUnique({ where: { currency: order.currency } }),
+  ]);
 
   const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
@@ -31,14 +33,20 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
   const shipToAddress = order.shipToAddress;
   const hasShipTo = shipToName || shipToAddress || order.destinationPort || order.incoterms;
 
-  const bank = [
-    ["Bank", company.bankName],
-    ["Account name", company.bankAccountName],
-    ["Account no.", company.bankAccountNo],
-    ["SWIFT", company.bankSwift],
-    ["IFSC", company.bankIfsc],
-    ["Branch", company.bankBranch],
-  ].filter(([, v]) => v) as [string, string][];
+  // Bank block for the order's currency — print only the fields that are set.
+  const bank = (bankAccount
+    ? [
+        ["Bank", bankAccount.bankName],
+        ["Account name", bankAccount.accountName],
+        ["Account no.", bankAccount.accountNo],
+        ["SWIFT / BIC", bankAccount.swift],
+        ["IFSC", bankAccount.ifsc],
+        ["IBAN", bankAccount.iban],
+        ["Branch", bankAccount.branch],
+        ["Bank address", bankAccount.bankAddress],
+      ]
+    : []
+  ).filter(([, v]) => v) as [string, string][];
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -152,12 +160,12 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
           <div className="text-xs">
             {bank.length > 0 && (
               <>
-                <p className="mb-1 font-bold uppercase tracking-wide text-gray-500">Bank details</p>
+                <p className="mb-1 font-bold uppercase tracking-wide text-gray-500">Bank details ({order.currency})</p>
                 <table className="border-collapse">
                   <tbody>
                     {bank.map(([k, v]) => (
                       <tr key={k}>
-                        <td className="pr-3 text-gray-500">{k}</td>
+                        <td className="pr-3 align-top text-gray-500">{k}</td>
                         <td className="font-medium">{v}</td>
                       </tr>
                     ))}

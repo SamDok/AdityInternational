@@ -24,17 +24,28 @@ model CompanyProfile {
   email          String?
   website        String?
   logoData       String? // downscaled logo as a base64 data URL
-  // Bank details, so a buyer can arrange payment / an LC.
-  bankName       String?
-  bankAccountName String?
-  bankAccountNo  String?
-  bankSwift      String?
-  bankIfsc       String?
-  bankBranch     String?
   // Footer
   signatureName  String? // "Authorised Signatory" name
   footerNote     String? // standing terms / thank-you line
   updatedAt      DateTime @updatedAt @default(now())
+}
+
+// One bank account per currency, so the proforma shows the account a buyer
+// should actually pay into. INR uses IFSC; foreign accounts use SWIFT (and
+// sometimes IBAN) — the PDF prints whichever fields are filled.
+model BankAccount {
+  id          String   @id @default(cuid())
+  currency    String   @unique // USD, EUR, GBP, INR — one account each
+  bankName    String?
+  accountName String?
+  accountNo   String?
+  swift       String? // foreign-currency accounts
+  ifsc        String? // INR (domestic) accounts
+  iban        String? // some EUR / GBP accounts
+  branch      String?
+  bankAddress String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // A person who can log in to the ERP.

@@ -1,13 +1,13 @@
 import { requireUser } from "@/lib/auth";
 import PageHeader from "@/components/PageHeader";
 import CompanyProfileForm from "./CompanyProfileForm";
-import { getCompanyProfile } from "../companyActions";
+import { getCompanyProfile, getBankAccounts } from "../companyActions";
 
 export const dynamic = "force-dynamic";
 
 export default async function CompanyProfilePage() {
   await requireUser();
-  const profile = await getCompanyProfile();
+  const [profile, banks] = await Promise.all([getCompanyProfile(), getBankAccounts()]);
 
   return (
     <div>
@@ -16,7 +16,7 @@ export default async function CompanyProfilePage() {
         subtitle="Used on your proforma invoices"
         backHref="/settings"
       />
-      <CompanyProfileForm initial={profile} />
+      <CompanyProfileForm initial={profile} banks={banks} />
     </div>
   );
 }

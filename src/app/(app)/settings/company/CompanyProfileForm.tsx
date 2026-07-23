@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveCompanyProfile } from "../companyActions";
+import { BANK_CURRENCIES, isDomestic } from "@/lib/bank";
 
 type Profile = {
   legalName?: string | null;
@@ -12,17 +13,17 @@ type Profile = {
   email?: string | null;
   website?: string | null;
   logoData?: string | null;
-  bankName?: string | null;
-  bankAccountName?: string | null;
-  bankAccountNo?: string | null;
-  bankSwift?: string | null;
-  bankIfsc?: string | null;
-  bankBranch?: string | null;
   signatureName?: string | null;
   footerNote?: string | null;
 };
 
-export default function CompanyProfileForm({ initial }: { initial: Profile }) {
+type BankAcct = {
+  bankName?: string | null; accountName?: string | null; accountNo?: string | null;
+  swift?: string | null; ifsc?: string | null; iban?: string | null;
+  branch?: string | null; bankAddress?: string | null;
+};
+
+export default function CompanyProfileForm({ initial, banks }: { initial: Profile; banks: Record<string, BankAcct> }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -111,18 +112,48 @@ export default function CompanyProfileForm({ initial }: { initial: Profile }) {
         </div>
       </div>
 
-      <div className="card space-y-4">
-        <p className="text-sm font-semibold text-gray-900">Bank details <span className="text-xs font-normal text-gray-400">— for payment / LC</span></p>
-        {field("bankName", "Bank name")}
-        <div className="grid grid-cols-2 gap-3">
-          {field("bankAccountName", "Account name")}
-          {field("bankAccountNo", "Account number")}
+      <div className="space-y-3">
+        <div className="px-1">
+          <p className="text-sm font-semibold text-gray-900">Bank accounts</p>
+          <p className="text-xs text-gray-500">One per currency. The proforma shows the account matching the order&apos;s currency. Fill in only the ones you use.</p>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {field("bankSwift", "SWIFT")}
-          {field("bankIfsc", "IFSC")}
-          {field("bankBranch", "Branch")}
-        </div>
+        {BANK_CURRENCIES.map((cur) => {
+          const b = banks[cur] ?? {};
+          const domestic = isDomestic(cur);
+          const bf = (f: keyof BankAcct, label: string, placeholder = "") => (
+            <div>
+              <label className="field-label">{label}</label>
+              <input name={`bank_${cur}_${f}`} defaultValue={b[f] ?? ""} className="field-input" placeholder={placeholder} />
+            </div>
+          );
+          return (
+            <details key={cur} className="card" open={!!b.accountNo}>
+              <summary className="flex cursor-pointer items-center justify-between font-semibold text-gray-900">
+                <span>{cur} account</span>
+                <span className="text-xs font-normal text-gray-400">{b.accountNo ? "set" : "not set"}</span>
+              </summary>
+              <div className="mt-4 space-y-4">
+                {bf("bankName", "Bank name")}
+                <div className="grid grid-cols-2 gap-3">
+                  {bf("accountName", "Account name")}
+                  {bf("accountNo", domestic ? "Account number" : "Account / IBAN number")}
+                </div>
+                {domestic ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {bf("ifsc", "IFSC code")}
+                    {bf("branch", "Branch")}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {bf("swift", "SWIFT / BIC")}
+                    {bf("iban", "IBAN (if any)")}
+                  </div>
+                )}
+                {bf("bankAddress", "Bank address (optional)")}
+              </div>
+            </details>
+          );
+        })}
       </div>
 
       <div className="card space-y-4">
