@@ -175,7 +175,6 @@ model Product {
   description    String?
   unit           String          @default("mtr")
   costPrice      Float? // what this width costs us
-  salePrice      Float           @default(0) // optional default/fallback selling price
   currency       String          @default("INR")
   stockQty       Float           @default(0) // quantity on hand
   reorderLevel   Float? // low-stock threshold

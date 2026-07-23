@@ -38,15 +38,15 @@ async function main() {
   });
 
   const twill = await prisma.product.create({
-    data: { name: 'Cotton Twill 60"', sku: "CT-60", unit: "mtr", salePrice: 3.2, currency: "USD", stockQty: 4200, description: "Mid-weight cotton twill" },
+    data: { name: 'Cotton Twill 60"', sku: "CT-60", unit: "mtr", currency: "USD", stockQty: 4200, description: "Mid-weight cotton twill" },
   });
 
   const poplin = await prisma.product.create({
-    data: { name: 'Poplin 44"', sku: "PP-44", unit: "mtr", salePrice: 2.1, currency: "USD", stockQty: 1800, description: "Fine poplin, white" },
+    data: { name: 'Poplin 44"', sku: "PP-44", unit: "mtr", currency: "USD", stockQty: 1800, description: "Fine poplin, white" },
   });
 
   await prisma.product.create({
-    data: { name: "Linen Blend", sku: "LB-01", unit: "mtr", salePrice: 4.5, currency: "EUR", stockQty: 950 },
+    data: { name: "Linen Blend", sku: "LB-01", unit: "mtr", currency: "EUR", stockQty: 950 },
   });
 
   await prisma.order.create({

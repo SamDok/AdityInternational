@@ -13,13 +13,12 @@ const FIELD_ALIASES: Record<string, string> = {
   "colour": "colour", "color": "colour",
   "gsm": "gsm", "weight": "gsm",
   "cost": "cost", "cost price": "cost", "costprice": "cost",
-  "default price": "defaultPrice", "defaultprice": "defaultPrice", "price": "defaultPrice", "sale price": "defaultPrice",
   "stock": "stock", "stock qty": "stock", "quantity": "stock", "qty": "stock",
   "unit": "unit",
   "sku": "sku", "barcode": "sku",
 };
 
-const TEMPLATE_HEADERS = ["type", "code", "composition", "hsn", "width", "colour", "gsm", "cost", "defaultPrice", "stock", "unit", "sku"];
+const TEMPLATE_HEADERS = ["type", "code", "composition", "hsn", "width", "colour", "gsm", "cost", "stock", "unit", "sku"];
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];

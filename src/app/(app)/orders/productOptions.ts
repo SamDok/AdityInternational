@@ -30,7 +30,6 @@ export async function getProductOptions() {
       group: p.design?.category.name ?? "Other",
       groupSort: p.design?.category.sortOrder ?? 999,
       unit: p.unit,
-      salePrice: p.salePrice,
       costPrice: p.costPrice,
     }))
     .sort(

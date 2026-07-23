@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { createVariantsBulk } from "./actions";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 
-type Row = { key: string; width: string; colour: string; gsm: string; costPrice: string; salePrice: string; stockQty: string };
+type Row = { key: string; width: string; colour: string; gsm: string; costPrice: string; stockQty: string };
 
 let counter = 0;
-const emptyRow = (): Row => ({ key: `r${counter++}`, width: "", colour: "", gsm: "", costPrice: "", salePrice: "", stockQty: "" });
+const emptyRow = (): Row => ({ key: `r${counter++}`, width: "", colour: "", gsm: "", costPrice: "", stockQty: "" });
 
 export default function BulkWidthsForm({ designId }: { designId: string }) {
   const [open, setOpen] = useState(false);
@@ -52,7 +52,7 @@ export default function BulkWidthsForm({ designId }: { designId: string }) {
           <thead>
             <tr className="text-left text-xs text-gray-400">
               <th className="px-1 pb-1">Width*</th><th className="px-1 pb-1">Colour</th><th className="px-1 pb-1">GSM</th>
-              <th className="px-1 pb-1">Cost</th><th className="px-1 pb-1">Price</th><th className="px-1 pb-1">Stock</th><th></th>
+              <th className="px-1 pb-1">Cost</th><th className="px-1 pb-1">Stock</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -62,7 +62,6 @@ export default function BulkWidthsForm({ designId }: { designId: string }) {
                 <td className="p-1"><input className={cell} value={r.colour} onChange={(e) => update(r.key, { colour: e.target.value })} placeholder="Gold" /></td>
                 <td className="p-1"><input className={cell} value={r.gsm} onChange={(e) => update(r.key, { gsm: e.target.value })} inputMode="decimal" /></td>
                 <td className="p-1"><input className={cell} value={r.costPrice} onChange={(e) => update(r.key, { costPrice: e.target.value })} inputMode="decimal" /></td>
-                <td className="p-1"><input className={cell} value={r.salePrice} onChange={(e) => update(r.key, { salePrice: e.target.value })} inputMode="decimal" /></td>
                 <td className="p-1"><input className={cell} value={r.stockQty} onChange={(e) => update(r.key, { stockQty: e.target.value })} inputMode="decimal" /></td>
                 <td className="p-1">
                   {rows.length > 1 && (

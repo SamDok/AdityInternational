@@ -9,7 +9,6 @@ type Values = {
   colour?: string | null;
   gsm?: number | null;
   costPrice?: number | null;
-  salePrice?: number | null;
   currency?: string | null;
   stockQty?: number | null;
   reorderLevel?: number | null;
@@ -29,8 +28,6 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
   const router = useRouter();
 
   const num = (v?: number | null) => (v === null || v === undefined ? "" : String(v));
-  const [cost, setCost] = useState(num(initial?.costPrice));
-  const [sale, setSale] = useState(String(initial?.salePrice ?? 0));
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -39,10 +36,6 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
       if (res?.error) setError(res.error);
     });
   }
-
-  const c = parseFloat(cost);
-  const s = parseFloat(sale);
-  const margin = !isNaN(c) && !isNaN(s) && s > 0 ? Math.round(((s - c) / s) * 100) : null;
 
   return (
     <form action={onSubmit} className="space-y-5 p-4">
@@ -71,22 +64,12 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
           defaultValue={num(initial?.gsm)} className="field-input" placeholder="Weight" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="field-label" htmlFor="costPrice">Cost price</label>
-          <input id="costPrice" name="costPrice" type="number" step="0.01" min="0" inputMode="decimal"
-            value={cost} onChange={(e) => setCost(e.target.value)} className="field-input" placeholder="What it costs us" />
-        </div>
-        <div>
-          <label className="field-label" htmlFor="salePrice">Default price</label>
-          <input id="salePrice" name="salePrice" type="number" step="0.01" min="0" inputMode="decimal"
-            value={sale} onChange={(e) => setSale(e.target.value)} className="field-input" placeholder="Optional fallback" />
-        </div>
+      <div>
+        <label className="field-label" htmlFor="costPrice">Cost price</label>
+        <input id="costPrice" name="costPrice" type="number" step="0.01" min="0" inputMode="decimal"
+          defaultValue={num(initial?.costPrice)} className="field-input" placeholder="What it costs us" />
+        <p className="mt-1.5 px-1 text-xs text-gray-400">Selling prices are set per customer in their price list.</p>
       </div>
-      <p className="-mt-2 px-1 text-xs text-gray-400">
-        {margin != null ? `Margin ${margin}% on default price. ` : ""}
-        Default price is only a fallback — each customer's own price is set in their price list.
-      </p>
 
       <div className="grid grid-cols-2 gap-3">
         <div>

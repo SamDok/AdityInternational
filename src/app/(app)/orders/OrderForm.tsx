@@ -22,7 +22,7 @@ type CustomerOpt = {
   incoterms?: string | null;
   paymentTerms?: string | null;
 };
-type ProductOpt = { id: string; label: string; group: string; unit: string; salePrice: number };
+type ProductOpt = { id: string; label: string; group: string; unit: string };
 
 type Line = {
   key: string;
@@ -172,17 +172,11 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
     return p != null ? p : null;
   }
 
-  // What to prefill a line's rate with: only the customer's regular price. The
-  // product's default is NOT used here — it's offered as a tappable hint below.
+  // What to prefill a line's rate with: only the customer's regular price. There
+  // is no product-level default price in this business.
   function rateFor(productId: string, custId: string): string {
     const saved = savedPriceFor(productId, custId);
     return saved != null ? String(saved) : "";
-  }
-
-  // The product's default sale price (a hint), if set.
-  function defaultPriceFor(productId: string): number | null {
-    const p = products.find((x) => x.id === productId);
-    return p && p.salePrice > 0 ? p.salePrice : null;
   }
 
   function onCustomerChange(id: string) {
@@ -386,7 +380,6 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
             const lineTotal = metres * rate;
             const pcs = parseInt(l.pieces, 10);
             const saved = savedPriceFor(l.productId, customerId);
-            const def = defaultPriceFor(l.productId);
             const rateNum = l.rate === "" ? null : rate;
             const differsFromSaved = saved != null && rateNum != null && Math.abs(saved - rateNum) > 1e-9;
             const justSaved = savedKeys.has(l.key) && !differsFromSaved;
@@ -439,11 +432,6 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs">
                       {saved == null ? (
                         <>
-                          {def != null && rateNum == null && (
-                            <button type="button" onClick={() => updateLine(l.key, { rate: String(def) })} className="text-gray-500 underline">
-                              Use default {formatMoney(def, currency)}
-                            </button>
-                          )}
                           {rateNum != null && !justSaved && (
                             <button type="button" onClick={() => saveRegularPrice(l)} disabled={savingKey === l.key} className="font-medium text-brand-600">
                               {savingKey === l.key ? "Saving…" : "Save as this customer's regular price"}

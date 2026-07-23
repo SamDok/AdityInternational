@@ -81,7 +81,7 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
             <EmptyState
               icon={<BoxIcon className="h-8 w-8" />}
               title="No widths yet"
-              message="Add each width of this design, with its own GSM, cost, sale price and stock."
+              message="Add each width of this design, with its own GSM, cost and stock."
               actionLabel="Add the first width"
               actionHref={`/products/width/new?design=${design.id}`}
             />
@@ -94,7 +94,6 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
                     <p className="truncate text-sm text-gray-500">
                       {v.gsm != null ? `${v.gsm} GSM` : ""}
                       {v.costPrice != null ? `${v.gsm != null ? " · " : ""}cost ${formatMoney(v.costPrice, v.currency)}` : ""}
-                      {` · ${formatMoney(v.salePrice, v.currency)} default`}
                     </p>
                   </Link>
                   <StockAdjust variantId={v.id} stockQty={v.stockQty} unit={v.unit} />

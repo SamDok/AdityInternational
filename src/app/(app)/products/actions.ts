@@ -161,7 +161,6 @@ const VariantSchema = z.object({
   colour: str(),
   gsm: optionalNumber(),
   costPrice: optionalNumber(),
-  salePrice: z.coerce.number().min(0).default(0),
   currency: z.string().trim().min(1).default("INR"),
   stockQty: z.coerce.number().default(0),
   reorderLevel: optionalNumber(),
@@ -188,7 +187,6 @@ export async function createVariant(designId: string, formData: FormData) {
       colour: d.colour || null,
       gsm: d.gsm ?? null,
       costPrice: d.costPrice ?? null,
-      salePrice: d.salePrice,
       currency: d.currency,
       stockQty: d.stockQty,
       reorderLevel: d.reorderLevel ?? null,
@@ -218,7 +216,6 @@ export async function updateVariant(id: string, formData: FormData) {
       colour: d.colour || null,
       gsm: d.gsm ?? null,
       costPrice: d.costPrice ?? null,
-      salePrice: d.salePrice,
       currency: d.currency,
       stockQty: d.stockQty,
       reorderLevel: d.reorderLevel ?? null,
@@ -249,7 +246,7 @@ const numOrNull = (v?: string) => {
 // Create several width-variants for a design in one submit.
 export async function createVariantsBulk(
   designId: string,
-  rows: { width?: string; colour?: string; gsm?: string; costPrice?: string; salePrice?: string; stockQty?: string; unit?: string }[],
+  rows: { width?: string; colour?: string; gsm?: string; costPrice?: string; stockQty?: string; unit?: string }[],
 ) {
   const design = await prisma.design.findUnique({ where: { id: designId }, select: { code: true } });
   if (!design) return { error: "Design not found." };
@@ -266,7 +263,6 @@ export async function createVariantsBulk(
         colour,
         gsm: numOrNull(r.gsm),
         costPrice: numOrNull(r.costPrice),
-        salePrice: numOrNull(r.salePrice) ?? 0,
         stockQty: numOrNull(r.stockQty) ?? 0,
         unit: (r.unit ?? "").trim() || "mtr",
         currency: "INR",
@@ -309,7 +305,6 @@ export async function duplicateDesign(id: string) {
         colour: v.colour,
         gsm: v.gsm,
         costPrice: v.costPrice,
-        salePrice: v.salePrice,
         currency: v.currency,
         stockQty: 0,
         reorderLevel: v.reorderLevel,
@@ -343,7 +338,7 @@ export async function exportProductsCsv(): Promise<string> {
     include: { design: { include: { category: true } } },
     orderBy: { name: "asc" },
   });
-  const header = ["type", "code", "composition", "hsn", "width", "colour", "gsm", "cost", "defaultPrice", "stock", "unit", "sku"];
+  const header = ["type", "code", "composition", "hsn", "width", "colour", "gsm", "cost", "stock", "unit", "sku"];
   const esc = (v: unknown) => {
     const s = v == null ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -352,7 +347,7 @@ export async function exportProductsCsv(): Promise<string> {
   for (const p of rows) {
     lines.push([
       p.design?.category.name, p.design?.code, p.design?.composition, p.design?.hsnCode,
-      p.width, p.colour, p.gsm, p.costPrice, p.salePrice, p.stockQty, p.unit, p.sku,
+      p.width, p.colour, p.gsm, p.costPrice, p.stockQty, p.unit, p.sku,
     ].map(esc).join(","));
   }
   return lines.join("\n");
@@ -410,7 +405,6 @@ export async function importProducts(rows: Record<string, string>[]) {
         colour,
         gsm: numOrNull(r.gsm),
         costPrice: numOrNull(r.cost),
-        salePrice: numOrNull(r.defaultPrice) ?? 0,
         stockQty: numOrNull(r.stock) ?? 0,
         unit: (r.unit ?? "").trim() || "mtr",
         sku: (r.sku ?? "").trim() || null,
