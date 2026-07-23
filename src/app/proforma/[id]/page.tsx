@@ -134,6 +134,7 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
                     <div>
                       <p className="font-medium">{it.product.name}</p>
                       {it.description && <p className="text-gray-600">{it.description}</p>}
+                      {it.dueDate && <p className="text-[10px] text-gray-500">Delivery: {formatDate(it.dueDate)}</p>}
                     </div>
                   </div>
                 </td>

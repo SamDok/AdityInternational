@@ -49,11 +49,13 @@ export default async function EditOrderPage({
     incoterms: order.incoterms,
     paymentTerms: order.paymentTerms,
     items: order.items.map((it) => ({
+      id: it.id,
       productId: it.productId,
       description: it.description,
       quantity: it.quantity,
       pieces: it.pieces,
       perPieceQty: it.perPieceQty,
+      dueDate: it.dueDate?.toISOString() ?? null,
       unit: it.unit,
       rate: it.rate,
     })),

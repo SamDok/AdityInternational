@@ -128,10 +128,10 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
     (shown on `products/width/[id]/edit`, powered by the `StockMovement` log). A
     catalogue-wide "recent stock movements" feed and a per-variant stock report
     would round it out.
-  - **🟢 Reserve on Confirmed vs deduct on Shipped** — stock currently leaves at
-    **Shipped** (`SHIPPED_SET` in `src/app/(app)/orders/actions.ts`). If the
-    workflow ever needs reservations, add a "reserved" concept that holds stock
-    from **Confirmed** and converts to a true deduction on Shipped.
+  - **🟢 Reserve stock on Confirmed** — stock now leaves **per shipment**
+    (`recordShipment` in `src/app/(app)/orders/actions.ts`). If the workflow ever
+    needs soft allocation, add a "reserved" concept that holds stock from Confirmed
+    and converts to a true deduction when a shipment is recorded.
 - Note: the order form loads a `pricesByCustomer` map
   (`orders/productOptions.ts`); move it to an on-demand fetch if it grows large.
 
@@ -145,11 +145,20 @@ balance, warn when a new order would exceed their credit limit, and auto-apply
 
 ### 🟡 Vendor payables & the rest of inventory
 Vendors (kaarigars/suppliers), design sourcing, job-work/purchase **receiving
-(stock-in)**, and **order-side stock-out** (deduct on Shipped, restore on
-reversal, with a full `StockMovement` audit log) are built — inventory now
-balances on both sides. Follow-ups:
+(stock-in)**, and **item-wise order shipping** (per-line `shippedQty`, stock out
+per shipment via `recordShipment`, derived Stage + fulfillment, full
+`StockMovement` audit log) are built — inventory balances on both sides and orders
+ship in parts. Follow-ups:
+- **🔴 Phase C — auto-generate jobs/POs from a confirmed order** (review-then-
+  generate, shortfall-only, grouped per kaarigar/supplier, each job inheriting the
+  order line's due date). Design sourcing + per-line due dates are already in place.
 - **Vendor payables/ledger** — total owed per vendor from job `rate × qty`,
   payments against it, and statements (pairs with the Invoicing phase).
+- **Per-shipment record / packing list** — currently shipments bump `shippedQty`
+  and the ledger but aren't grouped into a named dispatch; a packing-list / partial
+  commercial-invoice document would build on this.
+- **Finer shipment correction** — `unshipLine` resets a line to 0; a "reduce by N"
+  correction would be gentler.
 - **Push job cost into `Product.costPrice`** (making charge + base material).
 - **Base material issued to a kaarigar** (material out) if you want to track the
   fabric you hand over.

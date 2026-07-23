@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatMoney, formatDate, STATUS_LABELS, STATUS_COLORS, type OrderStatus } from "@/lib/format";
+import {
+  formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
+  fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS,
+} from "@/lib/format";
 import { ChevronRightIcon, PlusIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +109,7 @@ export default async function CustomerDetailPage({
             <ul className="space-y-2">
               {customer.orders.map((o) => {
                 const total = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
+                const f = fulfillmentOf(o.items);
                 return (
                   <li key={o.id}>
                     <Link href={`/orders/${o.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
@@ -113,8 +117,8 @@ export default async function CustomerDetailPage({
                         <p className="font-semibold text-gray-900">Order #{o.number}</p>
                         <p className="text-sm text-gray-500">{formatDate(o.orderDate)}</p>
                       </div>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[o.status as OrderStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                        {STATUS_LABELS[o.status as OrderStatus] ?? o.status}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o.status !== "CANCELLED" && f !== "NONE" ? FULFILLMENT_COLORS[f] : STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
+                        {o.status !== "CANCELLED" && f !== "NONE" ? FULFILLMENT_LABELS[f] : STAGE_LABELS[o.status as OrderStage] ?? o.status}
                       </span>
                       <span className="text-sm font-semibold text-gray-900">
                         {formatMoney(total, o.currency)}

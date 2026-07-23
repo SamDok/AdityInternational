@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import StatusPicker from "../StatusPicker";
-import { formatMoney, formatDate } from "@/lib/format";
+import StagePicker from "../StagePicker";
+import ShipForm from "../ShipForm";
+import UnshipButton from "../UnshipButton";
+import { formatMoney, formatDate, fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS } from "@/lib/format";
 import { DocumentIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,14 @@ export default async function OrderDetailPage({
 
   const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
+  const fulfillment = fulfillmentOf(order.items);
+  const shipItems = order.items.map((it) => ({
+    id: it.id,
+    label: it.product.name,
+    quantity: it.quantity,
+    shippedQty: it.shippedQty,
+    unit: it.unit,
+  }));
 
   // Prefer the frozen snapshot; fall back to the live customer for older orders.
   const billToName = order.billToName || order.customer.company || order.customer.name;
@@ -61,7 +71,16 @@ export default async function OrderDetailPage({
           </p>
         </div>
 
-        <StatusPicker orderId={order.id} current={order.status} />
+        <div className="flex items-start justify-between gap-3">
+          <StagePicker orderId={order.id} current={order.status} />
+          <div className="pt-6">
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${FULFILLMENT_COLORS[fulfillment]}`}>
+              {FULFILLMENT_LABELS[fulfillment]}
+            </span>
+          </div>
+        </div>
+
+        {order.status !== "CANCELLED" && <ShipForm orderId={order.id} items={shipItems} />}
 
         {/* Bill-to / ship-to snapshot (as it prints on the PDF) */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -116,6 +135,19 @@ export default async function OrderDetailPage({
                         : `${it.quantity} ${it.unit}`}
                       {" × "}{formatMoney(it.rate, order.currency)}
                     </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                      {it.shippedQty > 0 ? (
+                        <span className={it.shippedQty >= it.quantity ? "font-medium text-green-600" : "font-medium text-amber-600"}>
+                          {it.shippedQty >= it.quantity ? "Shipped" : `Shipped ${it.shippedQty}/${it.quantity} ${it.unit}`}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">Not shipped</span>
+                      )}
+                      {(it.dueDate || order.dueDate) && (
+                        <span className="text-gray-500">Due {formatDate(it.dueDate ?? order.dueDate!)}</span>
+                      )}
+                      {it.shippedQty > 0 && <UnshipButton itemId={it.id} />}
+                    </div>
                   </div>
                   <p className="shrink-0 font-semibold text-gray-900">
                     {formatMoney(it.quantity * it.rate, order.currency)}

@@ -26,31 +26,44 @@ export const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED"] as const;
 
 export const UNITS = ["mtr", "pcs", "kg", "roll", "box", "set"] as const;
 
-export const ORDER_STATUSES = [
-  "DRAFT",
-  "CONFIRMED",
-  "IN_PRODUCTION",
-  "SHIPPED",
-  "COMPLETED",
-  "CANCELLED",
-] as const;
+// The order's commercial STAGE — set by hand. Shipping progress is separate and
+// derived from what's actually been shipped (see fulfillmentOf below).
+export const ORDER_STAGES = ["DRAFT", "CONFIRMED", "CANCELLED"] as const;
 
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export type OrderStage = (typeof ORDER_STAGES)[number];
 
-export const STATUS_LABELS: Record<OrderStatus, string> = {
+export const STAGE_LABELS: Record<OrderStage, string> = {
   DRAFT: "Draft",
   CONFIRMED: "Confirmed",
-  IN_PRODUCTION: "In production",
-  SHIPPED: "Shipped",
-  COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };
 
-export const STATUS_COLORS: Record<OrderStatus, string> = {
+export const STAGE_COLORS: Record<OrderStage, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
   CONFIRMED: "bg-blue-100 text-blue-700",
-  IN_PRODUCTION: "bg-amber-100 text-amber-700",
-  SHIPPED: "bg-purple-100 text-purple-700",
-  COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-red-100 text-red-700",
+};
+
+// Derived shipping status from the order's line items.
+export type Fulfillment = "NONE" | "PARTIAL" | "FULL";
+
+export function fulfillmentOf(items: { quantity: number; shippedQty: number }[]): Fulfillment {
+  if (items.length === 0) return "NONE";
+  const ordered = items.reduce((s, i) => s + i.quantity, 0);
+  const shipped = items.reduce((s, i) => s + i.shippedQty, 0);
+  if (shipped <= 0) return "NONE";
+  if (shipped >= ordered) return "FULL";
+  return "PARTIAL";
+}
+
+export const FULFILLMENT_LABELS: Record<Fulfillment, string> = {
+  NONE: "Not shipped",
+  PARTIAL: "Partly shipped",
+  FULL: "Shipped",
+};
+
+export const FULFILLMENT_COLORS: Record<Fulfillment, string> = {
+  NONE: "bg-gray-100 text-gray-600",
+  PARTIAL: "bg-amber-100 text-amber-700",
+  FULL: "bg-green-100 text-green-700",
 };

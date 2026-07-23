@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CURRENCIES, UNITS, ORDER_STATUSES, STATUS_LABELS, formatMoney, type OrderStatus } from "@/lib/format";
+import { CURRENCIES, UNITS, ORDER_STAGES, STAGE_LABELS, formatMoney, type OrderStage } from "@/lib/format";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import ProductPicker from "./ProductPicker";
 import type { OrderInput } from "./actions";
@@ -26,10 +26,12 @@ type ProductOpt = { id: string; label: string; group: string; unit: string };
 
 type Line = {
   key: string;
+  id?: string; // set for lines that already exist (so edits update in place)
   productId: string;
   description: string;
   pieces: string; // number of pieces (blank = loose metres)
   perPieceQty: string; // metres in each piece
+  dueDate: string; // this line's own due date (blank = use the order's)
   unit: string;
   rate: string;
 };
@@ -60,7 +62,7 @@ type InitialOrder = {
   orderDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
-  items: { productId: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; unit: string; rate: number }[];
+  items: { id?: string; productId: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; dueDate?: string | null; unit: string; rate: number }[];
 } & Partial<Record<keyof Snapshot, string | null>>;
 
 type Props = {
@@ -81,7 +83,7 @@ function todayStr() {
 }
 
 function emptyLine(): Line {
-  return { key: newKey(), productId: "", description: "", pieces: "", perPieceQty: "", unit: "mtr", rate: "" };
+  return { key: newKey(), productId: "", description: "", pieces: "", perPieceQty: "", dueDate: "", unit: "mtr", rate: "" };
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -151,10 +153,12 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
               : it.quantity;
           return {
             key: newKey(),
+            id: it.id,
             productId: it.productId,
             description: it.description ?? "",
             pieces: it.pieces != null ? String(it.pieces) : "",
             perPieceQty: String(per),
+            dueDate: it.dueDate?.slice(0, 10) ?? "",
             unit: it.unit,
             rate: String(it.rate),
           };
@@ -245,7 +249,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
     const input: OrderInput = {
       customerId,
       currency,
-      status: status as OrderStatus,
+      status: status as OrderStage,
       orderDate,
       dueDate: dueDate || null,
       notes: notes || null,
@@ -258,10 +262,12 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
       incoterms: snap.incoterms || null,
       paymentTerms: snap.paymentTerms || null,
       items: cleanLines.map((l) => ({
+        id: l.id,
         productId: l.productId,
         description: l.description || null,
         pieces: l.pieces === "" ? null : Number(l.pieces),
         perPieceQty: Number(l.perPieceQty),
+        dueDate: l.dueDate || null,
         unit: l.unit,
         rate: Number(l.rate),
       })),
@@ -312,9 +318,9 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
             </select>
           </div>
           <div>
-            <label className="field-label" htmlFor="status">Status</label>
+            <label className="field-label" htmlFor="status">Stage</label>
             <select id="status" value={status} onChange={(e) => setStatus(e.target.value)} className="field-input">
-              {ORDER_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+              {ORDER_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
             </select>
           </div>
         </div>
@@ -423,6 +429,11 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                   Total: <span className="font-semibold text-gray-700">{metres || 0} {l.unit}</span>
                   {pcs > 0 && <span className="text-gray-400"> ({pcs} × {parseFloat(l.perPieceQty) || 0})</span>}
                 </p>
+
+                <div>
+                  <label className="field-label">Due date <span className="text-gray-400">(optional — defaults to the order&apos;s)</span></label>
+                  <input value={l.dueDate} onChange={(e) => updateLine(l.key, { dueDate: e.target.value })} className="field-input" type="date" />
+                </div>
 
                 {/* Rate + regular-price context */}
                 <div>

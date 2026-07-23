@@ -263,9 +263,8 @@ model Order {
   status     String      @default("DRAFT")
   currency   String      @default("INR")
   orderDate  DateTime    @default(now())
-  dueDate    DateTime?
+  dueDate    DateTime? // overall target date; each line may override with its own
   notes      String?
-  stockDeducted Boolean  @default(false) // whether this order's stock has been taken out
 
   // Snapshot of the customer's details at order time, frozen so a sent PDF never
   // changes if the customer is later edited. Prefilled from the customer,
@@ -296,6 +295,7 @@ model OrderItem {
   pieces      Int? // number of pieces / thans on this line
   perPieceQty Float? // metres in each piece; quantity is derived from this × pieces
   shippedQty  Float    @default(0) // metres shipped so far (item-wise fulfillment)
+  dueDate     DateTime? // this line's own due date; falls back to the order's when null
   unit        String   @default("mtr")
   rate        Float    @default(0) // price per unit in the order currency
   createdAt   DateTime @default(now())
