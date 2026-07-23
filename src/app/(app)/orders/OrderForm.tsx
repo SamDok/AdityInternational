@@ -7,6 +7,7 @@ import { CURRENCIES, UNITS, ORDER_STATUSES, STATUS_LABELS, formatMoney, type Ord
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import ProductPicker from "./ProductPicker";
 import type { OrderInput } from "./actions";
+import { saveCustomerRegularPrice } from "../customers/actions";
 
 type CustomerOpt = {
   id: string;
@@ -27,11 +28,18 @@ type Line = {
   key: string;
   productId: string;
   description: string;
-  quantity: string;
-  pieces: string;
+  pieces: string; // number of pieces (blank = loose metres)
+  perPieceQty: string; // metres in each piece
   unit: string;
   rate: string;
 };
+
+// Total metres on a line: pieces × qty-per-piece (pieces blank/0 → just the qty).
+function lineMetres(l: Line): number {
+  const per = parseFloat(l.perPieceQty) || 0;
+  const pcs = parseInt(l.pieces, 10);
+  return pcs > 0 ? pcs * per : per;
+}
 
 // The frozen customer-detail snapshot the order carries onto its PDF.
 type Snapshot = {
@@ -52,7 +60,7 @@ type InitialOrder = {
   orderDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
-  items: { productId: string; description?: string | null; quantity: number; pieces?: number | null; unit: string; rate: number }[];
+  items: { productId: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; unit: string; rate: number }[];
 } & Partial<Record<keyof Snapshot, string | null>>;
 
 type Props = {
@@ -73,7 +81,7 @@ function todayStr() {
 }
 
 function emptyLine(): Line {
-  return { key: newKey(), productId: "", description: "", quantity: "", pieces: "", unit: "mtr", rate: "" };
+  return { key: newKey(), productId: "", description: "", pieces: "", perPieceQty: "", unit: "mtr", rate: "" };
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -134,29 +142,47 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
 
   const [lines, setLines] = useState<Line[]>(
     initial?.items.length
-      ? initial.items.map((it) => ({
-          key: newKey(),
-          productId: it.productId,
-          description: it.description ?? "",
-          quantity: String(it.quantity),
-          pieces: it.pieces != null ? String(it.pieces) : "",
-          unit: it.unit,
-          rate: String(it.rate),
-        }))
+      ? initial.items.map((it) => {
+          // Prefer the stored per-piece value; reconstruct it for older orders.
+          const per = it.perPieceQty != null
+            ? it.perPieceQty
+            : it.pieces && it.pieces > 0
+              ? it.quantity / it.pieces
+              : it.quantity;
+          return {
+            key: newKey(),
+            productId: it.productId,
+            description: it.description ?? "",
+            pieces: it.pieces != null ? String(it.pieces) : "",
+            perPieceQty: String(per),
+            unit: it.unit,
+            rate: String(it.rate),
+          };
+        })
       : [emptyLine()],
   );
 
   const noCustomers = customers.length === 0;
   const noProducts = products.length === 0;
 
-  // Price for a product & customer: the customer's agreed price wins, then the
-  // product's optional default price, else blank.
+  // The customer's saved regular price for a product, if any (else null).
+  function savedPriceFor(productId: string, custId: string): number | null {
+    if (!productId || !custId) return null;
+    const p = pricesByCustomer[custId]?.[productId];
+    return p != null ? p : null;
+  }
+
+  // What to prefill a line's rate with: only the customer's regular price. The
+  // product's default is NOT used here — it's offered as a tappable hint below.
   function rateFor(productId: string, custId: string): string {
-    if (!productId) return "";
-    const agreed = pricesByCustomer[custId]?.[productId];
-    if (agreed != null) return String(agreed);
+    const saved = savedPriceFor(productId, custId);
+    return saved != null ? String(saved) : "";
+  }
+
+  // The product's default sale price (a hint), if set.
+  function defaultPriceFor(productId: string): number | null {
     const p = products.find((x) => x.id === productId);
-    return p && p.salePrice > 0 ? String(p.salePrice) : "";
+    return p && p.salePrice > 0 ? p.salePrice : null;
   }
 
   function onCustomerChange(id: string) {
@@ -194,14 +220,32 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   }
 
   const grandTotal = useMemo(
-    () => lines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0), 0),
+    () => lines.reduce((sum, l) => sum + lineMetres(l) * (parseFloat(l.rate) || 0), 0),
     [lines],
   );
+
+  // Opt-in: save a line's rate as this customer's regular price (never automatic).
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  function saveRegularPrice(l: Line) {
+    const price = parseFloat(l.rate);
+    if (!customerId || !l.productId || !(price >= 0)) return;
+    setSavingKey(l.key);
+    startTransition(async () => {
+      const res = await saveCustomerRegularPrice(customerId, l.productId, price, currency);
+      setSavingKey(null);
+      if (!res?.error) {
+        // Reflect it locally so the "one-off" hint clears immediately.
+        (pricesByCustomer[customerId] ??= {})[l.productId] = price;
+        setSavedKeys((prev) => new Set(prev).add(l.key));
+      }
+    });
+  }
 
   function onSubmit() {
     setError(null);
     if (!customerId) return setError("Please choose a customer");
-    const cleanLines = lines.filter((l) => l.productId && parseFloat(l.quantity) > 0);
+    const cleanLines = lines.filter((l) => l.productId && lineMetres(l) > 0);
     if (cleanLines.length === 0) return setError("Add at least one product with a quantity");
 
     const input: OrderInput = {
@@ -222,8 +266,8 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
       items: cleanLines.map((l) => ({
         productId: l.productId,
         description: l.description || null,
-        quantity: Number(l.quantity),
         pieces: l.pieces === "" ? null : Number(l.pieces),
+        perPieceQty: Number(l.perPieceQty),
         unit: l.unit,
         rate: Number(l.rate),
       })),
@@ -337,7 +381,15 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
         <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Products</h2>
         <div className="space-y-3">
           {lines.map((l, idx) => {
-            const lineTotal = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0);
+            const metres = lineMetres(l);
+            const rate = parseFloat(l.rate) || 0;
+            const lineTotal = metres * rate;
+            const pcs = parseInt(l.pieces, 10);
+            const saved = savedPriceFor(l.productId, customerId);
+            const def = defaultPriceFor(l.productId);
+            const rateNum = l.rate === "" ? null : rate;
+            const differsFromSaved = saved != null && rateNum != null && Math.abs(saved - rateNum) > 1e-9;
+            const justSaved = savedKeys.has(l.key) && !differsFromSaved;
             return (
               <div key={l.key} className="card space-y-3">
                 <div className="flex items-center justify-between">
@@ -356,14 +408,16 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                   <label className="field-label">Description</label>
                   <input value={l.description} onChange={(e) => updateLine(l.key, { description: e.target.value })} className="field-input" placeholder="e.g. colour / spec (optional)" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="field-label">Qty</label>
-                    <input value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} className="field-input" type="number" inputMode="decimal" step="0.01" min="0" placeholder="0" />
-                  </div>
+
+                {/* Pieces × qty-per-piece = total metres */}
+                <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="field-label">Pieces</label>
                     <input value={l.pieces} onChange={(e) => updateLine(l.key, { pieces: e.target.value })} className="field-input" type="number" inputMode="numeric" step="1" min="0" placeholder="e.g. 10" />
+                  </div>
+                  <div>
+                    <label className="field-label">Qty / piece</label>
+                    <input value={l.perPieceQty} onChange={(e) => updateLine(l.key, { perPieceQty: e.target.value })} className="field-input" type="number" inputMode="decimal" step="0.01" min="0" placeholder="0" />
                   </div>
                   <div>
                     <label className="field-label">Unit</label>
@@ -371,11 +425,46 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                       {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="field-label">Rate</label>
-                    <input value={l.rate} onChange={(e) => updateLine(l.key, { rate: e.target.value })} className="field-input" type="number" inputMode="decimal" step="0.01" min="0" placeholder="0.00" />
-                  </div>
                 </div>
+                <p className="px-1 text-xs text-gray-500">
+                  Total: <span className="font-semibold text-gray-700">{metres || 0} {l.unit}</span>
+                  {pcs > 0 && <span className="text-gray-400"> ({pcs} × {parseFloat(l.perPieceQty) || 0})</span>}
+                </p>
+
+                {/* Rate + regular-price context */}
+                <div>
+                  <label className="field-label">Rate / {l.unit}</label>
+                  <input value={l.rate} onChange={(e) => updateLine(l.key, { rate: e.target.value })} className="field-input" type="number" inputMode="decimal" step="0.01" min="0" placeholder="0.00" />
+                  {l.productId && customerId && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs">
+                      {saved == null ? (
+                        <>
+                          {def != null && rateNum == null && (
+                            <button type="button" onClick={() => updateLine(l.key, { rate: String(def) })} className="text-gray-500 underline">
+                              Use default {formatMoney(def, currency)}
+                            </button>
+                          )}
+                          {rateNum != null && !justSaved && (
+                            <button type="button" onClick={() => saveRegularPrice(l)} disabled={savingKey === l.key} className="font-medium text-brand-600">
+                              {savingKey === l.key ? "Saving…" : "Save as this customer's regular price"}
+                            </button>
+                          )}
+                          {justSaved && <span className="text-green-600">✓ Saved as regular price</span>}
+                        </>
+                      ) : differsFromSaved ? (
+                        <>
+                          <span className="text-amber-600">One-off — regular is {formatMoney(saved, currency)}</span>
+                          <button type="button" onClick={() => saveRegularPrice(l)} disabled={savingKey === l.key} className="font-medium text-brand-600">
+                            {savingKey === l.key ? "Saving…" : "Update regular price"}
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">✓ Regular price</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex justify-between border-t border-gray-100 pt-2 text-sm">
                   <span className="text-gray-500">Line total</span>
                   <span className="font-semibold text-gray-900">{formatMoney(lineTotal, currency)}</span>

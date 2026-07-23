@@ -53,6 +53,7 @@ export default async function EditOrderPage({
       description: it.description,
       quantity: it.quantity,
       pieces: it.pieces,
+      perPieceQty: it.perPieceQty,
       unit: it.unit,
       rate: it.rate,
     })),

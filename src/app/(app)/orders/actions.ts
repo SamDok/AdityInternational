@@ -28,14 +28,22 @@ function orderMoves(
   }));
 }
 
-const ItemSchema = z.object({
-  productId: z.string().min(1),
-  description: z.string().optional().nullable(),
-  quantity: z.coerce.number().min(0),
-  pieces: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
-  unit: z.string().min(1),
-  rate: z.coerce.number().min(0),
-});
+// A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
+// quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
+const ItemSchema = z
+  .object({
+    productId: z.string().min(1),
+    description: z.string().optional().nullable(),
+    pieces: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
+    perPieceQty: z.coerce.number().min(0),
+    unit: z.string().min(1),
+    rate: z.coerce.number().min(0),
+  })
+  .transform((it) => {
+    const pieces = it.pieces && it.pieces > 0 ? it.pieces : null;
+    const quantity = (pieces ?? 1) * it.perPieceQty;
+    return { ...it, pieces, quantity };
+  });
 
 const nullableStr = () => z.string().optional().nullable();
 
@@ -87,6 +95,7 @@ function itemCreate(items: z.infer<typeof ItemSchema>[]) {
     description: it.description || null,
     quantity: it.quantity,
     pieces: it.pieces ?? null,
+    perPieceQty: it.perPieceQty,
     unit: it.unit,
     rate: it.rate,
   }));

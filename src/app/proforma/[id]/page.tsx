@@ -138,7 +138,12 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
                   </div>
                 </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-center">{it.product.design?.hsnCode || "—"}</td>
-                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.quantity} {it.unit}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">
+                  {it.quantity} {it.unit}
+                  {it.pieces && it.perPieceQty != null && (
+                    <span className="block text-[10px] text-gray-500">{it.pieces} × {it.perPieceQty}</span>
+                  )}
+                </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right">{it.pieces ?? "—"}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(it.rate, order.currency)}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(it.quantity * it.rate, order.currency)}</td>

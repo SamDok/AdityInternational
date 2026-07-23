@@ -111,8 +111,10 @@ export default async function OrderDetailPage({
                     </p>
                     {it.description && <p className="text-sm text-gray-500">{it.description}</p>}
                     <p className="mt-1 text-sm text-gray-500">
-                      {it.quantity} {it.unit}
-                      {it.pieces != null ? ` · ${it.pieces} pcs` : ""} × {formatMoney(it.rate, order.currency)}
+                      {it.pieces && it.perPieceQty != null
+                        ? `${it.pieces} pcs × ${it.perPieceQty} ${it.unit} = ${it.quantity} ${it.unit}`
+                        : `${it.quantity} ${it.unit}`}
+                      {" × "}{formatMoney(it.rate, order.currency)}
                     </p>
                   </div>
                   <p className="shrink-0 font-semibold text-gray-900">

@@ -233,3 +233,22 @@ export async function removeCustomerPrice(id: string) {
   const p = await prisma.customerPrice.delete({ where: { id }, select: { customerId: true } });
   revalidatePath(`/customers/${p.customerId}/prices`);
 }
+
+// Save a customer's regular price for a variant, called from the order form's
+// opt-in "Save as regular price". Kept separate from a one-off order rate so a
+// circumstantial price never overwrites the regular price unless asked.
+export async function saveCustomerRegularPrice(
+  customerId: string,
+  productId: string,
+  price: number,
+  currency: string,
+) {
+  if (!customerId || !productId || !(price >= 0)) return { error: "Invalid price." };
+  await prisma.customerPrice.upsert({
+    where: { customerId_productId: { customerId, productId } },
+    create: { customerId, productId, price, currency: currency || "INR" },
+    update: { price, currency: currency || "INR" },
+  });
+  revalidatePath(`/customers/${customerId}/prices`);
+  return { ok: true };
+}

@@ -293,8 +293,9 @@ model OrderItem {
   product     Product  @relation(fields: [productId], references: [id])
   productId   String
   description String?  // e.g. colour / spec for this line
-  quantity    Float    @default(0)
-  pieces      Int? // number of pieces / thans on this line (metres stay the priced qty)
+  quantity    Float    @default(0) // TOTAL metres = pieces × perPieceQty (the priced quantity)
+  pieces      Int? // number of pieces / thans on this line
+  perPieceQty Float? // metres in each piece; quantity is derived from this × pieces
   shippedQty  Float    @default(0) // metres shipped so far (item-wise fulfillment)
   unit        String   @default("mtr")
   rate        Float    @default(0) // price per unit in the order currency
