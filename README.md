@@ -59,7 +59,10 @@ src/
   the owner; the owner adds teammates from Settings. Every page is private.
 - **Home dashboard** — counts and recent orders at a glance
 - **Customers** — add, view, edit, delete; per-customer currency and order history
-- **Products** — add, view, edit, delete; price, unit, and stock on hand
+- **Products** — organised as **type → design → width**: managed product
+  types (Silk Dupion, Boucle…), design codes under each (with composition &
+  HSN), and per-width variants each with their own GSM, cost price, sale price,
+  and stock. Order lines pick a specific design + width.
 - **Orders** — create and edit with product lines, live totals, multi-currency,
   and a one-tap status flow (Draft → Confirmed → In production → Shipped → Completed)
 - **Settings** — change your password, add/remove teammates (owner only)

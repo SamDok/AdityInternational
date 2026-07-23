@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../OrderForm";
 import { createOrder } from "../actions";
+import { getProductOptions } from "../productOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function NewOrderPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, currency: true },
     }),
-    prisma.product.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, unit: true, salePrice: true } }),
+    getProductOptions(),
   ]);
 
   return (

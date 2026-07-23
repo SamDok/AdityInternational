@@ -55,9 +55,13 @@ export default async function OrderDetailPage({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900">
-                      <Link href={`/products/${it.productId}`} className="hover:underline">
-                        {it.product.name}
-                      </Link>
+                      {it.product.designId ? (
+                        <Link href={`/products/design/${it.product.designId}`} className="hover:underline">
+                          {it.product.name}
+                        </Link>
+                      ) : (
+                        it.product.name
+                      )}
                     </p>
                     {it.description && <p className="text-sm text-gray-500">{it.description}</p>}
                     <p className="mt-1 text-sm text-gray-500">

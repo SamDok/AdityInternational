@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../../OrderForm";
 import { updateOrder, deleteOrder } from "../../actions";
+import { getProductOptions } from "../../productOptions";
 import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function EditOrderPage({
   const [order, customers, products] = await Promise.all([
     prisma.order.findUnique({ where: { id }, include: { items: true } }),
     prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, currency: true } }),
-    prisma.product.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, unit: true, salePrice: true } }),
+    getProductOptions(),
   ]);
 
   if (!order) notFound();

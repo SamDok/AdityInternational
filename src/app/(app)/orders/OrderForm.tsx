@@ -8,7 +8,7 @@ import { PlusIcon, TrashIcon } from "@/components/Icons";
 import type { OrderInput } from "./actions";
 
 type CustomerOpt = { id: string; name: string; currency: string };
-type ProductOpt = { id: string; name: string; unit: string; salePrice: number };
+type ProductOpt = { id: string; label: string; group: string; unit: string; salePrice: number };
 
 type Line = {
   key: string;
@@ -79,6 +79,16 @@ export default function OrderForm({ customers, products, initial, defaultCustome
   const noCustomers = customers.length === 0;
   const noProducts = products.length === 0;
 
+  // Group product options by their type for the <optgroup> picker.
+  const productGroups = useMemo(() => {
+    const map = new Map<string, ProductOpt[]>();
+    for (const p of products) {
+      if (!map.has(p.group)) map.set(p.group, []);
+      map.get(p.group)!.push(p);
+    }
+    return [...map.entries()];
+  }, [products]);
+
   function onCustomerChange(id: string) {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
@@ -146,7 +156,7 @@ export default function OrderForm({ customers, products, initial, defaultCustome
           <p className="text-gray-700">Before making an order you need at least one customer and one product.</p>
           <div className="flex flex-col gap-2">
             {noCustomers && <Link href="/customers/new" className="btn-primary">Add a customer</Link>}
-            {noProducts && <Link href="/products/new" className="btn-secondary">Add a product</Link>}
+            {noProducts && <Link href="/products/design/new" className="btn-secondary">Add a product</Link>}
           </div>
         </div>
       </div>
@@ -206,7 +216,11 @@ export default function OrderForm({ customers, products, initial, defaultCustome
                   <label className="field-label">Product</label>
                   <select value={l.productId} onChange={(e) => onProductChange(l.key, e.target.value)} className="field-input">
                     <option value="">Choose a product…</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {productGroups.map(([group, opts]) => (
+                      <optgroup key={group} label={group}>
+                        {opts.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
                 <div>

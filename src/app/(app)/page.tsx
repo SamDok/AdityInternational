@@ -71,8 +71,8 @@ export default async function HomePage() {
         <Link href="/customers/new" className="btn-secondary">
           <PlusIcon className="h-5 w-5" /> Customer
         </Link>
-        <Link href="/products/new" className="btn-secondary">
-          <PlusIcon className="h-5 w-5" /> Product
+        <Link href="/products/design/new" className="btn-secondary">
+          <PlusIcon className="h-5 w-5" /> Design
         </Link>
       </div>
 
