@@ -10,6 +10,7 @@ type Values = {
   composition?: string | null;
   hsnCode?: string | null;
   description?: string | null;
+  imageData?: string | null;
 };
 
 type Category = { id: string; name: string };
@@ -24,7 +25,33 @@ type Props = {
 export default function DesignForm({ categories, initial, action, submitLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [imageData, setImageData] = useState(initial?.imageData ?? "");
   const router = useRouter();
+
+  // Downscale the chosen photo to ~800px JPEG so it stays small in the database.
+  function onImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 800;
+        let { width, height } = img;
+        if (width > max || height > max) {
+          if (width >= height) { height = Math.round((height * max) / width); width = max; }
+          else { width = Math.round((width * max) / height); height = max; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")?.drawImage(img, 0, 0, width, height);
+        setImageData(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -74,6 +101,23 @@ export default function DesignForm({ categories, initial, action, submitLabel }:
         <label className="field-label" htmlFor="description">Notes</label>
         <textarea id="description" name="description" defaultValue={initial?.description ?? ""}
           className="field-input" rows={2} placeholder="Anything else about this design" />
+      </div>
+
+      <div>
+        <label className="field-label">Photo</label>
+        <input type="hidden" name="imageData" value={imageData} />
+        {imageData ? (
+          <div className="space-y-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imageData} alt="" className="h-40 w-full rounded-xl object-cover" />
+            <button type="button" onClick={() => setImageData("")} className="btn-secondary w-full text-sm">Remove photo</button>
+          </div>
+        ) : (
+          <label className="btn-secondary w-full cursor-pointer">
+            Add a photo
+            <input type="file" accept="image/*" onChange={onImage} className="hidden" />
+          </label>
+        )}
       </div>
 
       <div className="flex gap-3 pt-2">

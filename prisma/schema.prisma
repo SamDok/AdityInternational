@@ -112,6 +112,7 @@ model Design {
   composition String? // e.g. "100% Silk"
   hsnCode     String? // defaults from the category, editable
   description String?
+  imageData   String? // downscaled JPEG as a base64 data URL
   archived    Boolean         @default(false)
   variants    Product[] // its width-variants
   createdAt   DateTime        @default(now())
@@ -136,6 +137,7 @@ model Product {
   salePrice      Float           @default(0) // optional default/fallback selling price
   currency       String          @default("INR")
   stockQty       Float           @default(0) // quantity on hand
+  reorderLevel   Float? // low-stock threshold
   archived       Boolean         @default(false)
   orderItems     OrderItem[]
   customerPrices CustomerPrice[]

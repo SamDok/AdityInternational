@@ -72,6 +72,7 @@ const DesignSchema = z.object({
   composition: str(),
   hsnCode: str(),
   description: str(),
+  imageData: str(),
 });
 
 async function designCodeTaken(code: string, exceptId?: string) {
@@ -102,6 +103,7 @@ export async function createDesign(formData: FormData) {
       composition: d.composition || null,
       hsnCode: hsn,
       description: d.description || null,
+      imageData: d.imageData || null,
     },
   });
   revalidatePath("/products");
@@ -122,6 +124,7 @@ export async function updateDesign(id: string, formData: FormData) {
       composition: d.composition || null,
       hsnCode: d.hsnCode || null,
       description: d.description || null,
+      imageData: d.imageData || null,
     },
   });
   revalidatePath("/products");
@@ -153,6 +156,7 @@ const VariantSchema = z.object({
   salePrice: z.coerce.number().min(0).default(0),
   currency: z.string().trim().min(1).default("INR"),
   stockQty: z.coerce.number().default(0),
+  reorderLevel: optionalNumber(),
   unit: z.string().trim().min(1).default("mtr"),
   sku: str(),
 });
@@ -179,6 +183,7 @@ export async function createVariant(designId: string, formData: FormData) {
       salePrice: d.salePrice,
       currency: d.currency,
       stockQty: d.stockQty,
+      reorderLevel: d.reorderLevel ?? null,
       unit: d.unit,
       sku: d.sku || null,
     },
@@ -208,6 +213,7 @@ export async function updateVariant(id: string, formData: FormData) {
       salePrice: d.salePrice,
       currency: d.currency,
       stockQty: d.stockQty,
+      reorderLevel: d.reorderLevel ?? null,
       unit: d.unit,
       sku: d.sku || null,
     },
@@ -225,4 +231,182 @@ export async function deleteVariant(id: string) {
   revalidatePath("/products");
   if (v?.designId) revalidatePath(`/products/design/${v.designId}`);
   redirect(v?.designId ? `/products/design/${v.designId}` : "/products");
+}
+
+const numOrNull = (v?: string) => {
+  const n = parseFloat((v ?? "").trim());
+  return isNaN(n) ? null : n;
+};
+
+// Create several width-variants for a design in one submit.
+export async function createVariantsBulk(
+  designId: string,
+  rows: { width?: string; colour?: string; gsm?: string; costPrice?: string; salePrice?: string; stockQty?: string; unit?: string }[],
+) {
+  const design = await prisma.design.findUnique({ where: { id: designId }, select: { code: true } });
+  if (!design) return { error: "Design not found." };
+  let created = 0;
+  for (const r of rows) {
+    const width = (r.width ?? "").trim();
+    if (!width) continue;
+    const colour = (r.colour ?? "").trim() || null;
+    await prisma.product.create({
+      data: {
+        designId,
+        name: variantName(design.code, width, colour),
+        width,
+        colour,
+        gsm: numOrNull(r.gsm),
+        costPrice: numOrNull(r.costPrice),
+        salePrice: numOrNull(r.salePrice) ?? 0,
+        stockQty: numOrNull(r.stockQty) ?? 0,
+        unit: (r.unit ?? "").trim() || "mtr",
+        currency: "INR",
+      },
+    });
+    created++;
+  }
+  revalidatePath(`/products/design/${designId}`);
+  return { ok: true, created };
+}
+
+// Clone a design and all its widths under a new, unique code (stock reset to 0).
+export async function duplicateDesign(id: string) {
+  const src = await prisma.design.findUnique({ where: { id }, include: { variants: true } });
+  if (!src) return { error: "Design not found." };
+  const base = `${src.code}-COPY`;
+  let code = base;
+  let n = 1;
+  while (await prisma.design.findFirst({ where: { code: { equals: code, mode: "insensitive" } }, select: { id: true } })) {
+    n++;
+    code = `${base}-${n}`;
+  }
+  const copy = await prisma.design.create({
+    data: {
+      categoryId: src.categoryId,
+      code,
+      name: src.name,
+      composition: src.composition,
+      hsnCode: src.hsnCode,
+      description: src.description,
+      imageData: src.imageData,
+    },
+  });
+  for (const v of src.variants) {
+    await prisma.product.create({
+      data: {
+        designId: copy.id,
+        name: variantName(code, v.width ?? "", v.colour),
+        width: v.width,
+        colour: v.colour,
+        gsm: v.gsm,
+        costPrice: v.costPrice,
+        salePrice: v.salePrice,
+        currency: v.currency,
+        stockQty: 0,
+        reorderLevel: v.reorderLevel,
+        unit: v.unit,
+      },
+    });
+  }
+  revalidatePath("/products");
+  redirect(`/products/design/${copy.id}/edit`);
+}
+
+// Add to / subtract from a variant's stock (never below zero).
+export async function adjustStock(variantId: string, delta: number) {
+  const v = await prisma.product.findUnique({ where: { id: variantId }, select: { stockQty: true, designId: true } });
+  if (!v) return { error: "Not found." };
+  const stockQty = Math.max(0, v.stockQty + delta);
+  await prisma.product.update({ where: { id: variantId }, data: { stockQty } });
+  if (v.designId) revalidatePath(`/products/design/${v.designId}`);
+  revalidatePath("/products/low-stock");
+  return { ok: true, stockQty };
+}
+
+// Whole-catalogue CSV export (one row per width-variant).
+export async function exportProductsCsv(): Promise<string> {
+  const rows = await prisma.product.findMany({
+    include: { design: { include: { category: true } } },
+    orderBy: { name: "asc" },
+  });
+  const header = ["type", "code", "composition", "hsn", "width", "colour", "gsm", "cost", "defaultPrice", "stock", "unit", "sku"];
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [header.join(",")];
+  for (const p of rows) {
+    lines.push([
+      p.design?.category.name, p.design?.code, p.design?.composition, p.design?.hsnCode,
+      p.width, p.colour, p.gsm, p.costPrice, p.salePrice, p.stockQty, p.unit, p.sku,
+    ].map(esc).join(","));
+  }
+  return lines.join("\n");
+}
+
+// Bulk-import designs + widths from parsed spreadsheet rows.
+export async function importProducts(rows: Record<string, string>[]) {
+  const cats = await prisma.productCategory.findMany({ select: { id: true, name: true, sortOrder: true } });
+  const catByName = new Map(cats.map((c) => [c.name.trim().toLowerCase(), c.id]));
+  let maxSort = cats.reduce((m, c) => Math.max(m, c.sortOrder), 0);
+  const designs = await prisma.design.findMany({ select: { id: true, code: true } });
+  const designByCode = new Map(designs.map((d) => [d.code.trim().toLowerCase(), d.id]));
+
+  let designsCreated = 0;
+  let variantsCreated = 0;
+  let skipped = 0;
+  const warnings: string[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const line = i + 2;
+    const code = (r.code ?? "").trim();
+    const width = (r.width ?? "").trim();
+    if (!code || !width) { skipped++; continue; }
+
+    const typeName = (r.type ?? "").trim();
+    let categoryId: string | undefined;
+    if (typeName) {
+      categoryId = catByName.get(typeName.toLowerCase());
+      if (!categoryId) {
+        maxSort++;
+        const c = await prisma.productCategory.create({ data: { name: typeName, sortOrder: maxSort } });
+        categoryId = c.id;
+        catByName.set(typeName.toLowerCase(), c.id);
+      }
+    }
+
+    let designId = designByCode.get(code.toLowerCase());
+    if (!designId) {
+      if (!categoryId) { warnings.push(`Row ${line}: "${code}" has no type — skipped.`); skipped++; continue; }
+      const d = await prisma.design.create({
+        data: { categoryId, code, composition: (r.composition ?? "").trim() || null, hsnCode: (r.hsn ?? "").trim() || null },
+      });
+      designId = d.id;
+      designByCode.set(code.toLowerCase(), d.id);
+      designsCreated++;
+    }
+
+    const colour = (r.colour ?? "").trim() || null;
+    await prisma.product.create({
+      data: {
+        designId,
+        name: variantName(code, width, colour),
+        width,
+        colour,
+        gsm: numOrNull(r.gsm),
+        costPrice: numOrNull(r.cost),
+        salePrice: numOrNull(r.defaultPrice) ?? 0,
+        stockQty: numOrNull(r.stock) ?? 0,
+        unit: (r.unit ?? "").trim() || "mtr",
+        sku: (r.sku ?? "").trim() || null,
+        currency: "INR",
+      },
+    });
+    variantsCreated++;
+  }
+
+  revalidatePath("/products");
+  return { designsCreated, variantsCreated, skipped, warnings };
 }

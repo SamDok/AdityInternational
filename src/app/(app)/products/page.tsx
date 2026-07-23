@@ -77,6 +77,12 @@ export default async function ProductsPage({
       />
       <ProductSearch q="" />
 
+      <div className="flex flex-wrap gap-2 px-4 pt-2">
+        <Link href="/products/all" className="rounded-lg bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200 hover:bg-gray-100">All designs</Link>
+        <Link href="/products/low-stock" className="rounded-lg bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200 hover:bg-gray-100">Low stock</Link>
+        <Link href="/products/import" className="rounded-lg bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200 hover:bg-gray-100">Import</Link>
+      </div>
+
       {categories.length === 0 ? (
         <EmptyState
           icon={<BoxIcon className="h-8 w-8" />}

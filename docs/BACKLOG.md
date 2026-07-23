@@ -119,8 +119,13 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
 - **🟢 Price history / effective dates.** Keep past prices instead of
   overwriting on the `CustomerPrice` upsert.
 - **🟢 Colour-based reporting** once Reports exists (cost/margin by colour).
-- **🟡 Product CSV import/export & images**, and **low-stock alerts** (the
-  same treatment Customers got).
+- Product CSV import/export, images, low-stock alerts, bulk-width entry,
+  duplicate-design, quick stock adjust, catalogue filters and a searchable order
+  picker are **built**. Remaining:
+  - **🟢 Object storage for images** (beyond base64-in-DB) once photos get large
+    or numerous — swap `Design.imageData` for an uploaded URL + a storage bucket.
+  - **🟢 Stock-movement history / audit** — log each `adjustStock` change
+    (who, when, why) instead of only keeping the running total.
 - Note: the order form loads a `pricesByCustomer` map
   (`orders/productOptions.ts`); move it to an on-demand fetch if it grows large.
 

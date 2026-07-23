@@ -12,6 +12,7 @@ type Values = {
   salePrice?: number | null;
   currency?: string | null;
   stockQty?: number | null;
+  reorderLevel?: number | null;
   unit?: string | null;
   sku?: string | null;
 };
@@ -27,6 +28,10 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
+  const num = (v?: number | null) => (v === null || v === undefined ? "" : String(v));
+  const [cost, setCost] = useState(num(initial?.costPrice));
+  const [sale, setSale] = useState(String(initial?.salePrice ?? 0));
+
   function onSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
@@ -35,7 +40,9 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
     });
   }
 
-  const num = (v?: number | null) => (v === null || v === undefined ? "" : String(v));
+  const c = parseFloat(cost);
+  const s = parseFloat(sale);
+  const margin = !isNaN(c) && !isNaN(s) && s > 0 ? Math.round(((s - c) / s) * 100) : null;
 
   return (
     <form action={onSubmit} className="space-y-5 p-4">
@@ -68,16 +75,17 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
         <div>
           <label className="field-label" htmlFor="costPrice">Cost price</label>
           <input id="costPrice" name="costPrice" type="number" step="0.01" min="0" inputMode="decimal"
-            defaultValue={num(initial?.costPrice)} className="field-input" placeholder="What it costs us" />
+            value={cost} onChange={(e) => setCost(e.target.value)} className="field-input" placeholder="What it costs us" />
         </div>
         <div>
           <label className="field-label" htmlFor="salePrice">Default price</label>
           <input id="salePrice" name="salePrice" type="number" step="0.01" min="0" inputMode="decimal"
-            defaultValue={initial?.salePrice ?? 0} className="field-input" placeholder="Optional fallback" />
+            value={sale} onChange={(e) => setSale(e.target.value)} className="field-input" placeholder="Optional fallback" />
         </div>
       </div>
       <p className="-mt-2 px-1 text-xs text-gray-400">
-        Default price is only a fallback. Each customer's own price is set in their price list.
+        {margin != null ? `Margin ${margin}% on default price. ` : ""}
+        Default price is only a fallback — each customer's own price is set in their price list.
       </p>
 
       <div className="grid grid-cols-2 gap-3">
@@ -102,9 +110,14 @@ export default function VariantForm({ initial, action, submitLabel }: Props) {
             defaultValue={initial?.stockQty ?? 0} className="field-input" placeholder="0" />
         </div>
         <div>
-          <label className="field-label" htmlFor="sku">Barcode / code</label>
-          <input id="sku" name="sku" defaultValue={initial?.sku ?? ""} className="field-input" placeholder="Optional" />
+          <label className="field-label" htmlFor="reorderLevel">Reorder at</label>
+          <input id="reorderLevel" name="reorderLevel" type="number" step="0.01" min="0" inputMode="decimal"
+            defaultValue={num(initial?.reorderLevel)} className="field-input" placeholder="Low-stock alert" />
         </div>
+      </div>
+      <div>
+        <label className="field-label" htmlFor="sku">Barcode / code</label>
+        <input id="sku" name="sku" defaultValue={initial?.sku ?? ""} className="field-input" placeholder="Optional" />
       </div>
 
       <div className="flex gap-3 pt-2">

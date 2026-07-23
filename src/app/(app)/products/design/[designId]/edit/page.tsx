@@ -4,7 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import DesignForm from "../../../DesignForm";
 import ToggleButton from "../../../ToggleButton";
 import DeleteButton from "@/components/DeleteButton";
-import { updateDesign, setDesignArchived, deleteDesign } from "../../../actions";
+import { updateDesign, setDesignArchived, deleteDesign, duplicateDesign } from "../../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,7 @@ export default async function EditDesignPage({ params }: { params: Promise<{ des
       <PageHeader title={`Edit ${design.code}`} backHref={`/products/design/${design.id}`} />
       <DesignForm categories={categories} initial={design} action={updateDesign.bind(null, designId)} submitLabel="Save changes" />
       <div className="space-y-2 p-4 pt-0">
+        <ToggleButton action={duplicateDesign.bind(null, designId)} label="Duplicate design" />
         <ToggleButton
           action={setDesignArchived.bind(null, designId, !design.archived)}
           label={design.archived ? "Unarchive design" : "Archive design"}

@@ -31,6 +31,7 @@ export async function getProductOptions() {
       groupSort: p.design?.category.sortOrder ?? 999,
       unit: p.unit,
       salePrice: p.salePrice,
+      costPrice: p.costPrice,
     }))
     .sort(
       (a, b) =>

@@ -5,6 +5,8 @@ import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { formatMoney } from "@/lib/format";
 import { BoxIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
+import BulkWidthsForm from "../../BulkWidthsForm";
+import StockAdjust from "../../StockAdjust";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,11 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
           </div>
         )}
 
+        {design.imageData && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={design.imageData} alt={design.code} className="h-48 w-full rounded-2xl object-cover" />
+        )}
+
         <section className="card divide-y divide-gray-50">
           <Row label="Type" value={design.category.name} />
           <Row label="Composition" value={design.composition} />
@@ -75,24 +82,27 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
           ) : (
             <ul className="space-y-2">
               {design.variants.map((v) => (
-                <li key={v.id}>
-                  <Link href={`/products/width/${v.id}/edit`} className="card flex items-center gap-3 hover:bg-gray-50">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900">{v.width || "—"}{v.colour ? ` · ${v.colour}` : ""}</p>
-                      <p className="truncate text-sm text-gray-500">
-                        {v.gsm != null ? `${v.gsm} GSM · ` : ""}{v.stockQty} {v.unit} in stock
-                        {v.costPrice != null ? ` · cost ${formatMoney(v.costPrice, v.currency)}` : ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-gray-900">
-                      {formatMoney(v.salePrice, v.currency)}
-                    </span>
+                <li key={v.id} className="card flex items-center gap-3">
+                  <Link href={`/products/width/${v.id}/edit`} className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900">{v.width || "—"}{v.colour ? ` · ${v.colour}` : ""}</p>
+                    <p className="truncate text-sm text-gray-500">
+                      {v.gsm != null ? `${v.gsm} GSM` : ""}
+                      {v.costPrice != null ? `${v.gsm != null ? " · " : ""}cost ${formatMoney(v.costPrice, v.currency)}` : ""}
+                      {` · ${formatMoney(v.salePrice, v.currency)} default`}
+                    </p>
+                  </Link>
+                  <StockAdjust variantId={v.id} stockQty={v.stockQty} unit={v.unit} />
+                  <Link href={`/products/width/${v.id}/edit`} aria-label="Edit width">
                     <ChevronRightIcon className="h-5 w-5 text-gray-300" />
                   </Link>
                 </li>
               ))}
             </ul>
           )}
+
+          <div className="mt-3">
+            <BulkWidthsForm designId={design.id} />
+          </div>
         </section>
       </div>
     </div>

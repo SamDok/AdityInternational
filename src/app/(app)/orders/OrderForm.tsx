@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CURRENCIES, UNITS, ORDER_STATUSES, STATUS_LABELS, formatMoney, type OrderStatus } from "@/lib/format";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
+import ProductPicker from "./ProductPicker";
 import type { OrderInput } from "./actions";
 
 type CustomerOpt = { id: string; name: string; currency: string };
@@ -79,16 +80,6 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
 
   const noCustomers = customers.length === 0;
   const noProducts = products.length === 0;
-
-  // Group product options by their type for the <optgroup> picker.
-  const productGroups = useMemo(() => {
-    const map = new Map<string, ProductOpt[]>();
-    for (const p of products) {
-      if (!map.has(p.group)) map.set(p.group, []);
-      map.get(p.group)!.push(p);
-    }
-    return [...map.entries()];
-  }, [products]);
 
   // Price for a product & customer: the customer's agreed price wins, then the
   // product's optional default price, else blank.
@@ -227,14 +218,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                 </div>
                 <div>
                   <label className="field-label">Product</label>
-                  <select value={l.productId} onChange={(e) => onProductChange(l.key, e.target.value)} className="field-input">
-                    <option value="">Choose a product…</option>
-                    {productGroups.map(([group, opts]) => (
-                      <optgroup key={group} label={group}>
-                        {opts.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <ProductPicker options={products} value={l.productId} onChange={(pid) => onProductChange(l.key, pid)} />
                 </div>
                 <div>
                   <label className="field-label">Description</label>

@@ -36,7 +36,7 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
       <PriceListClient
         customerId={id}
         currency={customer.currency}
-        options={options.map((o) => ({ id: o.id, label: o.label, group: o.group }))}
+        options={options.map((o) => ({ id: o.id, label: o.label, group: o.group, cost: o.costPrice ?? null }))}
         prices={prices}
       />
     </div>
