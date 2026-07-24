@@ -50,13 +50,14 @@ export const STAGE_COLORS: Record<OrderStage, string> = {
 // Derived shipping status from the order's line items.
 export type Fulfillment = "NONE" | "PARTIAL" | "FULL";
 
+// Per-line: FULL only when every line is fully shipped, so over-shipping one
+// design can never mask another that's still short.
 export function fulfillmentOf(items: { quantity: number; shippedQty: number }[]): Fulfillment {
   if (items.length === 0) return "NONE";
-  const ordered = items.reduce((s, i) => s + i.quantity, 0);
-  const shipped = items.reduce((s, i) => s + i.shippedQty, 0);
-  if (shipped <= 0) return "NONE";
-  if (shipped >= ordered) return "FULL";
-  return "PARTIAL";
+  const anyShipped = items.some((i) => i.shippedQty > 1e-9);
+  if (!anyShipped) return "NONE";
+  const allFull = items.every((i) => i.shippedQty >= i.quantity - 1e-9);
+  return allFull ? "FULL" : "PARTIAL";
 }
 
 export const FULFILLMENT_LABELS: Record<Fulfillment, string> = {
@@ -70,3 +71,19 @@ export const FULFILLMENT_COLORS: Record<Fulfillment, string> = {
   PARTIAL: "bg-amber-100 text-amber-700",
   FULL: "bg-green-100 text-green-700",
 };
+
+type OrderLike = { manualComplete: boolean; items: { quantity: number; shippedQty: number }[] };
+
+// An order is complete when every line is fully shipped, or it's been closed by
+// hand (all pieces sent, but measured metres came up a little short).
+export function orderComplete(o: OrderLike): boolean {
+  return o.manualComplete || fulfillmentOf(o.items) === "FULL";
+}
+
+// The badge for an order's shipping/completion state. A hand-closed order that
+// isn't fully shipped by metres reads "Complete" rather than "Shipped".
+export function orderBadge(o: OrderLike): { label: string; className: string } {
+  const f = fulfillmentOf(o.items);
+  if (o.manualComplete && f !== "FULL") return { label: "Complete", className: FULFILLMENT_COLORS.FULL };
+  return { label: FULFILLMENT_LABELS[f], className: FULFILLMENT_COLORS[f] };
+}

@@ -144,13 +144,13 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   const orders = await prisma.order.findMany({
     where: { status: "CONFIRMED" },
     select: {
-      id: true, number: true, dueDate: true,
+      id: true, number: true, dueDate: true, manualComplete: true,
       customer: { select: { id: true, name: true } },
       items: { select: { productId: true, quantity: true, shippedQty: true } },
     },
     orderBy: { number: "asc" },
   });
-  const active = orders.filter((o) => fulfillmentOf(o.items) !== "FULL");
+  const active = orders.filter((o) => !o.manualComplete && fulfillmentOf(o.items) !== "FULL");
   const orderIds = active.map((o) => o.id);
 
   // 2. The products those orders reference, with sourcing (one query).

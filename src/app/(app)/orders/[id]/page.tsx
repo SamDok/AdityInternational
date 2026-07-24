@@ -8,8 +8,10 @@ import UnshipButton from "../UnshipButton";
 import DropLineButton from "../DropLineButton";
 import GenerateProcurement from "../GenerateProcurement";
 import { planProcurement } from "../procurement";
-import { formatMoney, formatDate, fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS } from "@/lib/format";
+import { formatMoney, formatDate, fulfillmentOf, orderBadge } from "@/lib/format";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
+import ToggleButton from "../../products/ToggleButton";
+import { setOrderComplete } from "../actions";
 
 const JOB_STATUS_LABEL: Record<string, string> = { OPEN: "Open", PARTIAL: "Partial", RECEIVED: "Received", CANCELLED: "Cancelled" };
 
@@ -35,7 +37,11 @@ export default async function OrderDetailPage({
 
   const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
-  const fulfillment = fulfillmentOf(order.items);
+  const badge = orderBadge(order);
+  const autoFull = fulfillmentOf(order.items) === "FULL";
+  // Offer a manual "mark complete" on a confirmed order that isn't fully shipped
+  // by metres and hasn't already been closed by hand.
+  const canMarkComplete = order.status === "CONFIRMED" && !autoFull && !order.manualComplete;
   const shipItems = order.items.map((it) => ({
     id: it.id,
     label: it.product.name,
@@ -97,10 +103,21 @@ export default async function OrderDetailPage({
           orderId={order.id}
           current={order.status}
           openJobs={openJobCount}
-          fulfillment={order.status !== "CANCELLED" ? { label: FULFILLMENT_LABELS[fulfillment], className: FULFILLMENT_COLORS[fulfillment] } : undefined}
+          fulfillment={order.status !== "CANCELLED" ? badge : undefined}
         />
 
-        {order.status !== "CANCELLED" && <ShipForm orderId={order.id} items={shipItems} defaultOpen={ship === "1"} />}
+        {order.status !== "CANCELLED" && !order.manualComplete && <ShipForm orderId={order.id} items={shipItems} defaultOpen={ship === "1"} />}
+
+        {order.manualComplete ? (
+          <div className="card flex items-center justify-between gap-3 bg-green-50">
+            <span className="text-sm font-medium text-green-800">Marked complete{!autoFull ? " (measured metres a little short)" : ""}.</span>
+            <div className="shrink-0">
+              <ToggleButton action={setOrderComplete.bind(null, order.id, false)} label="Reopen" toastMessage="Order reopened" />
+            </div>
+          </div>
+        ) : canMarkComplete ? (
+          <ToggleButton action={setOrderComplete.bind(null, order.id, true)} label="Mark order complete" toastMessage="Order marked complete" />
+        ) : null}
 
         {/* Bill-to / ship-to snapshot (as it prints on the PDF) — collapsed by default */}
         <details className="group">

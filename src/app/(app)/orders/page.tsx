@@ -6,7 +6,7 @@ import Pager from "@/components/Pager";
 import { CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
-  fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS,
+  orderComplete, orderBadge,
 } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -28,21 +28,20 @@ export default async function OrdersPage({
     include: { customer: true, items: { include: { product: { select: { stockQty: true } } } } },
   });
 
-  // An order is "ready to ship" when a not-fully-shipped line has stock on hand.
+  // An order is "ready to ship" when it isn't complete and a not-fully-shipped
+  // line has stock on hand.
   const isReadyToShip = (o: (typeof all)[number]) =>
-    o.status !== "CANCELLED" &&
+    o.status !== "CANCELLED" && !orderComplete(o) &&
     o.items.some((i) => i.quantity - i.shippedQty > 1e-9 && i.product.stockQty > 1e-9);
 
-  // "Done" = fully shipped; "Active" = everything not fully shipped and not cancelled.
-  const withFulfillment = all.map((o) => ({ o, f: fulfillmentOf(o.items) }));
-  const orders = withFulfillment
-    .filter(({ o, f }) =>
-      view === "all" ? true
-      : view === "ready" ? isReadyToShip(o)
-      : view === "done" ? f === "FULL"
-      : f !== "FULL" && o.status !== "CANCELLED",
-    )
-    .map(({ o }) => o);
+  // "Done" = complete (fully shipped or hand-closed); "Active" = not complete and
+  // not cancelled.
+  const orders = all.filter((o) =>
+    view === "all" ? true
+    : view === "ready" ? isReadyToShip(o)
+    : view === "done" ? orderComplete(o)
+    : !orderComplete(o) && o.status !== "CANCELLED",
+  );
 
   const readyCount = all.filter(isReadyToShip).length;
   const pagedOrders = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -50,8 +49,8 @@ export default async function OrdersPage({
 
   const DAY = 86400000;
   const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
-  function dueChip(dueDate: Date | null, ful: string, status: string) {
-    if (status === "CANCELLED" || ful === "FULL" || !dueDate) return null;
+  function dueChip(dueDate: Date | null, complete: boolean, status: string) {
+    if (status === "CANCELLED" || complete || !dueDate) return null;
     const d = Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
     if (d < today) return { label: "Overdue", cls: "bg-red-100 text-red-700" };
     if (d <= today + 7 * DAY) return { label: `Due ${formatDate(dueDate)}`, cls: "bg-amber-100 text-amber-700" };
@@ -91,7 +90,7 @@ export default async function OrdersPage({
 
           {orders.length === 0 ? (
             <p className="px-6 py-12 text-center text-sm text-gray-500">
-              {view === "done" ? "No fully-shipped orders yet."
+              {view === "done" ? "No completed orders yet."
                 : view === "ready" ? "Nothing ready to ship — receive stock from jobs first."
                 : "No orders here."}
             </p>
@@ -99,7 +98,7 @@ export default async function OrdersPage({
             <ul className="space-y-2 p-4">
               {pagedOrders.map((o) => {
                 const total = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
-                const f = fulfillmentOf(o.items);
+                const fb = orderBadge(o);
                 const ready = isReadyToShip(o);
                 return (
                   <li key={o.id}>
@@ -113,13 +112,13 @@ export default async function OrdersPage({
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <div className="flex flex-wrap justify-end gap-1">
-                            {(() => { const dc = dueChip(o.dueDate, f, o.status); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
+                            {(() => { const dc = dueChip(o.dueDate, orderComplete(o), o.status); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
                               {STAGE_LABELS[o.status as OrderStage] ?? o.status}
                             </span>
                             {o.status !== "CANCELLED" && (
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FULFILLMENT_COLORS[f]}`}>
-                                {FULFILLMENT_LABELS[f]}
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${fb.className}`}>
+                                {fb.label}
                               </span>
                             )}
                           </div>

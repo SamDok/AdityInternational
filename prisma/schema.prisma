@@ -300,6 +300,9 @@ model Order {
   dueDate    DateTime? // overall target date; each line may override with its own
   notes      String?
   createdByName String? // teammate who created this order (snapshot of their name)
+  // Manually closed as complete even if measured metres fall a little short of the
+  // order (e.g. all pieces shipped). Completion is otherwise per-line & automatic.
+  manualComplete Boolean @default(false)
 
   // Snapshot of the customer's details at order time, frozen so a sent PDF never
   // changes if the customer is later edited. Prefilled from the customer,

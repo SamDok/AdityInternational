@@ -38,7 +38,7 @@ const dayStart = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.ge
 // Business-wide delivery schedule with readiness, from a few bulk queries.
 export async function dueSoonSchedule(): Promise<Schedule> {
   const orders = await prisma.order.findMany({
-    where: { status: "CONFIRMED" },
+    where: { status: "CONFIRMED", manualComplete: false },
     select: {
       id: true, number: true, dueDate: true,
       customer: { select: { name: true } },

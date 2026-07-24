@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ClipboardIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon, SearchIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
-  fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS,
+  fulfillmentOf, orderComplete, orderBadge,
 } from "@/lib/format";
 import { dueSoonSchedule } from "./orders/schedule";
 
@@ -27,12 +27,12 @@ export default async function HomePage() {
     }),
   ]);
 
-  // "Open" = not cancelled and not yet fully shipped (shipping state is derived).
+  // "Open" = not cancelled and not complete (per-line shipped, or hand-closed).
   const activeOrders = await prisma.order.findMany({
     where: { status: { not: "CANCELLED" } },
-    select: { items: { select: { quantity: true, shippedQty: true } } },
+    select: { manualComplete: true, items: { select: { quantity: true, shippedQty: true } } },
   });
-  const openOrders = activeOrders.filter((o) => fulfillmentOf(o.items) !== "FULL").length;
+  const openOrders = activeOrders.filter((o) => !orderComplete(o)).length;
 
   const { counts } = await dueSoonSchedule();
   const urgent = counts.overdue + counts.behind;
@@ -118,7 +118,8 @@ export default async function HomePage() {
           <ul className="space-y-2">
             {orders.map((o) => {
               const total = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
-              const f = fulfillmentOf(o.items);
+              const showShip = o.status !== "CANCELLED" && (orderComplete(o) || fulfillmentOf(o.items) !== "NONE");
+              const fb = orderBadge(o);
               return (
                 <li key={o.id}>
                   <Link href={`/orders/${o.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
@@ -126,8 +127,8 @@ export default async function HomePage() {
                       <p className="font-semibold text-gray-900">#{o.number} · {o.customer.name}</p>
                       <p className="text-sm text-gray-500">{formatDate(o.orderDate)}</p>
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o.status !== "CANCELLED" && f !== "NONE" ? FULFILLMENT_COLORS[f] : STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
-                      {o.status !== "CANCELLED" && f !== "NONE" ? FULFILLMENT_LABELS[f] : STAGE_LABELS[o.status as OrderStage] ?? o.status}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${showShip ? fb.className : STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
+                      {showShip ? fb.label : STAGE_LABELS[o.status as OrderStage] ?? o.status}
                     </span>
                     <span className="text-sm font-semibold text-gray-900">{formatMoney(total, o.currency)}</span>
                     <ChevronRightIcon className="h-5 w-5 text-gray-300" />

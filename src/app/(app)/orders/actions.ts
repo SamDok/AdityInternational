@@ -263,6 +263,16 @@ export async function dropOrderLine(itemId: string) {
   return { ok: true };
 }
 
+// Manually close an order as complete (or reopen it). Used when all pieces are
+// shipped but the measured metres fall a little short of the ordered total.
+export async function setOrderComplete(id: string, complete: boolean) {
+  await requireUser();
+  await prisma.order.update({ where: { id }, data: { manualComplete: complete } });
+  revalidatePath(`/orders/${id}`);
+  revalidatePath("/orders");
+  revalidatePath("/");
+}
+
 // Record a shipment: add to each line's shippedQty and take that much out of
 // stock, logged as ORDER_SHIP. Mirrors receiveJob for the inbound side.
 export async function recordShipment(orderId: string, lines: { itemId: string; ship: number; weight?: number | null }[]) {
