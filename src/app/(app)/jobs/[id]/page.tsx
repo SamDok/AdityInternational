@@ -67,7 +67,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
         {canReceive && (
           <ReceiveForm
             jobId={job.id}
-            items={job.items.map((it) => ({ id: it.id, label: it.product.name, qtyOrdered: it.qtyOrdered, qtyReceived: it.qtyReceived, unit: it.unit, pieces: it.pieces, perPieceQty: it.perPieceQty }))}
+            items={job.items.map((it) => ({ id: it.id, label: it.product.name, qtyOrdered: it.qtyOrdered, qtyReceived: it.qtyReceived, unit: it.unit, pieces: it.pieces, perPieceQty: it.perPieceQty, piecesReceived: it.piecesReceived }))}
           />
         )}
 
@@ -87,7 +87,10 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                       <p className="mt-1 text-sm text-gray-500">{it.pieces} pcs × {it.perPieceQty} {it.unit} = {it.qtyOrdered} {it.unit}</p>
                     )}
                     <p className="mt-1 text-sm text-gray-500">
-                      {it.qtyReceived}/{it.qtyOrdered} {it.unit} received
+                      {it.pieces != null
+                        ? `${it.piecesReceived}/${it.pieces} pcs received · ${it.qtyReceived} ${it.unit}`
+                        : `${it.qtyReceived}/${it.qtyOrdered} ${it.unit} received`}
+                      {it.weightReceived > 0 ? ` · ${it.weightReceived} kg` : ""}
                       {it.rate != null ? ` · ${formatMoney(it.rate, job.currency)}/${it.unit}` : ""}
                     </p>
                     {it.dueDate && <p className="mt-0.5 text-sm text-gray-500">Due by {formatDate(it.dueDate)}</p>}

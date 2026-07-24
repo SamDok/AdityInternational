@@ -196,7 +196,9 @@ model StockMovement {
   id        String   @id @default(cuid())
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId String
-  delta     Float // +in / -out
+  delta     Float // +in / -out (metres)
+  pieces    Int? // pieces moved in this event
+  weight    Float? // weight (kg) moved in this event
   reason    String // JOB_RECEIVE | ORDER_SHIP | ORDER_UNSHIP | MANUAL_ADJUST
   note      String?
   orderId   String?
@@ -274,7 +276,9 @@ model JobItem {
   pieces      Int? // number of pieces (null = loose quantity)
   perPieceQty Float? // quantity in each piece
   qtyOrdered  Float    @default(0)
-  qtyReceived Float    @default(0)
+  qtyReceived Float    @default(0) // actual measured total received (metres) — may differ from pieces × perPieceQty
+  piecesReceived Int   @default(0) // count of pieces received (drives completion for piece-wise lines)
+  weightReceived Float @default(0) // cumulative weight (kg) received
   rate        Float? // making charge / purchase price per unit
   dueDate     DateTime? // this line's own due date
   note        String? // colour / spec for this line
@@ -327,6 +331,7 @@ model OrderItem {
   pieces      Int? // number of pieces / thans on this line
   perPieceQty Float? // metres in each piece; quantity is derived from this × pieces
   shippedQty  Float    @default(0) // metres shipped so far (item-wise fulfillment)
+  shippedWeight Float  @default(0) // cumulative weight (kg) shipped, captured for packing/invoice
   dueDate     DateTime? // this line's own due date; falls back to the order's when null
   unit        String   @default("mtr")
   rate        Float    @default(0) // price per unit in the order currency

@@ -214,6 +214,7 @@ export default async function OrderDetailPage({
                       {it.shippedQty > 0 ? (
                         <span className={it.shippedQty >= it.quantity ? "font-medium text-green-600" : "font-medium text-amber-600"}>
                           {it.shippedQty >= it.quantity ? "Shipped" : `Shipped ${it.shippedQty}/${it.quantity} ${it.unit}`}
+                          {it.shippedWeight > 0 ? ` · ${it.shippedWeight} kg` : ""}
                         </span>
                       ) : (
                         <span className="text-gray-400">Not shipped</span>

@@ -265,7 +265,7 @@ export async function dropOrderLine(itemId: string) {
 
 // Record a shipment: add to each line's shippedQty and take that much out of
 // stock, logged as ORDER_SHIP. Mirrors receiveJob for the inbound side.
-export async function recordShipment(orderId: string, lines: { itemId: string; ship: number }[]) {
+export async function recordShipment(orderId: string, lines: { itemId: string; ship: number; weight?: number | null }[]) {
   await requireUser();
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -281,12 +281,13 @@ export async function recordShipment(orderId: string, lines: { itemId: string; s
 
   // Gather the valid requests and tally demand per product. You may ship MORE
   // than was ordered, but never more of a product than is physically in stock.
-  const requests: { it: (typeof order.items)[number]; ship: number }[] = [];
+  const requests: { it: (typeof order.items)[number]; ship: number; weight: number | null }[] = [];
   const wantByProduct = new Map<string, number>();
   for (const l of lines) {
     const it = byId.get(l.itemId);
     if (!it || !(l.ship > 0)) continue;
-    requests.push({ it, ship: l.ship });
+    const weight = l.weight && l.weight > 0 ? l.weight : null;
+    requests.push({ it, ship: l.ship, weight });
     wantByProduct.set(it.productId, (wantByProduct.get(it.productId) ?? 0) + l.ship);
   }
   if (requests.length === 0) return { error: "Enter a quantity to ship." };
@@ -301,9 +302,12 @@ export async function recordShipment(orderId: string, lines: { itemId: string; s
 
   const ops = [];
   const moves: StockMove[] = [];
-  for (const { it, ship } of requests) {
-    ops.push(prisma.orderItem.update({ where: { id: it.id }, data: { shippedQty: { increment: ship } } }));
-    moves.push({ productId: it.productId, delta: -ship, reason: "ORDER_SHIP", orderId });
+  for (const { it, ship, weight } of requests) {
+    ops.push(prisma.orderItem.update({
+      where: { id: it.id },
+      data: { shippedQty: { increment: ship }, ...(weight != null ? { shippedWeight: { increment: weight } } : {}) },
+    }));
+    moves.push({ productId: it.productId, delta: -ship, weight: weight != null ? -weight : null, reason: "ORDER_SHIP", orderId });
   }
   await prisma.$transaction(ops);
 
@@ -383,14 +387,20 @@ export async function reduceShipment(itemId: string, amount: number) {
   await requireUser();
   const it = await prisma.orderItem.findUnique({
     where: { id: itemId },
-    select: { shippedQty: true, productId: true, orderId: true },
+    select: { shippedQty: true, shippedWeight: true, productId: true, orderId: true },
   });
   if (!it) return { error: "Line not found." };
   const amt = Math.min(Math.max(0, amount), it.shippedQty);
   if (amt > 0) {
     const userId = (await getCurrentUser())?.id ?? null;
-    await applyMovements([{ productId: it.productId, delta: amt, reason: "ORDER_UNSHIP", orderId: it.orderId, userId }]);
-    await prisma.orderItem.update({ where: { id: itemId }, data: { shippedQty: { decrement: amt } } });
+    // Unwind weight in proportion to the metres being un-shipped.
+    const frac = it.shippedQty > 0 ? amt / it.shippedQty : 0;
+    const wBack = it.shippedWeight != null ? it.shippedWeight * frac : null;
+    await applyMovements([{ productId: it.productId, delta: amt, weight: wBack, reason: "ORDER_UNSHIP", orderId: it.orderId, userId }]);
+    await prisma.orderItem.update({
+      where: { id: itemId },
+      data: { shippedQty: { decrement: amt }, ...(wBack != null ? { shippedWeight: { decrement: wBack } } : {}) },
+    });
   }
   revalidatePath(`/orders/${it.orderId}`);
   revalidatePath("/orders");

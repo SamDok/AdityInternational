@@ -2,7 +2,9 @@ import { prisma } from "./prisma";
 
 export type StockMove = {
   productId: string;
-  delta: number; // + in / - out
+  delta: number; // + in / - out (metres)
+  pieces?: number | null; // pieces moved in this event
+  weight?: number | null; // weight (kg) moved in this event
   reason: "JOB_RECEIVE" | "ORDER_SHIP" | "ORDER_UNSHIP" | "MANUAL_ADJUST";
   orderId?: string | null;
   jobId?: string | null;
@@ -23,6 +25,8 @@ export async function applyMovements(moves: StockMove[]) {
         data: {
           productId: m.productId,
           delta: m.delta,
+          pieces: m.pieces ?? null,
+          weight: m.weight ?? null,
           reason: m.reason,
           orderId: m.orderId ?? null,
           jobId: m.jobId ?? null,

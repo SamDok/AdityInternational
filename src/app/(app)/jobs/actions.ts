@@ -148,9 +148,13 @@ export async function updateJob(id: string, input: JobInput) {
   redirect(`/jobs/${id}`);
 }
 
-// Record received quantities (deltas) per line: add to stock and to qtyReceived,
-// then recompute the job status.
-export async function receiveJob(jobId: string, receipts: { itemId: string; received: number }[]) {
+// Record a receipt per line: the actual measured metres (which need not equal
+// pieces × nominal), the piece count, and the weight. Metres go into stock; a
+// piece-wise line completes once all its pieces are in.
+export async function receiveJob(
+  jobId: string,
+  receipts: { itemId: string; pieces?: number | null; meters: number; weight?: number | null }[],
+) {
   await requireUser();
   const job = await prisma.job.findUnique({ where: { id: jobId }, include: { items: true } });
   if (!job) return { error: "Job not found." };
@@ -160,21 +164,32 @@ export async function receiveJob(jobId: string, receipts: { itemId: string; rece
   const moves: StockMove[] = [];
   for (const r of receipts) {
     const item = job.items.find((i) => i.id === r.itemId);
-    if (!item || !r.received || r.received <= 0) continue;
-    ops.push(prisma.jobItem.update({ where: { id: item.id }, data: { qtyReceived: { increment: r.received } } }));
-    moves.push({ productId: item.productId, delta: r.received, reason: "JOB_RECEIVE", jobId });
+    if (!item) continue;
+    const meters = r.meters > 0 ? r.meters : 0;
+    const pieces = r.pieces && r.pieces > 0 ? r.pieces : 0;
+    const weight = r.weight && r.weight > 0 ? r.weight : null;
+    if (meters <= 0 && pieces <= 0 && weight == null) continue; // nothing entered
+    ops.push(prisma.jobItem.update({
+      where: { id: item.id },
+      data: {
+        qtyReceived: { increment: meters },
+        piecesReceived: { increment: pieces },
+        ...(weight != null ? { weightReceived: { increment: weight } } : {}),
+      },
+    }));
+    moves.push({ productId: item.productId, delta: meters, pieces: pieces || null, weight, reason: "JOB_RECEIVE", jobId });
   }
-  if (ops.length === 0) return { error: "Enter a quantity to receive." };
+  if (ops.length === 0) return { error: "Enter what you received." };
   await prisma.$transaction(ops);
 
-  // Bring received goods into stock and log each as a movement (JOB_RECEIVE).
+  // Bring received metres into stock and log each as a movement (JOB_RECEIVE).
   const userId = (await getCurrentUser())?.id ?? null;
   await applyMovements(moves.map((m) => ({ ...m, userId })));
 
-  // Recompute status from fresh totals.
+  // Completion: a piece-wise line is done once all pieces are in; a loose line by metres.
   const items = await prisma.jobItem.findMany({ where: { jobId } });
-  const allDone = items.every((i) => i.qtyReceived >= i.qtyOrdered);
-  const anyReceived = items.some((i) => i.qtyReceived > 0);
+  const allDone = items.every((i) => (i.pieces != null ? i.piecesReceived >= i.pieces : i.qtyReceived >= i.qtyOrdered));
+  const anyReceived = items.some((i) => i.piecesReceived > 0 || i.qtyReceived > 0);
   const status = allDone ? "RECEIVED" : anyReceived ? "PARTIAL" : "OPEN";
   await prisma.job.update({ where: { id: jobId }, data: { status } });
 

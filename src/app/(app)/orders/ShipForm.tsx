@@ -9,6 +9,7 @@ type Item = { id: string; label: string; quantity: number; shippedQty: number; u
 export default function ShipForm({ orderId, items }: { orderId: string; items: Item[] }) {
   const [open, setOpen] = useState(false);
   const [vals, setVals] = useState<Record<string, string>>({});
+  const [weights, setWeights] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const toast = useToast();
@@ -20,7 +21,11 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
   function submit() {
     setError(null);
     const lines = items
-      .map((it) => ({ itemId: it.id, ship: parseFloat(vals[it.id] ?? "") }))
+      .map((it) => {
+        const ship = parseFloat(vals[it.id] ?? "");
+        const weight = parseFloat(weights[it.id] ?? "");
+        return { itemId: it.id, ship, weight: !isNaN(weight) && weight > 0 ? weight : null };
+      })
       .filter((r) => !isNaN(r.ship) && r.ship > 0);
     if (lines.length === 0) return setError("Enter a quantity to ship.");
     startTransition(async () => {
@@ -45,19 +50,31 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
         {pendingItems.map((it) => {
           const remaining = Math.max(0, it.quantity - it.shippedQty);
           return (
-            <li key={it.id} className="flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-900">{it.label}</p>
-                <p className="text-xs text-gray-500">
-                  {it.shippedQty}/{it.quantity} {it.unit} shipped · {remaining} left · <span className={it.stockQty > 0 ? "text-gray-500" : "text-amber-600"}>{it.stockQty} in stock</span>
-                </p>
+            <li key={it.id} className="rounded-xl bg-gray-50 p-3 ring-1 ring-inset ring-gray-100">
+              <p className="truncate text-sm font-medium text-gray-900">{it.label}</p>
+              <p className="mb-2 text-xs text-gray-500">
+                {it.shippedQty}/{it.quantity} {it.unit} shipped · {remaining} left · <span className={it.stockQty > 0 ? "text-gray-500" : "text-amber-600"}>{it.stockQty} in stock</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-medium text-gray-500">Ship ({it.unit})</span>
+                  <input
+                    value={vals[it.id] ?? ""}
+                    onChange={(e) => setVals((v) => ({ ...v, [it.id]: e.target.value }))}
+                    type="number" inputMode="decimal" step="0.01" min="0" placeholder={String(remaining || "")}
+                    className="w-full rounded-lg border-0 bg-white px-3 py-2 text-sm ring-1 ring-inset ring-gray-200 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-medium text-gray-500">Weight (kg)</span>
+                  <input
+                    value={weights[it.id] ?? ""}
+                    onChange={(e) => setWeights((v) => ({ ...v, [it.id]: e.target.value }))}
+                    type="number" inputMode="decimal" step="0.01" min="0" placeholder="optional"
+                    className="w-full rounded-lg border-0 bg-white px-3 py-2 text-sm ring-1 ring-inset ring-gray-200 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                  />
+                </label>
               </div>
-              <input
-                value={vals[it.id] ?? ""}
-                onChange={(e) => setVals((v) => ({ ...v, [it.id]: e.target.value }))}
-                type="number" inputMode="decimal" step="0.01" min="0" placeholder={String(remaining || "")}
-                className="w-24 rounded-lg border-0 bg-gray-50 px-3 py-2 text-sm ring-1 ring-inset ring-gray-200 focus:ring-2 focus:ring-brand-500 focus:outline-none"
-              />
             </li>
           );
         })}

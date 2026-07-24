@@ -57,8 +57,13 @@ export default async function MovementsPage() {
                     {m.jobId ? <> · <Link href={`/jobs/${m.jobId}`} className="text-brand-600">job</Link></> : null}
                   </p>
                 </div>
-                <span className={`shrink-0 text-sm font-semibold tabular-nums ${up ? "text-green-600" : "text-red-600"}`}>
+                <span className={`shrink-0 text-right text-sm font-semibold tabular-nums ${up ? "text-green-600" : "text-red-600"}`}>
                   {up ? "+" : ""}{m.delta} {m.product.unit}
+                  {(m.pieces != null || m.weight != null) && (
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      {[m.pieces != null ? `${up ? "+" : ""}${m.pieces} pcs` : null, m.weight != null ? `${m.weight > 0 ? "+" : ""}${m.weight} kg` : null].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
                 </span>
               </li>
             );
