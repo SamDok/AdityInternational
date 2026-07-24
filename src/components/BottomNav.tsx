@@ -11,14 +11,13 @@ const tabs = [
   { href: "/", label: "Home", icon: HomeIcon, match: (p: string) => p === "/" },
   { href: "/orders", label: "Orders", icon: CartIcon, match: (p: string) => p.startsWith("/orders") },
   null, // center action
-  { href: "/jobs", label: "Jobs", icon: ClipboardIcon, match: (p: string) => p.startsWith("/jobs") },
+  { href: "/jobs", label: "Production", icon: ClipboardIcon, match: (p: string) => p.startsWith("/jobs") || p.startsWith("/schedule") || p.startsWith("/procurement") },
   {
     href: "/more",
     label: "More",
     icon: MoreIcon,
     match: (p: string) =>
       p.startsWith("/more") || p.startsWith("/vendors") || p.startsWith("/settings") ||
-      p.startsWith("/procurement") || p.startsWith("/schedule") ||
       p.startsWith("/customers") || p.startsWith("/products"),
   },
 ];

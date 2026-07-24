@@ -18,8 +18,8 @@ type Item = {
 type Row = { pieces: string; meters: string; weight: string };
 const emptyRow = (): Row => ({ pieces: "", meters: "", weight: "" });
 
-export default function ReceiveForm({ jobId, items }: { jobId: string; items: Item[] }) {
-  const [open, setOpen] = useState(false);
+export default function ReceiveForm({ jobId, items, defaultOpen = false }: { jobId: string; items: Item[]; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [rows, setRows] = useState<Record<string, Row>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();

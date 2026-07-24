@@ -38,7 +38,7 @@ export default async function ProcurementPage({
 
   return (
     <div>
-      <PageHeader title="Procurement" subtitle="What to make/buy, and what's on its way" backHref="/more" />
+      <PageHeader title="Procurement" subtitle="What to make/buy, and what's on its way" backHref="/jobs" />
 
       <div className="space-y-5 p-4">
         {(board.vendorOpts.length > 0 || board.customerOpts.length > 0) && (

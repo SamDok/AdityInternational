@@ -11,7 +11,7 @@ export default async function SchedulePage() {
 
   return (
     <div>
-      <PageHeader title="Due soon" subtitle="Deliveries that need attention, and what's blocking them" backHref="/more" />
+      <PageHeader title="Due soon" subtitle="Deliveries that need attention, and what's blocking them" backHref="/jobs" />
 
       <div className="space-y-6 p-4">
         {empty ? (

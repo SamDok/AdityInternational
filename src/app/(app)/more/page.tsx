@@ -1,24 +1,22 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { UsersIcon, ClipboardIcon, GearIcon, BoxIcon, ChevronRightIcon, DocumentIcon } from "@/components/Icons";
+import { UsersIcon, ClipboardIcon, GearIcon, BoxIcon, ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
-  const [customers, products, vendors, openJobs, lowStock] = await Promise.all([
+  const [customers, products, vendors, lowStock] = await Promise.all([
     prisma.customer.count(),
     prisma.product.count({ where: { archived: false } }),
     prisma.vendor.count({ where: { archived: false } }),
-    prisma.job.count({ where: { status: { in: ["OPEN", "PARTIAL"] } } }),
     prisma.product.count({ where: { archived: false, reorderLevel: { not: null } } }),
   ]);
 
+  // Due soon & Procurement now live under the Production (Jobs) tab.
   const items = [
     { href: "/customers", label: "Customers", sub: `${customers} total`, icon: UsersIcon },
     { href: "/products", label: "Products & designs", sub: `${products} in the catalogue`, icon: BoxIcon },
-    { href: "/schedule", label: "Due soon", sub: "deadlines & what's at risk", icon: ClipboardIcon },
-    { href: "/procurement", label: "Procurement", sub: `${openJobs} in progress · what to make/buy`, icon: DocumentIcon },
     { href: "/vendors", label: "Vendors", sub: `${vendors} kaarigars & suppliers`, icon: UsersIcon },
     { href: "/products/low-stock", label: "Low stock", sub: lowStock ? "items to watch" : "nothing tracked", icon: BoxIcon },
     { href: "/products/movements", label: "Stock movements", sub: "recent stock changes", icon: ClipboardIcon },

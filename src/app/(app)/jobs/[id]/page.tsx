@@ -18,8 +18,9 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Cancelled", cls: "bg-red-100 text-red-700" },
 };
 
-export default async function JobPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function JobPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ receive?: string }> }) {
   const { id } = await params;
+  const { receive } = await searchParams;
   const job = await prisma.job.findUnique({
     where: { id },
     include: { vendor: true, order: true, items: { include: { product: true } } },
@@ -67,6 +68,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
         {canReceive && (
           <ReceiveForm
             jobId={job.id}
+            defaultOpen={receive === "1"}
             items={job.items.map((it) => ({ id: it.id, label: it.product.name, qtyOrdered: it.qtyOrdered, qtyReceived: it.qtyReceived, unit: it.unit, pieces: it.pieces, perPieceQty: it.perPieceQty, piecesReceived: it.piecesReceived }))}
           />
         )}
