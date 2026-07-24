@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
+import { financialYearLabel } from "@/lib/jobNumber";
 
 const ItemSchema = z.object({
   id: z.string().optional(),
@@ -53,9 +54,16 @@ function toDate(v?: string | null) {
   return isNaN(d.getTime()) ? undefined : d;
 }
 
-async function nextJobNumber() {
-  const last = await prisma.job.findFirst({ orderBy: { number: "desc" } });
-  return last ? last.number + 1 : 1;
+// Allocate a job's numbers: the global internal `number` plus the per-(kind,
+// financial year) document `seq` and its `fyLabel`. Sequential callers each see
+// the previous committed job, so max+1 is safe for this workload.
+export async function allocateJobNumbers(kind: string, issueDate: Date) {
+  const fyLabel = financialYearLabel(issueDate);
+  const [lastNum, lastSeq] = await Promise.all([
+    prisma.job.findFirst({ orderBy: { number: "desc" }, select: { number: true } }),
+    prisma.job.findFirst({ where: { kind, fyLabel }, orderBy: { seq: "desc" }, select: { seq: true } }),
+  ]);
+  return { number: (lastNum?.number ?? 0) + 1, seq: (lastSeq?.seq ?? 0) + 1, fyLabel };
 }
 
 export async function createJob(input: JobInput) {
@@ -63,14 +71,17 @@ export async function createJob(input: JobInput) {
   const parsed = JobSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid job" };
   const d = parsed.data;
-  const number = await nextJobNumber();
+  const issueDate = toDate(d.issueDate) ?? new Date();
+  const { number, seq, fyLabel } = await allocateJobNumbers(d.kind, issueDate);
   const job = await prisma.job.create({
     data: {
       number,
+      seq,
+      fyLabel,
       vendorId: d.vendorId,
       kind: d.kind,
       currency: d.currency,
-      issueDate: toDate(d.issueDate) ?? new Date(),
+      issueDate,
       dueDate: toDate(d.dueDate) ?? null,
       notes: d.notes || null,
       items: { create: d.items.map(jobItemData) },

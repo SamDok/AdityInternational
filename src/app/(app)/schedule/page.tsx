@@ -78,7 +78,7 @@ function Readiness({ it }: { it: ScheduleItem }) {
   if (it.readiness === "MAKING") {
     return (
       <p className={`mt-1 text-xs font-medium ${it.jobLate ? "text-red-600" : "text-amber-600"}`}>
-        Being made{it.jobNumber ? <> · <Link href={`/jobs/${it.jobId}`} className="underline">Job #{it.jobNumber}</Link></> : ""}
+        Being made{it.jobDocNo ? <> · <Link href={`/jobs/${it.jobId}`} className="underline">Job {it.jobDocNo}</Link></> : ""}
         {it.jobDueDate ? ` due ${formatDate(it.jobDueDate)}` : ""}
         {it.jobLate ? " — arrives after the deadline" : ""}
       </p>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import JobForm from "../../JobForm";
 import { updateJob } from "../../actions";
+import { jobDocNo } from "@/lib/jobNumber";
 import { getProductOptions } from "../../../orders/productOptions";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
 
   return (
     <div>
-      <PageHeader title={`Edit job #${job.number}`} backHref={`/jobs/${job.id}`} />
+      <PageHeader title={`Edit job ${jobDocNo(job)}`} backHref={`/jobs/${job.id}`} />
       <JobForm
         vendors={vendors}
         products={products.map((p) => ({ id: p.id, label: p.label, group: p.group, unit: p.unit }))}

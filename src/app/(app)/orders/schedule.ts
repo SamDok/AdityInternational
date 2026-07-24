@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { jobDocNo } from "@/lib/jobNumber";
 
 // Readiness of an unshipped line toward its delivery date.
 export type Readiness = "READY" | "MAKING" | "NOT_PROCURED";
@@ -16,6 +17,7 @@ export type ScheduleItem = {
   leadDays: number | null;
   readiness: Readiness;
   jobNumber: number | null; // when MAKING, the job it's on
+  jobDocNo: string | null;
   jobId: string | null;
   jobDueDate: Date | null;
   jobLate: boolean; // job's date lands after the delivery date
@@ -54,9 +56,9 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   // binding (latest) job date.
   const jobs = await prisma.job.findMany({
     where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null } },
-    select: { id: true, number: true, dueDate: true, orderId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true } } },
+    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true } } },
   });
-  type JobCover = { outstanding: number; jobId: string; jobNumber: number; jobDue: Date | null };
+  type JobCover = { outstanding: number; jobId: string; jobNumber: number; jobDocNo: string; jobDue: Date | null };
   const cover = new Map<string, JobCover>();
   for (const j of jobs) {
     for (const it of j.items) {
@@ -65,11 +67,11 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       const k = `${j.orderId}:${it.productId}`;
       const prev = cover.get(k);
       if (!prev) {
-        cover.set(k, { outstanding: out, jobId: j.id, jobNumber: j.number, jobDue: j.dueDate });
+        cover.set(k, { outstanding: out, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), jobDue: j.dueDate });
       } else {
         prev.outstanding += out;
         // Keep the latest date (the constraint) and its job for the link.
-        if (j.dueDate && (!prev.jobDue || j.dueDate > prev.jobDue)) { prev.jobDue = j.dueDate; prev.jobId = j.id; prev.jobNumber = j.number; }
+        if (j.dueDate && (!prev.jobDue || j.dueDate > prev.jobDue)) { prev.jobDue = j.dueDate; prev.jobId = j.id; prev.jobNumber = j.number; prev.jobDocNo = jobDocNo(j); }
       }
     }
   }
@@ -124,6 +126,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
         productName: it.product.name, remaining, unit: it.unit,
         deliveryDate: due, startBy: startBy != null ? new Date(startBy) : null, leadDays,
         readiness, jobNumber: readiness === "MAKING" ? jc?.jobNumber ?? null : null,
+        jobDocNo: readiness === "MAKING" ? jc?.jobDocNo ?? null : null,
         jobId: readiness === "MAKING" ? jc?.jobId ?? null : null, jobDueDate: jobDue, jobLate, bucket,
       });
     }

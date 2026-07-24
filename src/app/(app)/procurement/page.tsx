@@ -103,7 +103,7 @@ export default async function ProcurementPage({
                           {i.productName} — <span className="font-medium text-gray-800">{i.outstanding} {i.unit} left</span>
                         </span>
                         <span className="shrink-0 text-gray-400">
-                          <Link href={`/jobs/${i.jobId}`} className="text-brand-600">#{i.jobNumber}</Link>
+                          <Link href={`/jobs/${i.jobId}`} className="text-brand-600">{i.jobDocNo}</Link>
                           {i.orderNumber ? ` · ord #${i.orderNumber}` : ""}
                           {i.dueDate ? ` · ${i.overdue ? "overdue " : "due "}${formatDate(i.dueDate)}` : ""}
                         </span>

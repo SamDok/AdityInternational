@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { formatDate } from "@/lib/format";
+import { jobDocNo } from "@/lib/jobNumber";
 import { ClipboardIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export default async function JobsPage() {
               <li key={j.id}>
                 <Link href={`/jobs/${j.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900">Job #{j.number} · {j.vendor.name}</p>
+                    <p className="font-semibold text-gray-900">Job {jobDocNo(j)} · {j.vendor.name}</p>
                     <p className="truncate text-sm text-gray-500">
                       {j.kind === "PURCHASE" ? "Purchase" : "Job work"} · {formatDate(j.issueDate)} · {j._count.items} line{j._count.items !== 1 ? "s" : ""}
                     </p>

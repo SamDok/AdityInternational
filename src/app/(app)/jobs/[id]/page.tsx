@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { formatMoney, formatDate } from "@/lib/format";
+import { jobDocNo } from "@/lib/jobNumber";
 import ReceiveForm from "../ReceiveForm";
 import ToggleButton from "../../products/ToggleButton";
 import DeleteButton from "@/components/DeleteButton";
@@ -25,6 +26,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   });
   if (!job) notFound();
 
+  const docNo = jobDocNo(job);
   const s = STATUS[job.status] ?? { label: job.status, cls: "bg-gray-100 text-gray-700" };
   const total = job.items.reduce((sum, it) => sum + (it.rate ?? 0) * it.qtyOrdered, 0);
   const canReceive = job.status === "OPEN" || job.status === "PARTIAL";
@@ -32,7 +34,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   return (
     <div>
       <PageHeader
-        title={`Job #${job.number}`}
+        title={`Job ${docNo}`}
         subtitle={job.vendor.name}
         backHref="/jobs"
         action={
@@ -113,7 +115,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
           {job.status !== "CANCELLED" && job.status !== "RECEIVED" && (
             <ToggleButton action={cancelJob.bind(null, job.id)} label="Cancel job" toastMessage="Job cancelled" />
           )}
-          <DeleteButton action={deleteJob.bind(null, job.id)} label="Delete job" confirmMessage={`Delete job #${job.number}? Stock already received stays. This can't be undone.`} />
+          <DeleteButton action={deleteJob.bind(null, job.id)} label="Delete job" confirmMessage={`Delete job ${docNo}? Stock already received stays. This can't be undone.`} />
         </div>
       </div>
     </div>

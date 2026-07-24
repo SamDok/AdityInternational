@@ -240,7 +240,11 @@ model Vendor {
 // supplier. Receiving its items brings finished goods into stock.
 model Job {
   id        String    @id @default(cuid())
-  number    Int       @unique // human-facing job no., assigned in app code
+  number    Int       @unique // internal global job no., assigned in app code
+  // Document number = per-(kind, financial year) sequence, shown as JW/25-26/001
+  // or PO/25-26/001. Nullable for jobs created before this scheme.
+  seq       Int?
+  fyLabel   String? // Indian financial year tag, e.g. "25-26"
   vendor    Vendor    @relation(fields: [vendorId], references: [id])
   vendorId  String
   kind      String    @default("JOB_WORK") // "JOB_WORK" | "PURCHASE"

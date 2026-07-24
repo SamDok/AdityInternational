@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
+import { jobDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import PrintBar from "./PrintBar";
 
@@ -24,7 +25,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
 
   const isPurchase = job.kind === "PURCHASE";
   const title = isPurchase ? "Purchase Order" : "Job Work Order";
-  const docNo = `${isPurchase ? "PO" : "JW"}-${job.number}`;
+  const docNo = jobDocNo(job);
   const total = job.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyOrdered, 0);
   const hasRates = job.items.some((i) => i.rate != null);
 

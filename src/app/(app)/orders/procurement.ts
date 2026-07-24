@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { fulfillmentOf } from "@/lib/format";
+import { jobDocNo } from "@/lib/jobNumber";
 
 // One order line's procurement view: how much is needed, what's coverable from
 // stock (and jobs already raised for this order), and the shortfall to make/buy.
@@ -25,7 +26,7 @@ export type ProcGroup = {
   jobDueDate: Date | null; // earliest line due date in the group
 };
 
-export type ExistingJob = { id: string; number: number; vendorName: string; status: string; kind: string };
+export type ExistingJob = { id: string; number: number; docNo: string; vendorName: string; status: string; kind: string };
 
 export type ProcPlan = {
   orderNumber: number;
@@ -114,7 +115,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
     groups,
     unassigned,
     inStock,
-    existingJobs: existingJobs.map((j) => ({ id: j.id, number: j.number, vendorName: j.vendor.name, status: j.status, kind: j.kind })),
+    existingJobs: existingJobs.map((j) => ({ id: j.id, number: j.number, docNo: jobDocNo(j), vendorName: j.vendor.name, status: j.status, kind: j.kind })),
   };
 }
 
@@ -124,7 +125,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
 
 export type NeedGroup = { vendorId: string; vendorName: string; kind: ProcKind; lines: { productId: string; name: string; shortfall: number; unit: string }[] };
 export type OrderNeed = { orderId: string; number: number; customerId: string; customerName: string; dueDate: Date | null; groups: NeedGroup[]; unassignedCount: number; vendorIds: string[] };
-export type AwaitingItem = { productName: string; outstanding: number; unit: string; jobId: string; jobNumber: number; orderNumber: number | null; orderId: string | null; dueDate: Date | null; overdue: boolean };
+export type AwaitingItem = { productName: string; outstanding: number; unit: string; jobId: string; jobNumber: number; jobDocNo: string; orderNumber: number | null; orderId: string | null; dueDate: Date | null; overdue: boolean };
 export type AwaitingVendor = { vendorId: string; vendorName: string; items: AwaitingItem[]; anyOverdue: boolean };
 export type DesignRollup = { productId: string; name: string; unit: string; demand: number; stock: number; onOrder: number; toProcure: number };
 
@@ -218,7 +219,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     let av = avMap.get(j.vendorId);
     if (!av) { av = { vendorId: j.vendorId, vendorName: j.vendor.name, items: [], anyOverdue: false }; avMap.set(j.vendorId, av); }
     for (const i of outstanding) {
-      av.items.push({ productName: i.product.name, outstanding: i.qtyOrdered - i.qtyReceived, unit: i.unit, jobId: j.id, jobNumber: j.number, orderNumber: j.order?.number ?? null, orderId: j.order?.id ?? null, dueDate: j.dueDate, overdue });
+      av.items.push({ productName: i.product.name, outstanding: i.qtyOrdered - i.qtyReceived, unit: i.unit, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), orderNumber: j.order?.number ?? null, orderId: j.order?.id ?? null, dueDate: j.dueDate, overdue });
     }
     if (overdue) av.anyOverdue = true;
   }

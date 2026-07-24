@@ -8,6 +8,7 @@ import { ORDER_STAGES } from "@/lib/format";
 import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
+import { allocateJobNumbers } from "../jobs/actions";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -331,16 +332,20 @@ export async function generateProcurement(orderId: string) {
     return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
   }
 
-  let number = await nextJobNumber();
+  const now = new Date();
   const createdIds: string[] = [];
   for (const g of plan.groups) {
+    const { number, seq, fyLabel } = await allocateJobNumbers(g.kind, now);
     const job = await prisma.job.create({
       data: {
         number,
+        seq,
+        fyLabel,
         vendorId: g.vendorId,
         kind: g.kind,
         status: "OPEN",
         currency: g.lines[0]?.currency ?? "INR",
+        issueDate: now,
         dueDate: g.jobDueDate ?? null,
         orderId,
         notes: `Auto-generated from order #${plan.orderNumber}`,
@@ -355,18 +360,12 @@ export async function generateProcurement(orderId: string) {
       },
     });
     createdIds.push(job.id);
-    number += 1;
   }
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/jobs");
   revalidatePath("/");
   return { ok: true, count: createdIds.length };
-}
-
-async function nextJobNumber(): Promise<number> {
-  const last = await prisma.job.findFirst({ orderBy: { number: "desc" } });
-  return last ? last.number + 1 : 1;
 }
 
 // Reduce a line's shipped quantity by `amount` (a correction), adding that much

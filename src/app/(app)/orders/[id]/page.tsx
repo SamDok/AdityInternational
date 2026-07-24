@@ -137,7 +137,7 @@ export default async function OrderDetailPage({
                   {plan.existingJobs.map((j) => (
                     <li key={j.id}>
                       <Link href={`/jobs/${j.id}`} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50">
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">Job #{j.number} · {j.vendorName}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">Job {j.docNo} · {j.vendorName}</span>
                         <span className="shrink-0 text-xs text-gray-500">{j.kind === "JOB_WORK" ? "Job work" : "Purchase"} · {JOB_STATUS_LABEL[j.status] ?? j.status}</span>
                         <ChevronRightIcon className="h-4 w-4 shrink-0 text-gray-300" />
                       </Link>

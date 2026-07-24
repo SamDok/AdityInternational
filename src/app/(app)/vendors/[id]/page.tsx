@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, formatMoney } from "@/lib/format";
+import { jobDocNo } from "@/lib/jobNumber";
 import { ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -103,7 +104,7 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
                 <li key={j.id}>
                   <Link href={`/jobs/${j.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900">Job #{j.number}</p>
+                      <p className="font-semibold text-gray-900">Job {jobDocNo(j)}</p>
                       <p className="text-sm text-gray-500">{formatDate(j.issueDate)}</p>
                     </div>
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{STATUS_LABEL[j.status] ?? j.status}</span>
