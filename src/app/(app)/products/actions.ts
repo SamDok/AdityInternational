@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyMovements } from "@/lib/stock";
-import { getCurrentUser, requireUser } from "@/lib/auth";
+import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 
 const str = () => z.string().trim().optional();
 const optionalNumber = () =>
@@ -154,6 +154,7 @@ export async function setDesignArchived(id: string, archived: boolean) {
 
 export async function deleteDesign(id: string) {
   await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can delete designs." };
   const variants = await prisma.product.count({ where: { designId: id } });
   if (variants > 0) return { error: "Remove this design's widths before deleting it." };
   await prisma.design.delete({ where: { id } });
@@ -239,6 +240,7 @@ export async function updateVariant(id: string, formData: FormData) {
 
 export async function deleteVariant(id: string) {
   await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can delete widths." };
   const [used, jobbed] = await Promise.all([
     prisma.orderItem.count({ where: { productId: id } }),
     prisma.jobItem.count({ where: { productId: id } }),

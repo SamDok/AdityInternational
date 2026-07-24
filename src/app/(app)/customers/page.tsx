@@ -2,8 +2,10 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
+import ExportButton from "./ExportButton";
 import EmptyState from "@/components/EmptyState";
 import CustomerFilters from "./CustomerFilters";
+import Pager from "@/components/Pager";
 import { formatDate } from "@/lib/format";
 import { UsersIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 
@@ -69,6 +71,11 @@ export default async function CustomersPage({
         })
       : rawCustomers;
 
+  const PAGE_SIZE = 30;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const matchCount = customers.length;
+  const pagedCustomers = customers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const totalCustomers = allForOptions.length;
   const countries = [...new Set(allForOptions.map((c) => c.country).filter(Boolean))].sort() as string[];
   const categories = [...new Set(allForOptions.map((c) => c.category).filter(Boolean))].sort() as string[];
@@ -82,6 +89,7 @@ export default async function CustomersPage({
         subtitle={totalCustomers ? `${customers.length} shown` : undefined}
         action={
           <div className="flex items-center gap-2">
+            {totalCustomers > 0 && <ExportButton />}
             <Link href="/customers/import" className="btn-secondary !px-3 !py-2 text-sm">
               Import
             </Link>
@@ -120,7 +128,7 @@ export default async function CustomersPage({
             </p>
           ) : (
             <ul className="divide-y divide-gray-100 p-2">
-              {customers.map((c) => (
+              {pagedCustomers.map((c) => (
                 <li key={c.id}>
                   <Link
                     href={`/customers/${c.id}`}
@@ -153,6 +161,7 @@ export default async function CustomersPage({
               ))}
             </ul>
           )}
+          <Pager basePath="/customers" params={{ q, country, category, salesperson, sort, archived: showArchived ? "1" : undefined }} page={page} pageSize={PAGE_SIZE} total={matchCount} />
         </>
       )}
     </div>

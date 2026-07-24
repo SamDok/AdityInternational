@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { requireUser, isOwner } from "@/lib/auth";
 
 const VENDOR_KINDS = ["KAARIGAR", "SUPPLIER", "BOTH"] as const;
 
@@ -90,6 +90,7 @@ export async function setVendorArchived(id: string, archived: boolean) {
 
 export async function deleteVendor(id: string) {
   await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can delete vendors." };
   const [jobs, designs] = await Promise.all([
     prisma.job.count({ where: { vendorId: id } }),
     prisma.design.count({ where: { vendorId: id } }),

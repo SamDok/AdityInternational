@@ -97,6 +97,7 @@ export default async function CustomerDetailPage({
           <Row label="GST number" value={customer.gstin} />
           <Row label="Tax ID / VAT" value={customer.taxId} />
           <Row label="Notes" value={customer.notes} />
+          <Row label="Added by" value={customer.createdByName} />
         </section>
 
         <section>

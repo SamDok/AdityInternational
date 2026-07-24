@@ -1,16 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useToast } from "@/components/Toast";
 
 export default function ToggleButton({
   action,
   label,
+  toastMessage,
 }: {
   action: () => Promise<{ error?: string } | void>;
   label: string;
+  toastMessage?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   return (
     <div className="space-y-2">
@@ -18,7 +22,11 @@ export default function ToggleButton({
       <button
         type="button"
         disabled={isPending}
-        onClick={() => startTransition(async () => { const r = await action(); if (r?.error) setError(r.error); })}
+        onClick={() => startTransition(async () => {
+          const r = await action();
+          if (r?.error) { setError(r.error); toast(r.error, { kind: "error" }); }
+          else if (toastMessage) toast(toastMessage);
+        })}
         className="btn-secondary w-full"
       >
         {isPending ? "Saving…" : label}

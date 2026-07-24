@@ -3,18 +3,20 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { generateProcurement } from "./actions";
+import { useToast } from "@/components/Toast";
 
 export default function GenerateProcurement({ orderId, label }: { orderId: string; label: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   function onClick() {
     setError(null);
     startTransition(async () => {
       const res = await generateProcurement(orderId);
-      if (res?.error) setError(res.error);
-      else router.refresh();
+      if (res?.error) { setError(res.error); toast(res.error, { kind: "error" }); }
+      else { router.refresh(); toast(`Created ${res?.count ?? 0} job${res?.count === 1 ? "" : "s"}`); }
     });
   }
 

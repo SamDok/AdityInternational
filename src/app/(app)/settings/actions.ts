@@ -3,10 +3,41 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, destroySession, hashPassword, verifyPassword } from "@/lib/auth";
+import { requireUser, isOwner, destroySession, hashPassword, verifyPassword } from "@/lib/auth";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+// Owner-only full-database export (JSON) for backup / peace of mind.
+export async function exportAllData(): Promise<{ error?: string; data?: string }> {
+  await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can export all data." };
+  const [
+    customers, customerPrices, categories, designs, products, orders, orderItems,
+    vendors, jobs, jobItems, stockMovements, bankAccounts, company, users,
+  ] = await Promise.all([
+    prisma.customer.findMany(),
+    prisma.customerPrice.findMany(),
+    prisma.productCategory.findMany(),
+    prisma.design.findMany(),
+    prisma.product.findMany(),
+    prisma.order.findMany(),
+    prisma.orderItem.findMany(),
+    prisma.vendor.findMany(),
+    prisma.job.findMany(),
+    prisma.jobItem.findMany(),
+    prisma.stockMovement.findMany(),
+    prisma.bankAccount.findMany(),
+    prisma.companyProfile.findMany(),
+    prisma.user.findMany({ select: { id: true, email: true, name: true, role: true, createdAt: true } }),
+  ]);
+  const dump = {
+    exportedAt: new Date().toISOString(),
+    customers, customerPrices, categories, designs, products, orders, orderItems,
+    vendors, jobs, jobItems, stockMovements, bankAccounts, company, users,
+  };
+  return { data: JSON.stringify(dump, null, 2) };
 }
 
 export async function logout() {

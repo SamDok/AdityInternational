@@ -2,19 +2,23 @@
 
 import { useState, useTransition } from "react";
 import { adjustStock } from "./actions";
+import { useToast } from "@/components/Toast";
 
 export default function StockAdjust({ variantId, stockQty, unit }: { variantId: string; stockQty: number; unit: string }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState("");
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   function apply(sign: number) {
     const n = parseFloat(qty);
     if (isNaN(n) || n <= 0) return;
     startTransition(async () => {
-      await adjustStock(variantId, sign * n);
+      const res = await adjustStock(variantId, sign * n);
       setQty("");
       setOpen(false);
+      if (res?.error) toast(res.error, { kind: "error" });
+      else toast(`Stock ${sign > 0 ? "added" : "removed"}: ${res?.stockQty ?? ""} ${unit} on hand`);
     });
   }
 

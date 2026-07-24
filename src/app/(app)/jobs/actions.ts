@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyMovements, type StockMove } from "@/lib/stock";
-import { getCurrentUser, requireUser } from "@/lib/auth";
+import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 
 const ItemSchema = z.object({
   productId: z.string().min(1),
@@ -111,6 +111,7 @@ export async function cancelJob(id: string) {
 
 export async function deleteJob(id: string) {
   await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can delete jobs." };
   await prisma.job.delete({ where: { id } }); // items cascade; stock already added stays
   revalidatePath("/jobs");
   redirect("/jobs");

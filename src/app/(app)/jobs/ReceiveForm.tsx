@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { receiveJob } from "./actions";
+import { useToast } from "@/components/Toast";
 
 type Item = { id: string; label: string; qtyOrdered: number; qtyReceived: number; unit: string };
 
@@ -10,6 +11,7 @@ export default function ReceiveForm({ jobId, items }: { jobId: string; items: It
   const [vals, setVals] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   function submit() {
     setError(null);
@@ -19,8 +21,8 @@ export default function ReceiveForm({ jobId, items }: { jobId: string; items: It
     if (receipts.length === 0) return setError("Enter a quantity to receive.");
     startTransition(async () => {
       const res = await receiveJob(jobId, receipts);
-      if (res?.error) setError(res.error);
-      else { setVals({}); setOpen(false); }
+      if (res?.error) { setError(res.error); toast(res.error, { kind: "error" }); }
+      else { setVals({}); setOpen(false); toast("Received — added to stock"); }
     });
   }
 

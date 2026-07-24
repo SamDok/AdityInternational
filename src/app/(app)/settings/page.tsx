@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import PageHeader from "@/components/PageHeader";
 import SettingsClient from "./SettingsClient";
+import BackupButton from "./BackupButton";
 import { BuildingIcon, ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,13 @@ export default async function SettingsPage() {
         </Link>
       </div>
       <SettingsClient me={me} teammates={teammates} isOwner={isOwner} />
+      {isOwner && (
+        <div className="px-4 pb-8">
+          <p className="mb-2 px-1 text-sm font-semibold text-gray-500">Backup</p>
+          <BackupButton />
+          <p className="mt-1.5 px-1 text-xs text-gray-400">Downloads all your data as a JSON file you can keep safe.</p>
+        </div>
+      )}
     </div>
   );
 }

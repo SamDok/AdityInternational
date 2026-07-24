@@ -71,6 +71,7 @@ export default async function OrderDetailPage({
         <div className="card">
           <p className="text-sm text-gray-500">Placed {formatDate(order.orderDate)}</p>
           {order.dueDate && <p className="text-sm text-gray-500">Due {formatDate(order.dueDate)}</p>}
+          {order.createdByName && <p className="text-xs text-gray-400">Created by {order.createdByName}</p>}
           <p className="mt-1 text-sm text-gray-500">
             <Link href={`/customers/${order.customerId}`} className="font-medium text-brand-600 hover:underline">
               {order.customer.name}
@@ -209,7 +210,7 @@ export default async function OrderDetailPage({
                       {(it.dueDate || order.dueDate) && (
                         <span className="text-gray-500">Due {formatDate(it.dueDate ?? order.dueDate!)}</span>
                       )}
-                      {it.shippedQty > 0 && <UnshipButton itemId={it.id} />}
+                      {it.shippedQty > 0 && <UnshipButton itemId={it.id} shippedQty={it.shippedQty} unit={it.unit} />}
                     </div>
                   </div>
                   <p className="shrink-0 font-semibold text-gray-900">

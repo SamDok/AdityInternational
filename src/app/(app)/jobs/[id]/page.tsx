@@ -97,7 +97,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
         <div className="space-y-2 pt-2">
           {job.status !== "CANCELLED" && job.status !== "RECEIVED" && (
-            <ToggleButton action={cancelJob.bind(null, job.id)} label="Cancel job" />
+            <ToggleButton action={cancelJob.bind(null, job.id)} label="Cancel job" toastMessage="Job cancelled" />
           )}
           <DeleteButton action={deleteJob.bind(null, job.id)} label="Delete job" confirmMessage={`Delete job #${job.number}? Stock already received stays. This can't be undone.`} />
         </div>

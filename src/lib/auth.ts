@@ -77,6 +77,12 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
+// True when the signed-in user is the owner (can do destructive actions).
+export async function isOwner(): Promise<boolean> {
+  const user = await getCurrentUser();
+  return user?.role === "owner";
+}
+
 // True when no accounts exist yet (first-run setup).
 export async function hasNoUsers(): Promise<boolean> {
   return (await prisma.user.count()) === 0;

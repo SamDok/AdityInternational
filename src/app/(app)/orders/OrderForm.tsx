@@ -8,6 +8,7 @@ import { PlusIcon, TrashIcon } from "@/components/Icons";
 import ProductPicker from "./ProductPicker";
 import type { OrderInput } from "./actions";
 import { saveCustomerRegularPrice } from "../customers/actions";
+import { useToast } from "@/components/Toast";
 
 type CustomerOpt = {
   id: string;
@@ -109,6 +110,7 @@ const INCOTERMS = ["", "EXW", "FOB", "CFR", "CIF", "DAP", "DDP"];
 
 export default function OrderForm({ customers, products, pricesByCustomer, initial, defaultCustomerId, action, submitLabel }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -238,10 +240,12 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
     startTransition(async () => {
       const res = await saveCustomerRegularPrice(customerId, l.productId, price, currency);
       setSavingKey(null);
-      if (!res?.error) {
+      if (res?.error) toast(res.error, { kind: "error" });
+      else {
         // Reflect it locally so the "one-off" hint clears immediately.
         setSavedOverrides((o) => ({ ...o, [`${customerId}:${l.productId}`]: price }));
         setSavedKeys((prev) => new Set(prev).add(l.key));
+        toast("Saved as this customer's regular price");
       }
     });
   }

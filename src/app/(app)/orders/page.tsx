@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import Pager from "@/components/Pager";
 import { CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
@@ -15,9 +16,12 @@ type View = "active" | "done" | "all";
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; page?: string }>;
 }) {
-  const view = ((await searchParams).view ?? "active") as View;
+  const sp = await searchParams;
+  const view = (sp.view ?? "active") as View;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const PAGE_SIZE = 30;
 
   const all = await prisma.order.findMany({
     orderBy: { orderDate: "desc" },
@@ -34,6 +38,7 @@ export default async function OrdersPage({
     )
     .map(({ o }) => o);
 
+  const pagedOrders = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const tabs: [View, string][] = [["active", "Active"], ["done", "Done"], ["all", "All"]];
 
   return (
@@ -73,7 +78,7 @@ export default async function OrdersPage({
             </p>
           ) : (
             <ul className="space-y-2 p-4">
-              {orders.map((o) => {
+              {pagedOrders.map((o) => {
                 const total = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
                 const f = fulfillmentOf(o.items);
                 return (
@@ -105,6 +110,7 @@ export default async function OrdersPage({
               })}
             </ul>
           )}
+          <Pager basePath="/orders" params={{ view: view === "active" ? undefined : view }} page={page} pageSize={PAGE_SIZE} total={orders.length} />
         </>
       )}
     </div>

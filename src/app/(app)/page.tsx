@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { UsersIcon, BoxIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon } from "@/components/Icons";
+import { UsersIcon, BoxIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon, SearchIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
   fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS,
@@ -47,6 +47,16 @@ export default async function HomePage() {
           <GearIcon className="h-6 w-6" />
         </Link>
       </header>
+
+      {/* Global search */}
+      <form action="/search" className="relative mb-6">
+        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+        <input
+          name="q"
+          placeholder="Search customers, designs, orders…"
+          className="w-full rounded-xl border-0 bg-white py-3 pl-10 pr-4 text-base shadow-sm ring-1 ring-inset ring-gray-200 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+        />
+      </form>
 
       {/* Stat tiles */}
       <div className="mb-6 grid grid-cols-3 gap-3">

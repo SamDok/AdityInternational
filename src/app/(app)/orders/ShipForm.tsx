@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { recordShipment } from "./actions";
+import { useToast } from "@/components/Toast";
 
 type Item = { id: string; label: string; quantity: number; shippedQty: number; unit: string; stockQty: number };
 
@@ -10,6 +11,7 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
   const [vals, setVals] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   // Show a line if there's still something to ship, or stock on hand to send
   // (you can ship more than ordered, as long as it's in stock).
@@ -23,8 +25,8 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
     if (lines.length === 0) return setError("Enter a quantity to ship.");
     startTransition(async () => {
       const res = await recordShipment(orderId, lines);
-      if (res?.error) setError(res.error);
-      else { setVals({}); setOpen(false); }
+      if (res?.error) { setError(res.error); toast(res.error, { kind: "error" }); }
+      else { setVals({}); setOpen(false); toast("Shipment recorded — stock reduced"); }
     });
   }
 

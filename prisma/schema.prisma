@@ -103,6 +103,7 @@ model Customer {
   salesperson   User?   @relation(fields: [salespersonId], references: [id], onDelete: SetNull)
   salespersonId String?
 
+  createdByName String? // teammate who added this customer (snapshot of their name)
   notes     String?
   orders    Order[]
   prices    CustomerPrice[] // this customer's agreed prices per width-variant
@@ -269,6 +270,7 @@ model Order {
   orderDate  DateTime    @default(now())
   dueDate    DateTime? // overall target date; each line may override with its own
   notes      String?
+  createdByName String? // teammate who created this order (snapshot of their name)
 
   // Snapshot of the customer's details at order time, frozen so a sent PDF never
   // changes if the customer is later edited. Prefilled from the customer,

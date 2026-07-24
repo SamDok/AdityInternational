@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import CatalogueFilters from "../CatalogueFilters";
 import ExportButton from "../ExportButton";
+import Pager from "@/components/Pager";
 import { ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,10 @@ export default async function CataloguePage({
 
   const compositions = allComps.map((c) => c.composition).filter(Boolean).sort() as string[];
 
+  const PAGE_SIZE = 40;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const pagedDesigns = designs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div>
       <PageHeader
@@ -80,7 +85,7 @@ export default async function CataloguePage({
         <p className="px-6 py-12 text-center text-sm text-gray-500">No designs match.</p>
       ) : (
         <ul className="divide-y divide-gray-100 p-2">
-          {designs.map((d) => (
+          {pagedDesigns.map((d) => (
             <li key={d.id}>
               <Link href={`/products/design/${d.id}`} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-gray-50">
                 {d.imageData ? (
@@ -101,6 +106,7 @@ export default async function CataloguePage({
           ))}
         </ul>
       )}
+      <Pager basePath="/products/all" params={{ q, type, composition, stock: stock === "all" ? undefined : stock, sort: sort === "code" ? undefined : sort }} page={page} pageSize={PAGE_SIZE} total={designs.length} />
     </div>
   );
 }

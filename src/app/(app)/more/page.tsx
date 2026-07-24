@@ -16,6 +16,7 @@ export default async function MorePage() {
     { href: "/vendors", label: "Vendors", sub: `${vendors} kaarigars & suppliers`, icon: UsersIcon },
     { href: "/jobs", label: "Jobs", sub: `${openJobs} open`, icon: ClipboardIcon },
     { href: "/products/low-stock", label: "Low stock", sub: lowStock ? "items to watch" : "nothing tracked", icon: BoxIcon },
+    { href: "/products/movements", label: "Stock movements", sub: "recent stock changes", icon: ClipboardIcon },
     { href: "/settings", label: "Settings", sub: "account & team", icon: GearIcon },
   ];
 

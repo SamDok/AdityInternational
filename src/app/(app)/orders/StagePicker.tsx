@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { ORDER_STAGES, STAGE_LABELS, STAGE_COLORS, type OrderStage } from "@/lib/format";
 import { updateOrderStage } from "./actions";
+import { useToast } from "@/components/Toast";
 
 export default function StagePicker({
   orderId,
@@ -15,6 +16,7 @@ export default function StagePicker({
 }) {
   const [stage, setStage] = useState(current);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   function change(next: string) {
     if (next === stage) return;
@@ -22,7 +24,8 @@ export default function StagePicker({
     setStage(next); // optimistic
     startTransition(async () => {
       const res = await updateOrderStage(orderId, next);
-      if (res?.error) setStage(prev); // revert on failure
+      if (res?.error) { setStage(prev); toast(res.error, { kind: "error" }); } // revert on failure
+      else toast(`Order marked ${STAGE_LABELS[next as OrderStage] ?? next}`);
     });
   }
 

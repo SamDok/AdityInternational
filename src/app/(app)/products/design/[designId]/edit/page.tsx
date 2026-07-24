@@ -26,10 +26,11 @@ export default async function EditDesignPage({ params }: { params: Promise<{ des
       <PageHeader title={`Edit ${design.code}`} backHref={`/products/design/${design.id}`} />
       <DesignForm categories={categories} vendors={vendors} initial={design} action={updateDesign.bind(null, designId)} submitLabel="Save changes" />
       <div className="space-y-2 p-4 pt-0">
-        <ToggleButton action={duplicateDesign.bind(null, designId)} label="Duplicate design" />
+        <ToggleButton action={duplicateDesign.bind(null, designId)} label="Duplicate design" toastMessage="Design duplicated" />
         <ToggleButton
           action={setDesignArchived.bind(null, designId, !design.archived)}
           label={design.archived ? "Unarchive design" : "Archive design"}
+          toastMessage={design.archived ? "Design restored" : "Design archived"}
         />
         <DeleteButton
           action={deleteDesign.bind(null, designId)}

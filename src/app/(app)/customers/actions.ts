@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { isBareDialCode } from "@/lib/dialCodes";
-import { requireUser } from "@/lib/auth";
+import { requireUser, isOwner } from "@/lib/auth";
 
 // A phone that is blank or only an auto-filled dial code becomes empty.
 const phoneField = z.preprocess((v) => {
@@ -160,7 +160,7 @@ export async function importCustomers(rows: Record<string, string>[]) {
 }
 
 export async function createCustomer(formData: FormData) {
-  await requireUser();
+  const me = await requireUser();
   const result = parse(formData);
   if (!result.success) {
     return { error: result.error.issues[0]?.message ?? "Invalid input" };
@@ -170,7 +170,7 @@ export async function createCustomer(formData: FormData) {
   }
   const code = await nextCustomerCode();
   await prisma.customer.create({
-    data: { ...clean(result.data), name: result.data.name, currency: result.data.currency, code } as never,
+    data: { ...clean(result.data), name: result.data.name, currency: result.data.currency, code, createdByName: me.name || me.email } as never,
   });
   revalidatePath("/customers");
   redirect("/customers");
@@ -203,6 +203,7 @@ export async function setCustomerArchived(id: string, archived: boolean) {
 
 export async function deleteCustomer(id: string) {
   await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can delete customers." };
   const orderCount = await prisma.order.count({ where: { customerId: id } });
   if (orderCount > 0) {
     return { error: "This customer has orders and can't be deleted." };
@@ -245,6 +246,30 @@ export async function removeCustomerPrice(id: string) {
 // Save a customer's regular price for a variant, called from the order form's
 // opt-in "Save as regular price". Kept separate from a one-off order rate so a
 // circumstantial price never overwrites the regular price unless asked.
+// Whole-directory CSV export (one row per customer). Mirrors the import headers.
+export async function exportCustomersCsv(): Promise<string> {
+  await requireUser();
+  const rows = await prisma.customer.findMany({ orderBy: { name: "asc" } });
+  const header = [
+    "code", "name", "company", "contactPerson", "email", "phone", "altPhone", "address",
+    "country", "shippingAddress", "destinationPort", "incoterms", "gstin", "taxId",
+    "currency", "paymentTerms", "creditLimit", "defaultDiscount", "category", "notes",
+  ];
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [header.join(",")];
+  for (const c of rows) {
+    lines.push([
+      c.code, c.name, c.company, c.contactPerson, c.email, c.phone, c.altPhone, c.address,
+      c.country, c.shippingAddress, c.destinationPort, c.incoterms, c.gstin, c.taxId,
+      c.currency, c.paymentTerms, c.creditLimit, c.defaultDiscount, c.category, c.notes,
+    ].map(esc).join(","));
+  }
+  return lines.join("\n");
+}
+
 export async function saveCustomerRegularPrice(
   customerId: string,
   productId: string,

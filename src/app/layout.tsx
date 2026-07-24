@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Aditya International ERP",
   description: "Run your business — customers, products, and orders — from any device.",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
