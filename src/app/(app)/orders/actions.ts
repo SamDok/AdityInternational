@@ -192,14 +192,74 @@ export async function updateOrder(id: string, input: OrderInput) {
 }
 
 // Set the commercial stage (Draft / Confirmed / Cancelled). No stock effect —
-// shipping is tracked per line via recordShipment.
-export async function updateOrderStage(id: string, stage: string) {
+// shipping is tracked per line via recordShipment. When cancelling, the caller
+// may also ask to cancel the order's still-open jobs (so kaarigars/suppliers are
+// told to stop). Fabric already received stays in stock.
+export async function updateOrderStage(id: string, stage: string, opts?: { cancelJobs?: boolean }) {
   await requireUser();
   if (!ORDER_STAGES.includes(stage as never)) return { error: "Unknown stage" };
   await prisma.order.update({ where: { id }, data: { status: stage } });
+  if (stage === "CANCELLED" && opts?.cancelJobs) {
+    await prisma.job.updateMany({
+      where: { orderId: id, status: { in: ["OPEN", "PARTIAL"] } },
+      data: { status: "CANCELLED" },
+    });
+    revalidatePath("/jobs");
+  }
   revalidatePath("/orders");
   revalidatePath(`/orders/${id}`);
   revalidatePath("/");
+}
+
+// How many of this order's jobs are still open (used to decide whether to prompt
+// about cancelling them alongside the order).
+export async function openJobCountForOrder(id: string): Promise<number> {
+  await requireUser();
+  return prisma.job.count({ where: { orderId: id, status: { in: ["OPEN", "PARTIAL"] } } });
+}
+
+// "Can't make this design" — drop a single line from the order and stop the
+// un-received part of its job, leaving the rest of the order live. Refuses if the
+// line already shipped, or if it's the order's only line (cancel the order instead).
+export async function dropOrderLine(itemId: string) {
+  await requireUser();
+  const item = await prisma.orderItem.findUnique({
+    where: { id: itemId },
+    select: { id: true, orderId: true, productId: true, shippedQty: true },
+  });
+  if (!item) return { error: "Line not found." };
+  if (item.shippedQty > 0) return { error: "This line has already shipped — un-ship it first." };
+
+  const lineCount = await prisma.orderItem.count({ where: { orderId: item.orderId } });
+  if (lineCount <= 1) return { error: "This is the order's only design — cancel the whole order instead." };
+
+  // Trim this product from the order's open jobs: drop un-received job lines, and
+  // cancel any job left with nothing to make.
+  const jobs = await prisma.job.findMany({
+    where: { orderId: item.orderId, status: { in: ["OPEN", "PARTIAL"] } },
+    select: { id: true, items: { select: { id: true, productId: true, qtyOrdered: true, qtyReceived: true } } },
+  });
+  for (const job of jobs) {
+    const toRemove = job.items.filter((ji) => ji.productId === item.productId && ji.qtyReceived <= 0);
+    if (toRemove.length === 0) continue;
+    await prisma.jobItem.deleteMany({ where: { id: { in: toRemove.map((ji) => ji.id) } } });
+    const remaining = job.items.filter((ji) => !toRemove.some((r) => r.id === ji.id));
+    if (remaining.length === 0) {
+      await prisma.job.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
+    } else {
+      const allDone = remaining.every((i) => i.qtyReceived >= i.qtyOrdered);
+      const anyReceived = remaining.some((i) => i.qtyReceived > 0);
+      await prisma.job.update({ where: { id: job.id }, data: { status: allDone ? "RECEIVED" : anyReceived ? "PARTIAL" : "OPEN" } });
+    }
+  }
+
+  await prisma.orderItem.delete({ where: { id: itemId } });
+
+  revalidatePath(`/orders/${item.orderId}`);
+  revalidatePath("/orders");
+  revalidatePath("/jobs");
+  revalidatePath("/");
+  return { ok: true };
 }
 
 // Record a shipment: add to each line's shippedQty and take that much out of

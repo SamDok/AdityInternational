@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import StagePicker from "../StagePicker";
 import ShipForm from "../ShipForm";
 import UnshipButton from "../UnshipButton";
+import DropLineButton from "../DropLineButton";
 import GenerateProcurement from "../GenerateProcurement";
 import { planProcurement } from "../procurement";
 import { formatMoney, formatDate, fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS } from "@/lib/format";
@@ -42,6 +43,15 @@ export default async function OrderDetailPage({
   }));
 
   const plan = await planProcurement(id);
+  const openJobCount = plan?.existingJobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL").length ?? 0;
+
+  // Products still being made on an open job for this order (drives the per-line
+  // "Can't make this" toast wording).
+  const openJobLines = await prisma.jobItem.findMany({
+    where: { job: { orderId: id, status: { in: ["OPEN", "PARTIAL"] } } },
+    select: { productId: true, qtyOrdered: true, qtyReceived: true },
+  });
+  const productsWithOpenJob = new Set(openJobLines.filter((l) => l.qtyReceived < l.qtyOrdered).map((l) => l.productId));
 
   // Prefer the frozen snapshot; fall back to the live customer for older orders.
   const billToName = order.billToName || order.customer.company || order.customer.name;
@@ -82,6 +92,7 @@ export default async function OrderDetailPage({
         <StagePicker
           orderId={order.id}
           current={order.status}
+          openJobs={openJobCount}
           fulfillment={order.status !== "CANCELLED" ? { label: FULFILLMENT_LABELS[fulfillment], className: FULFILLMENT_COLORS[fulfillment] } : undefined}
         />
 
@@ -211,6 +222,9 @@ export default async function OrderDetailPage({
                         <span className="text-gray-500">Due {formatDate(it.dueDate ?? order.dueDate!)}</span>
                       )}
                       {it.shippedQty > 0 && <UnshipButton itemId={it.id} shippedQty={it.shippedQty} unit={it.unit} />}
+                      {order.status !== "CANCELLED" && it.shippedQty === 0 && order.items.length > 1 && (
+                        <DropLineButton itemId={it.id} hasJob={productsWithOpenJob.has(it.productId)} />
+                      )}
                     </div>
                   </div>
                   <p className="shrink-0 font-semibold text-gray-900">
