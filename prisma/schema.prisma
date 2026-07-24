@@ -106,6 +106,7 @@ model Customer {
   createdByName String? // teammate who added this customer (snapshot of their name)
   notes     String?
   orders    Order[]
+  shipments Shipment[]
   prices    CustomerPrice[] // this customer's agreed prices per width-variant
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -185,6 +186,7 @@ model Product {
   orderItems     OrderItem[]
   customerPrices CustomerPrice[]
   jobItems       JobItem[]
+  shipmentItems  ShipmentItem[]
   movements      StockMovement[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -203,6 +205,8 @@ model StockMovement {
   note      String?
   orderId   String?
   jobId     String?
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId String?
   userId    String?
   createdAt DateTime @default(now())
 }
@@ -322,6 +326,60 @@ model Order {
   updatedAt  DateTime    @updatedAt
 }
 
+// A physical dispatch to one customer. Can club ready items from several of that
+// customer's orders. Produces a commercial invoice + packing list.
+model Shipment {
+  id         String  @id @default(cuid())
+  number     Int     @unique // internal counter
+  seq        Int? // per financial-year document sequence → INV/25-26/001, PL/25-26/001
+  fyLabel    String?
+  date       DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+  currency   String   @default("INR")
+  status     String   @default("DISPATCHED") // DISPATCHED | CANCELLED
+
+  // Snapshot of parties/terms for the documents (frozen at ship time).
+  billToName      String?
+  billToAddress   String?
+  billToTaxId     String?
+  shipToName      String?
+  shipToAddress   String?
+  destinationPort String?
+  incoterms       String?
+  paymentTerms    String?
+
+  // Export / packing detail.
+  marksNumbers String? // shipping marks & numbers
+  grossWeight  Float? // total gross weight (kg, incl. packing)
+  notes        String?
+  createdByName String?
+
+  items     ShipmentItem[]
+  movements StockMovement[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ShipmentItem {
+  id          String   @id @default(cuid())
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId  String
+  // The order line this fulfils — gives us the order, product and rate.
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  orderItemId String
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   String
+  description String?
+  unit        String   @default("mtr")
+  pieces      Int? // pieces shipped in this consignment
+  quantity    Float    @default(0) // metres shipped
+  netWeight   Float    @default(0) // net weight of the goods (kg)
+  cartons     Int? // cartons / bales for this line
+  rate        Float    @default(0) // snapshot of the order-line rate, for the invoice
+  createdAt   DateTime @default(now())
+}
+
 // A single line on a sales order.
 model OrderItem {
   id          String   @id @default(cuid())
@@ -338,5 +396,6 @@ model OrderItem {
   dueDate     DateTime? // this line's own due date; falls back to the order's when null
   unit        String   @default("mtr")
   rate        Float    @default(0) // price per unit in the order currency
+  shipmentItems ShipmentItem[]
   createdAt   DateTime @default(now())
 }
