@@ -2,6 +2,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { procurementBoard } from "../orders/procurement";
 import GenerateProcurement from "../orders/GenerateProcurement";
+import ProcurementFilters from "./ProcurementFilters";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -35,43 +36,13 @@ export default async function ProcurementPage({
       .filter((a) => a.items.length > 0);
   }
 
-  // Build a filter href preserving the other params, toggling one key.
-  const chip = (key: "vendor" | "customer" | "overdue", value: string) => {
-    const next = { vendor, customer, overdue: overdue ? "1" : "" };
-    (next as Record<string, string>)[key] = (next as Record<string, string>)[key] === value ? "" : value;
-    const qs = new URLSearchParams();
-    if (next.vendor) qs.set("vendor", next.vendor);
-    if (next.customer) qs.set("customer", next.customer);
-    if (next.overdue) qs.set("overdue", "1");
-    const s = qs.toString();
-    return s ? `/procurement?${s}` : "/procurement";
-  };
-  const chipCls = (active: boolean) =>
-    `rounded-lg px-3 py-1.5 text-sm font-medium ring-1 ring-inset ${active ? "bg-brand-50 text-brand-700 ring-brand-200" : "bg-gray-50 text-gray-700 ring-gray-200"}`;
-
   return (
     <div>
       <PageHeader title="Procurement" subtitle="What to make/buy, and what's on its way" backHref="/more" />
 
       <div className="space-y-5 p-4">
-        {/* Filters */}
         {(board.vendorOpts.length > 0 || board.customerOpts.length > 0) && (
-          <div className="space-y-2">
-            {board.vendorOpts.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <Link href={chip("vendor", "")} className={chipCls(!vendor)}>All vendors</Link>
-                {board.vendorOpts.map((v) => (
-                  <Link key={v.id} href={chip("vendor", v.id)} className={chipCls(vendor === v.id)}>{v.name}</Link>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Link href={chip("overdue", "1")} className={chipCls(overdue)}>Overdue only</Link>
-              {board.customerOpts.map((c) => (
-                <Link key={c.id} href={chip("customer", c.id)} className={chipCls(customer === c.id)}>{c.name}</Link>
-              ))}
-            </div>
-          </div>
+          <ProcurementFilters vendor={vendor} customer={customer} overdue={overdue} vendors={board.vendorOpts} customers={board.customerOpts} />
         )}
 
         {/* Still to procure */}
