@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 
-type Values = { name?: string | null; hsnCode?: string | null; sortOrder?: number | null };
+type Values = { name?: string | null; hsnCode?: string | null; sortOrder?: number | null; leadDays?: number | null };
 
 type Props = {
   initial?: Values;
@@ -33,11 +33,16 @@ export default function CategoryForm({ initial, action, submitLabel, resetOnSucc
         <input id="name" name="name" required defaultValue={initial?.name ?? ""}
           className="field-input" placeholder="e.g. Silk Dupion" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="field-label" htmlFor="hsnCode">Default HSN</label>
           <input id="hsnCode" name="hsnCode" defaultValue={initial?.hsnCode ?? ""}
             className="field-input" placeholder="Optional" />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="leadDays">Lead days</label>
+          <input id="leadDays" name="leadDays" type="number" min="0" inputMode="numeric" defaultValue={initial?.leadDays ?? ""}
+            className="field-input" placeholder="e.g. 21" />
         </div>
         <div>
           <label className="field-label" htmlFor="sortOrder">Order</label>
@@ -45,6 +50,7 @@ export default function CategoryForm({ initial, action, submitLabel, resetOnSucc
             className="field-input" />
         </div>
       </div>
+      <p className="-mt-1 px-1 text-xs text-gray-400">Lead days = how long this type takes to make/procure. Powers the due-date warnings.</p>
       <button type="submit" disabled={isPending} className="btn-primary w-full">
         {isPending ? "Saving…" : submitLabel}
       </button>

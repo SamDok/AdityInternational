@@ -9,6 +9,7 @@ type Values = {
   name?: string | null;
   composition?: string | null;
   hsnCode?: string | null;
+  leadDays?: number | null;
   description?: string | null;
   imageData?: string | null;
   sourcingType?: string | null;
@@ -95,10 +96,17 @@ export default function DesignForm({ categories, vendors, initial, action, submi
           className="field-input" placeholder="e.g. 100% Silk" />
       </div>
 
-      <div>
-        <label className="field-label" htmlFor="hsnCode">HSN code</label>
-        <input id="hsnCode" name="hsnCode" defaultValue={initial?.hsnCode ?? ""}
-          className="field-input" placeholder="Defaults from the type if left blank" />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="field-label" htmlFor="hsnCode">HSN code</label>
+          <input id="hsnCode" name="hsnCode" defaultValue={initial?.hsnCode ?? ""}
+            className="field-input" placeholder="Defaults from the type" />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="leadDays">Lead days</label>
+          <input id="leadDays" name="leadDays" type="number" min="0" inputMode="numeric" defaultValue={initial?.leadDays ?? ""}
+            className="field-input" placeholder="Defaults from the type" />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

@@ -13,6 +13,7 @@ export default async function MorePage() {
   ]);
 
   const items = [
+    { href: "/schedule", label: "Due soon", sub: "deadlines & what's at risk", icon: ClipboardIcon },
     { href: "/procurement", label: "Procurement", sub: `${openJobs} in progress · what to make/buy`, icon: DocumentIcon },
     { href: "/vendors", label: "Vendors", sub: `${vendors} kaarigars & suppliers`, icon: UsersIcon },
     { href: "/jobs", label: "Jobs", sub: `${openJobs} open`, icon: ClipboardIcon },

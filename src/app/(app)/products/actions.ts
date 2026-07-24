@@ -23,6 +23,7 @@ function issue(result: { success: false; error: z.ZodError }) {
 const CategorySchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   hsnCode: str(),
+  leadDays: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
   sortOrder: z.coerce.number().int().default(0),
 });
 
@@ -36,7 +37,7 @@ export async function createCategory(formData: FormData) {
   });
   if (exists) return { error: `A type named "${r.data.name}" already exists.` };
   await prisma.productCategory.create({
-    data: { name: r.data.name, hsnCode: r.data.hsnCode || null, sortOrder: r.data.sortOrder },
+    data: { name: r.data.name, hsnCode: r.data.hsnCode || null, leadDays: r.data.leadDays ?? null, sortOrder: r.data.sortOrder },
   });
   revalidatePath("/products");
   revalidatePath("/products/manage-types");
@@ -54,7 +55,7 @@ export async function updateCategory(id: string, formData: FormData) {
   if (clash) return { error: `Another type named "${r.data.name}" already exists.` };
   await prisma.productCategory.update({
     where: { id },
-    data: { name: r.data.name, hsnCode: r.data.hsnCode || null, sortOrder: r.data.sortOrder },
+    data: { name: r.data.name, hsnCode: r.data.hsnCode || null, leadDays: r.data.leadDays ?? null, sortOrder: r.data.sortOrder },
   });
   revalidatePath("/products");
   revalidatePath("/products/manage-types");
@@ -76,6 +77,7 @@ const DesignSchema = z.object({
   name: str(),
   composition: str(),
   hsnCode: str(),
+  leadDays: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
   description: str(),
   imageData: str(),
   sourcingType: str(),
@@ -110,6 +112,7 @@ export async function createDesign(formData: FormData) {
       name: d.name || null,
       composition: d.composition || null,
       hsnCode: hsn,
+      leadDays: d.leadDays ?? null,
       description: d.description || null,
       imageData: d.imageData || null,
       sourcingType: d.sourcingType || null,
@@ -134,6 +137,7 @@ export async function updateDesign(id: string, formData: FormData) {
       name: d.name || null,
       composition: d.composition || null,
       hsnCode: d.hsnCode || null,
+      leadDays: d.leadDays ?? null,
       description: d.description || null,
       imageData: d.imageData || null,
       sourcingType: d.sourcingType || null,

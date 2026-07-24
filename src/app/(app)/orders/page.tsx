@@ -41,6 +41,16 @@ export default async function OrdersPage({
   const pagedOrders = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const tabs: [View, string][] = [["active", "Active"], ["done", "Done"], ["all", "All"]];
 
+  const DAY = 86400000;
+  const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+  function dueChip(dueDate: Date | null, ful: string, status: string) {
+    if (status === "CANCELLED" || ful === "FULL" || !dueDate) return null;
+    const d = Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
+    if (d < today) return { label: "Overdue", cls: "bg-red-100 text-red-700" };
+    if (d <= today + 7 * DAY) return { label: `Due ${formatDate(dueDate)}`, cls: "bg-amber-100 text-amber-700" };
+    return null;
+  }
+
   return (
     <div>
       <PageHeader
@@ -92,6 +102,7 @@ export default async function OrdersPage({
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex flex-wrap justify-end gap-1">
+                          {(() => { const dc = dueChip(o.dueDate, f, o.status); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
                             {STAGE_LABELS[o.status as OrderStage] ?? o.status}
                           </span>

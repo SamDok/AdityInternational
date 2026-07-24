@@ -6,6 +6,7 @@ import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
   fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS,
 } from "@/lib/format";
+import { dueSoonSchedule } from "./orders/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,9 @@ export default async function HomePage() {
   });
   const openOrders = activeOrders.filter((o) => fulfillmentOf(o.items) !== "FULL").length;
 
+  const { counts } = await dueSoonSchedule();
+  const urgent = counts.overdue + counts.behind;
+
   return (
     <div className="p-4">
       <header className="mb-6 flex items-start justify-between pt-4">
@@ -47,6 +51,24 @@ export default async function HomePage() {
           <GearIcon className="h-6 w-6" />
         </Link>
       </header>
+
+      {/* Deadline alert */}
+      {urgent > 0 ? (
+        <Link href="/schedule" className="mb-4 flex items-center gap-3 rounded-xl bg-red-50 px-4 py-3 ring-1 ring-inset ring-red-200">
+          <span className="text-lg">⚠️</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-red-700">{urgent} deliver{urgent === 1 ? "y" : "ies"} need attention</p>
+            <p className="text-xs text-red-600">{counts.overdue} overdue · {counts.behind} behind schedule{counts.soon ? ` · ${counts.soon} due soon` : ""}</p>
+          </div>
+          <ChevronRightIcon className="h-5 w-5 text-red-400" />
+        </Link>
+      ) : counts.soon > 0 ? (
+        <Link href="/schedule" className="mb-4 flex items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-inset ring-amber-200">
+          <span className="text-lg">🗓️</span>
+          <p className="min-w-0 flex-1 text-sm font-medium text-amber-700">{counts.soon} deliver{counts.soon === 1 ? "y" : "ies"} due soon</p>
+          <ChevronRightIcon className="h-5 w-5 text-amber-400" />
+        </Link>
+      ) : null}
 
       {/* Global search */}
       <form action="/search" className="relative mb-6">

@@ -131,6 +131,7 @@ model ProductCategory {
   id        String   @id @default(cuid())
   name      String   @unique
   hsnCode   String? // optional default HSN for designs in this type
+  leadDays  Int? // typical days to make/procure this type — drives due-date warnings
   sortOrder Int      @default(0)
   archived  Boolean  @default(false)
   designs   Design[]
@@ -147,6 +148,7 @@ model Design {
   name        String?
   composition String? // e.g. "100% Silk"
   hsnCode     String? // defaults from the category, editable
+  leadDays    Int? // override the type's make/procure lead time for this design
   description String?
   imageData   String? // downscaled JPEG as a base64 data URL
 
