@@ -11,7 +11,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type View = "active" | "done" | "all";
+type View = "active" | "ready" | "done" | "all";
 
 export default async function OrdersPage({
   searchParams,
@@ -25,21 +25,28 @@ export default async function OrdersPage({
 
   const all = await prisma.order.findMany({
     orderBy: { orderDate: "desc" },
-    include: { customer: true, items: true },
+    include: { customer: true, items: { include: { product: { select: { stockQty: true } } } } },
   });
+
+  // An order is "ready to ship" when a not-fully-shipped line has stock on hand.
+  const isReadyToShip = (o: (typeof all)[number]) =>
+    o.status !== "CANCELLED" &&
+    o.items.some((i) => i.quantity - i.shippedQty > 1e-9 && i.product.stockQty > 1e-9);
 
   // "Done" = fully shipped; "Active" = everything not fully shipped and not cancelled.
   const withFulfillment = all.map((o) => ({ o, f: fulfillmentOf(o.items) }));
   const orders = withFulfillment
     .filter(({ o, f }) =>
       view === "all" ? true
+      : view === "ready" ? isReadyToShip(o)
       : view === "done" ? f === "FULL"
       : f !== "FULL" && o.status !== "CANCELLED",
     )
     .map(({ o }) => o);
 
+  const readyCount = all.filter(isReadyToShip).length;
   const pagedOrders = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const tabs: [View, string][] = [["active", "Active"], ["done", "Done"], ["all", "All"]];
+  const tabs: [View, string][] = [["active", "Active"], ["ready", `Ready${readyCount ? ` (${readyCount})` : ""}`], ["done", "Done"], ["all", "All"]];
 
   const DAY = 86400000;
   const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
@@ -73,10 +80,10 @@ export default async function OrdersPage({
         />
       ) : (
         <>
-          <div className="flex gap-2 px-4 pt-2">
+          <div className="flex gap-2 overflow-x-auto px-4 pt-2">
             {tabs.map(([value, label]) => (
               <Link key={value} href={value === "active" ? "/orders" : `/orders?view=${value}`}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium ring-1 ring-inset ${view === value ? "bg-brand-50 text-brand-700 ring-brand-200" : "bg-gray-50 text-gray-700 ring-gray-200"}`}>
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium ring-1 ring-inset ${view === value ? "bg-brand-50 text-brand-700 ring-brand-200" : "bg-gray-50 text-gray-700 ring-gray-200"}`}>
                 {label}
               </Link>
             ))}
@@ -84,38 +91,48 @@ export default async function OrdersPage({
 
           {orders.length === 0 ? (
             <p className="px-6 py-12 text-center text-sm text-gray-500">
-              {view === "done" ? "No fully-shipped orders yet." : "No orders here."}
+              {view === "done" ? "No fully-shipped orders yet."
+                : view === "ready" ? "Nothing ready to ship — receive stock from jobs first."
+                : "No orders here."}
             </p>
           ) : (
             <ul className="space-y-2 p-4">
               {pagedOrders.map((o) => {
                 const total = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
                 const f = fulfillmentOf(o.items);
+                const ready = isReadyToShip(o);
                 return (
                   <li key={o.id}>
-                    <Link href={`/orders/${o.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900">Order #{o.number}</p>
-                        <p className="truncate text-sm text-gray-500">
-                          {o.customer.name} · {formatDate(o.orderDate)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="flex flex-wrap justify-end gap-1">
-                          {(() => { const dc = dueChip(o.dueDate, f, o.status); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
-                            {STAGE_LABELS[o.status as OrderStage] ?? o.status}
-                          </span>
-                          {o.status !== "CANCELLED" && (
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FULFILLMENT_COLORS[f]}`}>
-                              {FULFILLMENT_LABELS[f]}
-                            </span>
-                          )}
+                    <div className="card flex items-center gap-2">
+                      <Link href={`/orders/${o.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="whitespace-nowrap font-semibold text-gray-900">Order #{o.number}</p>
+                          <p className="truncate text-sm text-gray-500">
+                            {o.customer.name} · {formatDate(o.orderDate)}
+                          </p>
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">{formatMoney(total, o.currency)}</span>
-                      </div>
-                      <ChevronRightIcon className="h-5 w-5 text-gray-300" />
-                    </Link>
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {(() => { const dc = dueChip(o.dueDate, f, o.status); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
+                              {STAGE_LABELS[o.status as OrderStage] ?? o.status}
+                            </span>
+                            {o.status !== "CANCELLED" && (
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FULFILLMENT_COLORS[f]}`}>
+                                {FULFILLMENT_LABELS[f]}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900">{formatMoney(total, o.currency)}</span>
+                        </div>
+                        {!ready && <ChevronRightIcon className="h-5 w-5 text-gray-300" />}
+                      </Link>
+                      {ready && (
+                        <Link href={`/orders/${o.id}?ship=1`} className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white active:bg-green-700">
+                          Ship
+                        </Link>
+                      )}
+                    </div>
                   </li>
                 );
               })}

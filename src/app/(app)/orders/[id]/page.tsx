@@ -17,10 +17,13 @@ export const dynamic = "force-dynamic";
 
 export default async function OrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ ship?: string }>;
 }) {
   const { id } = await params;
+  const { ship } = await searchParams;
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
@@ -40,6 +43,7 @@ export default async function OrderDetailPage({
     shippedQty: it.shippedQty,
     unit: it.unit,
     stockQty: it.product.stockQty,
+    perPieceQty: it.perPieceQty,
   }));
 
   const plan = await planProcurement(id);
@@ -96,31 +100,37 @@ export default async function OrderDetailPage({
           fulfillment={order.status !== "CANCELLED" ? { label: FULFILLMENT_LABELS[fulfillment], className: FULFILLMENT_COLORS[fulfillment] } : undefined}
         />
 
-        {order.status !== "CANCELLED" && <ShipForm orderId={order.id} items={shipItems} />}
+        {order.status !== "CANCELLED" && <ShipForm orderId={order.id} items={shipItems} defaultOpen={ship === "1"} />}
 
-        {/* Bill-to / ship-to snapshot (as it prints on the PDF) */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="card">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Bill to</p>
-            <p className="mt-1 font-medium text-gray-900">{billToName}</p>
-            {billToAddress && <p className="whitespace-pre-line text-sm text-gray-500">{billToAddress}</p>}
-            {order.billToTaxId && <p className="mt-1 text-sm text-gray-500">GST/Tax: {order.billToTaxId}</p>}
+        {/* Bill-to / ship-to snapshot (as it prints on the PDF) — collapsed by default */}
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-600 ring-1 ring-inset ring-gray-100">
+            Billing &amp; delivery details <span className="text-xs font-normal text-gray-400">— on the PDF</span>
+            <ChevronRightIcon className="h-4 w-4 shrink-0 text-gray-400 transition group-open:rotate-90" />
+          </summary>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="card">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Bill to</p>
+              <p className="mt-1 font-medium text-gray-900">{billToName}</p>
+              {billToAddress && <p className="whitespace-pre-line text-sm text-gray-500">{billToAddress}</p>}
+              {order.billToTaxId && <p className="mt-1 text-sm text-gray-500">GST/Tax: {order.billToTaxId}</p>}
+            </div>
+            <div className="card">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Ship to</p>
+              {shipToName && <p className="mt-1 font-medium text-gray-900">{shipToName}</p>}
+              {shipToAddress ? (
+                <p className="whitespace-pre-line text-sm text-gray-500">{shipToAddress}</p>
+              ) : (
+                !shipToName && <p className="mt-1 text-sm text-gray-400">Same as bill-to</p>
+              )}
+              {order.destinationPort && <p className="mt-1 text-sm text-gray-500">Port: {order.destinationPort}</p>}
+              {order.incoterms && <p className="text-sm text-gray-500">Incoterms: {order.incoterms}</p>}
+            </div>
           </div>
-          <div className="card">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Ship to</p>
-            {shipToName && <p className="mt-1 font-medium text-gray-900">{shipToName}</p>}
-            {shipToAddress ? (
-              <p className="whitespace-pre-line text-sm text-gray-500">{shipToAddress}</p>
-            ) : (
-              !shipToName && <p className="mt-1 text-sm text-gray-400">Same as bill-to</p>
-            )}
-            {order.destinationPort && <p className="mt-1 text-sm text-gray-500">Port: {order.destinationPort}</p>}
-            {order.incoterms && <p className="text-sm text-gray-500">Incoterms: {order.incoterms}</p>}
-          </div>
-        </div>
-        {order.paymentTerms && (
-          <p className="px-1 text-sm text-gray-500">Payment terms: <span className="font-medium text-gray-700">{order.paymentTerms}</span></p>
-        )}
+          {order.paymentTerms && (
+            <p className="mt-2 px-1 text-sm text-gray-500">Payment terms: <span className="font-medium text-gray-700">{order.paymentTerms}</span></p>
+          )}
+        </details>
 
         {/* Procurement — make/buy the shortfall from kaarigars & suppliers */}
         {order.status === "DRAFT" && plan && (plan.groups.length > 0 || plan.unassigned.length > 0) && (

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { recordShipment } from "./actions";
 import { useToast } from "@/components/Toast";
 
-type Item = { id: string; label: string; quantity: number; shippedQty: number; unit: string; stockQty: number };
+type Item = { id: string; label: string; quantity: number; shippedQty: number; unit: string; stockQty: number; perPieceQty: number | null };
 
 // What's ready to send on a line now: everything in stock (you can send a little
 // more than ordered). Left blank for an already-complete line with nothing extra.
@@ -13,8 +13,8 @@ function readyToShip(it: Item): number {
   return remaining > 0 ? it.stockQty : 0;
 }
 
-export default function ShipForm({ orderId, items }: { orderId: string; items: Item[] }) {
-  const [open, setOpen] = useState(false);
+export default function ShipForm({ orderId, items, defaultOpen = false }: { orderId: string; items: Item[]; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   // Pre-fill each line with what's ready in stock — sending the full lot (incl. a
   // small excess over the order) is then one tap; type less to hold some back.
   const [vals, setVals] = useState<Record<string, string>>(() =>
@@ -60,6 +60,9 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
       <ul className="space-y-2">
         {pendingItems.map((it) => {
           const remaining = Math.max(0, it.quantity - it.shippedQty);
+          const shipNum = parseFloat(vals[it.id] ?? "");
+          const pcsHint = it.perPieceQty && it.perPieceQty > 0 && !isNaN(shipNum) && shipNum > 0
+            ? Math.round((shipNum / it.perPieceQty) * 100) / 100 : null;
           return (
             <li key={it.id} className="rounded-xl bg-gray-50 p-3 ring-1 ring-inset ring-gray-100">
               <p className="truncate text-sm font-medium text-gray-900">{it.label}</p>
@@ -68,7 +71,7 @@ export default function ShipForm({ orderId, items }: { orderId: string; items: I
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
-                  <span className="mb-1 block text-[11px] font-medium text-gray-500">Ship ({it.unit})</span>
+                  <span className="mb-1 block text-[11px] font-medium text-gray-500">Ship ({it.unit}){pcsHint != null ? ` · ≈${pcsHint} pcs` : ""}</span>
                   <input
                     value={vals[it.id] ?? ""}
                     onChange={(e) => setVals((v) => ({ ...v, [it.id]: e.target.value }))}
