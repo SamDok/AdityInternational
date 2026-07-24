@@ -27,6 +27,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const title = isPurchase ? "Purchase Order" : "Job Work Order";
   const docNo = jobDocNo(job);
   const total = job.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyOrdered, 0);
+  const totalPieces = job.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
   const hasRates = job.items.some((i) => i.rate != null);
 
   const v = job.vendor;
@@ -91,6 +92,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               <th className="border border-gray-300 px-2 py-1.5 text-center">#</th>
               <th className="border border-gray-300 px-2 py-1.5">Description</th>
               <th className="border border-gray-300 px-2 py-1.5 text-right">Qty</th>
+              <th className="border border-gray-300 px-2 py-1.5 text-right">Pcs</th>
               <th className="border border-gray-300 px-2 py-1.5 text-center">Due by</th>
               {hasRates && <th className="border border-gray-300 px-2 py-1.5 text-right">Rate</th>}
               {hasRates && <th className="border border-gray-300 px-2 py-1.5 text-right">Amount</th>}
@@ -112,7 +114,13 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                     </div>
                   </div>
                 </td>
-                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.qtyOrdered} {it.unit}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">
+                  {it.qtyOrdered} {it.unit}
+                  {it.pieces && it.perPieceQty != null && (
+                    <span className="block text-[10px] text-gray-500">{it.pieces} × {it.perPieceQty}</span>
+                  )}
+                </td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right">{it.pieces ?? "—"}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-center whitespace-nowrap">{it.dueDate ? formatDate(it.dueDate) : "—"}</td>
                 {hasRates && <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.rate != null ? formatMoney(it.rate, job.currency) : "—"}</td>}
                 {hasRates && <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.rate != null ? formatMoney(it.rate * it.qtyOrdered, job.currency) : "—"}</td>}
@@ -122,7 +130,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           {hasRates && (
             <tfoot>
               <tr className="font-semibold">
-                <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>Total</td>
+                <td className="border border-gray-300 px-2 py-1.5" colSpan={3}>Total</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right">{totalPieces || "—"}</td>
+                <td className="border border-gray-300 px-2 py-1.5"></td>
                 <td className="border border-gray-300 px-2 py-1.5"></td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(total, job.currency)}</td>
               </tr>

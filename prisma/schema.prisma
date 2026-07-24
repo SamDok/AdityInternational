@@ -269,6 +269,10 @@ model JobItem {
   jobId       String
   product     Product  @relation(fields: [productId], references: [id])
   productId   String
+  // Quantity is entered piece-wise like orders: pieces × perPieceQty. qtyOrdered
+  // stays the computed total (source of truth for receiving, stock and value).
+  pieces      Int? // number of pieces (null = loose quantity)
+  perPieceQty Float? // quantity in each piece
   qtyOrdered  Float    @default(0)
   qtyReceived Float    @default(0)
   rate        Float? // making charge / purchase price per unit

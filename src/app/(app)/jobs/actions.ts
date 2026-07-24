@@ -8,20 +8,32 @@ import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { financialYearLabel } from "@/lib/jobNumber";
 
-const ItemSchema = z.object({
-  id: z.string().optional(),
-  productId: z.string().min(1),
-  qtyOrdered: z.coerce.number().min(0),
-  rate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
-  dueDate: z.string().optional().nullable(),
-  note: z.string().optional().nullable(),
-  unit: z.string().min(1).default("mtr"),
-});
+// A line is entered piece-wise like an order line: `pieces` pieces of
+// `perPieceQty` each. qtyOrdered = (pieces || 1) × perPieceQty; pieces blank
+// means a loose quantity. `id` marks lines that already exist (edit in place).
+const ItemSchema = z
+  .object({
+    id: z.string().optional(),
+    productId: z.string().min(1),
+    pieces: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
+    perPieceQty: z.coerce.number().min(0),
+    rate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+    dueDate: z.string().optional().nullable(),
+    note: z.string().optional().nullable(),
+    unit: z.string().min(1).default("mtr"),
+  })
+  .transform((it) => {
+    const pieces = it.pieces && it.pieces > 0 ? it.pieces : null;
+    const qtyOrdered = (pieces ?? 1) * it.perPieceQty;
+    return { ...it, pieces, qtyOrdered };
+  });
 
 // Common JobItem column data (no jobId) for create and update.
 function jobItemData(it: z.infer<typeof ItemSchema>) {
   return {
     productId: it.productId,
+    pieces: it.pieces ?? null,
+    perPieceQty: it.perPieceQty,
     qtyOrdered: it.qtyOrdered,
     rate: it.rate ?? null,
     dueDate: toDate(it.dueDate) ?? null,

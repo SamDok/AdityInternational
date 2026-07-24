@@ -11,7 +11,7 @@ import type { JobInput } from "./actions";
 
 type Vendor = { id: string; name: string };
 type ProductOpt = { id: string; label: string; group: string; unit: string };
-type Line = { key: string; id?: string; productId: string; qty: string; rate: string; unit: string; dueDate: string; note: string };
+type Line = { key: string; id?: string; productId: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string };
 
 export type JobInitial = {
   vendorId: string;
@@ -20,13 +20,20 @@ export type JobInitial = {
   issueDate: string;
   dueDate: string;
   notes: string;
-  items: { id: string; productId: string; qty: string; rate: string; unit: string; dueDate: string; note: string }[];
+  items: { id: string; productId: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string }[];
 };
 
 let counter = 0;
 const newKey = () => `j${counter++}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const emptyLine = (): Line => ({ key: newKey(), productId: "", qty: "", rate: "", unit: "mtr", dueDate: "", note: "" });
+const emptyLine = (): Line => ({ key: newKey(), productId: "", pieces: "", perPieceQty: "", rate: "", unit: "mtr", dueDate: "", note: "" });
+
+// Total on a line: pieces × qty-per-piece (pieces blank/0 → just the qty).
+function lineTotal(l: Line): number {
+  const per = parseFloat(l.perPieceQty) || 0;
+  const pcs = parseInt(l.pieces, 10);
+  return pcs > 0 ? pcs * per : per;
+}
 
 export default function JobForm({
   vendors,
@@ -55,7 +62,7 @@ export default function JobForm({
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [lines, setLines] = useState<Line[]>(
     initial?.items.length
-      ? initial.items.map((it) => ({ key: newKey(), id: it.id, productId: it.productId, qty: it.qty, rate: it.rate, unit: it.unit, dueDate: it.dueDate, note: it.note }))
+      ? initial.items.map((it) => ({ key: newKey(), id: it.id, productId: it.productId, pieces: it.pieces, perPieceQty: it.perPieceQty, rate: it.rate, unit: it.unit, dueDate: it.dueDate, note: it.note }))
       : [emptyLine()],
   );
 
@@ -72,11 +79,11 @@ export default function JobForm({
   function submit() {
     setError(null);
     if (!vendorId) return setError("Please choose a vendor.");
-    const clean = lines.filter((l) => l.productId && parseFloat(l.qty) > 0);
+    const clean = lines.filter((l) => l.productId && lineTotal(l) > 0);
     if (clean.length === 0) return setError("Add at least one product with a quantity.");
     const input: JobInput = {
       vendorId, kind: kind as "JOB_WORK" | "PURCHASE", currency, issueDate, dueDate: dueDate || null, notes: notes || null,
-      items: clean.map((l) => ({ id: l.id, productId: l.productId, qtyOrdered: Number(l.qty), rate: l.rate === "" ? null : Number(l.rate), unit: l.unit, dueDate: l.dueDate || null, note: l.note || null })),
+      items: clean.map((l) => ({ id: l.id, productId: l.productId, pieces: l.pieces === "" ? null : Number(l.pieces), perPieceQty: Number(l.perPieceQty), rate: l.rate === "" ? null : Number(l.rate), unit: l.unit, dueDate: l.dueDate || null, note: l.note || null })),
     };
     startTransition(async () => {
       const res = await action(input);
@@ -142,15 +149,24 @@ export default function JobForm({
                 <label className="field-label">Product</label>
                 <ProductPicker options={products} value={l.productId} onChange={(pid) => onProduct(l.key, pid)} />
               </div>
+              {/* Pieces × qty-per-piece = total (same as the order form) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="field-label">Quantity ({l.unit})</label>
-                  <input value={l.qty} onChange={(e) => updateLine(l.key, { qty: e.target.value })} type="number" inputMode="decimal" step="0.01" min="0" className="field-input" placeholder="0" />
+                  <label className="field-label">Pieces</label>
+                  <input value={l.pieces} onChange={(e) => updateLine(l.key, { pieces: e.target.value })} type="number" inputMode="numeric" step="1" min="0" className="field-input" placeholder="e.g. 10" />
                 </div>
                 <div>
-                  <label className="field-label">Rate you pay</label>
-                  <input value={l.rate} onChange={(e) => updateLine(l.key, { rate: e.target.value })} type="number" inputMode="decimal" step="0.01" min="0" className="field-input" placeholder="Making charge / cost" />
+                  <label className="field-label">Qty / piece ({l.unit})</label>
+                  <input value={l.perPieceQty} onChange={(e) => updateLine(l.key, { perPieceQty: e.target.value })} type="number" inputMode="decimal" step="0.01" min="0" className="field-input" placeholder="0" />
                 </div>
+              </div>
+              <p className="px-1 text-xs text-gray-500">
+                Total: <span className="font-semibold text-gray-700">{lineTotal(l) || 0} {l.unit}</span>
+                {parseInt(l.pieces, 10) > 0 && <span className="text-gray-400"> ({parseInt(l.pieces, 10)} × {parseFloat(l.perPieceQty) || 0})</span>}
+              </p>
+              <div>
+                <label className="field-label">Rate you pay / {l.unit}</label>
+                <input value={l.rate} onChange={(e) => updateLine(l.key, { rate: e.target.value })} type="number" inputMode="decimal" step="0.01" min="0" className="field-input" placeholder="Making charge / cost" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

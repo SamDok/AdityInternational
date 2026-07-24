@@ -10,6 +10,7 @@ export type ProcLine = {
   needed: number;
   available: number; // current stock on hand for this variant
   shortfall: number; // needed minus what stock + existing linked jobs already cover
+  perPieceQty: number | null; // the order line's per-piece size, to keep the job piece-wise
   dueDate: Date | null;
   rate: number | null; // variant cost — the making/purchase rate to seed the job
   currency: string; // the variant's cost currency
@@ -89,6 +90,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
       needed: it.quantity,
       available: prod.stockQty,
       shortfall,
+      perPieceQty: it.perPieceQty ?? null,
       dueDate: it.dueDate ?? order.dueDate,
       rate: prod.costPrice ?? null,
       currency: prod.currency,

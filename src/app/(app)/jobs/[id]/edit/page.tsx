@@ -26,15 +26,20 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
     issueDate: dateInput(job.issueDate),
     dueDate: dateInput(job.dueDate),
     notes: job.notes ?? "",
-    items: job.items.map((it) => ({
-      id: it.id,
-      productId: it.productId,
-      qty: String(it.qtyOrdered),
-      rate: it.rate != null ? String(it.rate) : "",
-      unit: it.unit,
-      dueDate: dateInput(it.dueDate),
-      note: it.note ?? "",
-    })),
+    items: job.items.map((it) => {
+      // Prefer the stored per-piece value; reconstruct it for older lines.
+      const per = it.perPieceQty != null ? it.perPieceQty : it.pieces && it.pieces > 0 ? it.qtyOrdered / it.pieces : it.qtyOrdered;
+      return {
+        id: it.id,
+        productId: it.productId,
+        pieces: it.pieces != null ? String(it.pieces) : "",
+        perPieceQty: String(per),
+        rate: it.rate != null ? String(it.rate) : "",
+        unit: it.unit,
+        dueDate: dateInput(it.dueDate),
+        note: it.note ?? "",
+      };
+    }),
   };
 
   return (

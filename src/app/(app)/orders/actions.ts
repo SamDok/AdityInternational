@@ -350,12 +350,21 @@ export async function generateProcurement(orderId: string) {
         orderId,
         notes: `Auto-generated from order #${plan.orderNumber}`,
         items: {
-          create: g.lines.map((l) => ({
-            productId: l.productId,
-            qtyOrdered: l.shortfall,
-            rate: l.rate ?? null,
-            unit: l.unit,
-          })),
+          create: g.lines.map((l) => {
+            // Keep the job piece-wise when the shortfall is a whole number of the
+            // order line's pieces; otherwise fall back to a loose quantity.
+            const per = l.perPieceQty && l.perPieceQty > 0 ? l.perPieceQty : null;
+            const exact = per != null && Math.abs(l.shortfall / per - Math.round(l.shortfall / per)) < 1e-9;
+            const pieces = exact ? Math.round(l.shortfall / per!) : null;
+            return {
+              productId: l.productId,
+              pieces,
+              perPieceQty: pieces ? per : l.shortfall, // loose → perPieceQty holds the total
+              qtyOrdered: l.shortfall,
+              rate: l.rate ?? null,
+              unit: l.unit,
+            };
+          }),
         },
       },
     });

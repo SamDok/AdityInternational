@@ -67,7 +67,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
         {canReceive && (
           <ReceiveForm
             jobId={job.id}
-            items={job.items.map((it) => ({ id: it.id, label: it.product.name, qtyOrdered: it.qtyOrdered, qtyReceived: it.qtyReceived, unit: it.unit }))}
+            items={job.items.map((it) => ({ id: it.id, label: it.product.name, qtyOrdered: it.qtyOrdered, qtyReceived: it.qtyReceived, unit: it.unit, pieces: it.pieces, perPieceQty: it.perPieceQty }))}
           />
         )}
 
@@ -83,6 +83,9 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                         <Link href={`/products/design/${it.product.designId}`} className="hover:underline">{it.product.name}</Link>
                       ) : it.product.name}
                     </p>
+                    {it.pieces && it.perPieceQty != null && (
+                      <p className="mt-1 text-sm text-gray-500">{it.pieces} pcs × {it.perPieceQty} {it.unit} = {it.qtyOrdered} {it.unit}</p>
+                    )}
                     <p className="mt-1 text-sm text-gray-500">
                       {it.qtyReceived}/{it.qtyOrdered} {it.unit} received
                       {it.rate != null ? ` · ${formatMoney(it.rate, job.currency)}/${it.unit}` : ""}
