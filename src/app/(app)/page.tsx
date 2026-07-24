@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { UsersIcon, BoxIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon, SearchIcon } from "@/components/Icons";
+import { ClipboardIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon, SearchIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
   fulfillmentOf, FULFILLMENT_LABELS, FULFILLMENT_COLORS,
@@ -18,9 +18,8 @@ function firstName(user: { name: string | null; email: string } | null): string 
 
 export default async function HomePage() {
   const user = await getCurrentUser();
-  const [customerCount, productCount, orders] = await Promise.all([
-    prisma.customer.count(),
-    prisma.product.count(),
+  const [openJobs, orders] = await Promise.all([
+    prisma.job.count({ where: { status: { in: ["OPEN", "PARTIAL"] } } }),
     prisma.order.findMany({
       orderBy: { orderDate: "desc" },
       take: 5,
@@ -37,6 +36,7 @@ export default async function HomePage() {
 
   const { counts } = await dueSoonSchedule();
   const urgent = counts.overdue + counts.behind;
+  const dueSoonTotal = counts.overdue + counts.behind + counts.soon;
 
   return (
     <div className="p-4">
@@ -80,37 +80,29 @@ export default async function HomePage() {
         />
       </form>
 
-      {/* Stat tiles */}
+      {/* Today's work — the three things to check daily, each a direct link */}
       <div className="mb-6 grid grid-cols-3 gap-3">
-        <Link href="/customers" className="card text-center">
-          <UsersIcon className="mx-auto h-6 w-6 text-brand-500" />
-          <p className="mt-2 text-2xl font-bold text-gray-900">{customerCount}</p>
-          <p className="text-xs text-gray-500">Customers</p>
-        </Link>
-        <Link href="/products" className="card text-center">
-          <BoxIcon className="mx-auto h-6 w-6 text-brand-500" />
-          <p className="mt-2 text-2xl font-bold text-gray-900">{productCount}</p>
-          <p className="text-xs text-gray-500">Products</p>
-        </Link>
         <Link href="/orders" className="card text-center">
           <CartIcon className="mx-auto h-6 w-6 text-brand-500" />
           <p className="mt-2 text-2xl font-bold text-gray-900">{openOrders}</p>
-          <p className="text-xs text-gray-500">Open orders</p>
+          <p className="text-xs text-gray-500">To ship</p>
+        </Link>
+        <Link href="/jobs" className="card text-center">
+          <ClipboardIcon className="mx-auto h-6 w-6 text-brand-500" />
+          <p className="mt-2 text-2xl font-bold text-gray-900">{openJobs}</p>
+          <p className="text-xs text-gray-500">To receive</p>
+        </Link>
+        <Link href="/schedule" className="card text-center">
+          <span className="mx-auto block text-2xl leading-6">🗓️</span>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{dueSoonTotal}</p>
+          <p className="text-xs text-gray-500">Due soon</p>
         </Link>
       </div>
 
-      {/* Quick actions */}
-      <div className="mb-3">
+      {/* Primary action (the "+" in the bar covers the rest) */}
+      <div className="mb-6">
         <Link href="/orders/new" className="btn-primary w-full">
           <PlusIcon className="h-5 w-5" /> New order
-        </Link>
-      </div>
-      <div className="mb-6 grid grid-cols-2 gap-3">
-        <Link href="/customers/new" className="btn-secondary">
-          <PlusIcon className="h-5 w-5" /> Customer
-        </Link>
-        <Link href="/products/design/new" className="btn-secondary">
-          <PlusIcon className="h-5 w-5" /> Design
         </Link>
       </div>
 

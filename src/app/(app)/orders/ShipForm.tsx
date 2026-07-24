@@ -6,9 +6,20 @@ import { useToast } from "@/components/Toast";
 
 type Item = { id: string; label: string; quantity: number; shippedQty: number; unit: string; stockQty: number };
 
+// What's ready to send on a line now: everything in stock (you can send a little
+// more than ordered). Left blank for an already-complete line with nothing extra.
+function readyToShip(it: Item): number {
+  const remaining = Math.max(0, it.quantity - it.shippedQty);
+  return remaining > 0 ? it.stockQty : 0;
+}
+
 export default function ShipForm({ orderId, items }: { orderId: string; items: Item[] }) {
   const [open, setOpen] = useState(false);
-  const [vals, setVals] = useState<Record<string, string>>({});
+  // Pre-fill each line with what's ready in stock — sending the full lot (incl. a
+  // small excess over the order) is then one tap; type less to hold some back.
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(items.map((it) => [it.id, readyToShip(it) > 0 ? String(readyToShip(it)) : ""])),
+  );
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();

@@ -6,17 +6,20 @@ import { UsersIcon, ClipboardIcon, GearIcon, BoxIcon, ChevronRightIcon, Document
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
-  const [vendors, openJobs, lowStock] = await Promise.all([
+  const [customers, products, vendors, openJobs, lowStock] = await Promise.all([
+    prisma.customer.count(),
+    prisma.product.count({ where: { archived: false } }),
     prisma.vendor.count({ where: { archived: false } }),
     prisma.job.count({ where: { status: { in: ["OPEN", "PARTIAL"] } } }),
     prisma.product.count({ where: { archived: false, reorderLevel: { not: null } } }),
   ]);
 
   const items = [
+    { href: "/customers", label: "Customers", sub: `${customers} total`, icon: UsersIcon },
+    { href: "/products", label: "Products & designs", sub: `${products} in the catalogue`, icon: BoxIcon },
     { href: "/schedule", label: "Due soon", sub: "deadlines & what's at risk", icon: ClipboardIcon },
     { href: "/procurement", label: "Procurement", sub: `${openJobs} in progress · what to make/buy`, icon: DocumentIcon },
     { href: "/vendors", label: "Vendors", sub: `${vendors} kaarigars & suppliers`, icon: UsersIcon },
-    { href: "/jobs", label: "Jobs", sub: `${openJobs} open`, icon: ClipboardIcon },
     { href: "/products/low-stock", label: "Low stock", sub: lowStock ? "items to watch" : "nothing tracked", icon: BoxIcon },
     { href: "/products/movements", label: "Stock movements", sub: "recent stock changes", icon: ClipboardIcon },
     { href: "/settings", label: "Settings", sub: "account & team", icon: GearIcon },
