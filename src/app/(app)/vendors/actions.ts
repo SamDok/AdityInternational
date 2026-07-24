@@ -11,13 +11,25 @@ const VENDOR_KINDS = ["KAARIGAR", "SUPPLIER", "BOTH"] as const;
 const VendorSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   kind: z.enum(VENDOR_KINDS).default("KAARIGAR"),
+  contactPerson: z.string().trim().optional(),
   phone: z.string().trim().optional(),
+  altPhone: z.string().trim().optional(),
   email: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.string().trim().email("Please enter a valid email address").optional(),
   ),
   address: z.string().trim().optional(),
   country: z.string().trim().optional(),
+  gstin: z.string().trim().optional(),
+  currency: z.string().trim().min(1).default("INR"),
+  paymentTerms: z.string().trim().optional(),
+  leadDays: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
+  bankName: z.string().trim().optional(),
+  bankAccountName: z.string().trim().optional(),
+  bankAccountNo: z.string().trim().optional(),
+  bankIfsc: z.string().trim().optional(),
+  bankSwift: z.string().trim().optional(),
+  bankBranch: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
 
@@ -51,10 +63,22 @@ function clean(d: z.infer<typeof VendorSchema>) {
   return {
     name: d.name,
     kind: d.kind,
+    contactPerson: d.contactPerson || null,
     phone: d.phone || null,
+    altPhone: d.altPhone || null,
     email: d.email || null,
     address: d.address || null,
     country: d.country || null,
+    gstin: d.gstin || null,
+    currency: d.currency || "INR",
+    paymentTerms: d.paymentTerms || null,
+    leadDays: d.leadDays ?? null,
+    bankName: d.bankName || null,
+    bankAccountName: d.bankAccountName || null,
+    bankAccountNo: d.bankAccountNo || null,
+    bankIfsc: d.bankIfsc || null,
+    bankSwift: d.bankSwift || null,
+    bankBranch: d.bankBranch || null,
     notes: d.notes || null,
   };
 }

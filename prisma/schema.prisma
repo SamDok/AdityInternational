@@ -211,10 +211,23 @@ model Vendor {
   code      String?  @unique // "VEND-001", auto-assigned
   name      String
   kind      String   @default("KAARIGAR") // "KAARIGAR" | "SUPPLIER" | "BOTH"
+  contactPerson String? // named person at the vendor
   phone     String?
+  altPhone  String? // second / WhatsApp number
   email     String?
   address   String?
   country   String?
+  gstin     String? // vendor's GST number (for their invoices / input credit)
+  currency  String   @default("INR") // currency you pay this vendor in
+  paymentTerms String? // e.g. "Advance", "Net 15"
+  leadDays  Int? // typical days this vendor takes — feeds due-date warnings
+  // Bank details, for paying the vendor.
+  bankName        String?
+  bankAccountName String?
+  bankAccountNo   String?
+  bankIfsc        String?
+  bankSwift       String?
+  bankBranch      String?
   notes     String?
   archived  Boolean  @default(false)
   designs   Design[]
@@ -255,6 +268,8 @@ model JobItem {
   qtyOrdered  Float    @default(0)
   qtyReceived Float    @default(0)
   rate        Float? // making charge / purchase price per unit
+  dueDate     DateTime? // this line's own due date
+  note        String? // colour / spec for this line
   unit        String   @default("mtr")
   createdAt   DateTime @default(now())
 }

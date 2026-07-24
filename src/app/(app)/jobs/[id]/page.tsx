@@ -31,7 +31,19 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
   return (
     <div>
-      <PageHeader title={`Job #${job.number}`} subtitle={job.vendor.name} backHref="/jobs" />
+      <PageHeader
+        title={`Job #${job.number}`}
+        subtitle={job.vendor.name}
+        backHref="/jobs"
+        action={
+          <div className="flex gap-2">
+            <Link href={`/po/${job.id}`} className="btn-secondary !px-4 !py-2 text-sm">Print</Link>
+            {job.status !== "CANCELLED" && (
+              <Link href={`/jobs/${job.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">Edit</Link>
+            )}
+          </div>
+        }
+      />
 
       <div className="space-y-4 p-4">
         <div className="card flex items-center justify-between">
@@ -73,6 +85,8 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                       {it.qtyReceived}/{it.qtyOrdered} {it.unit} received
                       {it.rate != null ? ` · ${formatMoney(it.rate, job.currency)}/${it.unit}` : ""}
                     </p>
+                    {it.dueDate && <p className="mt-0.5 text-sm text-gray-500">Due by {formatDate(it.dueDate)}</p>}
+                    {it.note && <p className="mt-0.5 text-sm text-gray-600">{it.note}</p>}
                   </div>
                   {it.rate != null && (
                     <p className="shrink-0 text-sm font-semibold text-gray-900">{formatMoney(it.rate * it.qtyOrdered, job.currency)}</p>

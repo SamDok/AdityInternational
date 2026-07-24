@@ -43,7 +43,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       items: {
         select: {
           productId: true, quantity: true, shippedQty: true, dueDate: true, unit: true,
-          product: { select: { name: true, stockQty: true, design: { select: { leadDays: true, category: { select: { leadDays: true } } } } } },
+          product: { select: { name: true, stockQty: true, design: { select: { leadDays: true, vendor: { select: { leadDays: true } }, category: { select: { leadDays: true } } } } } },
         },
       },
     },
@@ -102,7 +102,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       else if (fromStock + fromJob >= remaining - 1e-9) readiness = "MAKING";
       else readiness = "NOT_PROCURED";
 
-      const leadDays = it.product.design?.leadDays ?? it.product.design?.category.leadDays ?? null;
+      const leadDays = it.product.design?.leadDays ?? it.product.design?.vendor?.leadDays ?? it.product.design?.category.leadDays ?? null;
       const dDay = dayStart(due);
       const startBy = leadDays != null ? dDay - leadDays * DAY : null;
       const urgency = readiness === "READY" ? dDay : (startBy ?? dDay);

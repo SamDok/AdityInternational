@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +25,23 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
   const vendor = await prisma.vendor.findUnique({
     where: { id },
     include: {
-      jobs: { orderBy: { issueDate: "desc" }, take: 20 },
+      jobs: { orderBy: { issueDate: "desc" }, take: 20, include: { items: { select: { rate: true, qtyOrdered: true } } } },
       designs: { orderBy: { code: "asc" }, take: 20, include: { category: true } },
     },
   });
   if (!vendor) notFound();
 
-  const waDigits = (vendor.phone ?? "").replace(/[^\d]/g, "");
+  const waDigits = (vendor.altPhone || vendor.phone || "").replace(/[^\d]/g, "");
+  const openJobs = vendor.jobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL");
+  const openValue = openJobs.reduce((s, j) => s + j.items.reduce((a, i) => a + (i.rate ?? 0) * i.qtyOrdered, 0), 0);
+  const bank = [
+    ["Bank", vendor.bankName],
+    ["Account name", vendor.bankAccountName],
+    ["Account no.", vendor.bankAccountNo],
+    ["IFSC", vendor.bankIfsc],
+    ["SWIFT", vendor.bankSwift],
+    ["Branch", vendor.bankBranch],
+  ].filter(([, v]) => v) as [string, string][];
 
   return (
     <div>
@@ -54,14 +64,34 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
         </div>
         <Link href={`/jobs/new?vendorId=${vendor.id}`} className="btn-primary w-full">New job for this vendor</Link>
 
+        {openJobs.length > 0 && (
+          <div className="card flex items-center justify-between bg-brand-50">
+            <span className="text-sm font-semibold text-brand-900">Open value · {openJobs.length} job{openJobs.length > 1 ? "s" : ""}</span>
+            <span className="text-lg font-bold text-brand-900">{formatMoney(openValue, vendor.currency)}</span>
+          </div>
+        )}
+
         <section className="card divide-y divide-gray-50">
           <Row label="Type" value={KIND_LABEL[vendor.kind]} />
+          <Row label="Contact person" value={vendor.contactPerson} />
           <Row label="Phone" value={vendor.phone} />
+          <Row label="WhatsApp / alt" value={vendor.altPhone} />
           <Row label="Email" value={vendor.email} />
           <Row label="Address" value={vendor.address} />
           <Row label="Country" value={vendor.country} />
+          <Row label="GSTIN" value={vendor.gstin} />
+          <Row label="Pay in" value={vendor.currency} />
+          <Row label="Payment terms" value={vendor.paymentTerms} />
+          <Row label="Lead time" value={vendor.leadDays != null ? `${vendor.leadDays} days` : null} />
           <Row label="Notes" value={vendor.notes} />
         </section>
+
+        {bank.length > 0 && (
+          <section className="card divide-y divide-gray-50">
+            <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Bank details</p>
+            {bank.map(([k, v]) => <Row key={k} label={k} value={v} />)}
+          </section>
+        )}
 
         <section>
           <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Jobs ({vendor.jobs.length})</h2>

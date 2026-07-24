@@ -8,11 +8,32 @@ import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 
 const ItemSchema = z.object({
+  id: z.string().optional(),
   productId: z.string().min(1),
   qtyOrdered: z.coerce.number().min(0),
   rate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  dueDate: z.string().optional().nullable(),
+  note: z.string().optional().nullable(),
   unit: z.string().min(1).default("mtr"),
 });
+
+// Common JobItem column data (no jobId) for create and update.
+function jobItemData(it: z.infer<typeof ItemSchema>) {
+  return {
+    productId: it.productId,
+    qtyOrdered: it.qtyOrdered,
+    rate: it.rate ?? null,
+    dueDate: toDate(it.dueDate) ?? null,
+    note: it.note || null,
+    unit: it.unit,
+  };
+}
+
+function jobStatusFrom(items: { qtyOrdered: number; qtyReceived: number }[]): string {
+  const allDone = items.every((i) => i.qtyReceived >= i.qtyOrdered);
+  const anyReceived = items.some((i) => i.qtyReceived > 0);
+  return allDone ? "RECEIVED" : anyReceived ? "PARTIAL" : "OPEN";
+}
 
 const JobSchema = z.object({
   vendorId: z.string().min(1, "Please choose a vendor"),
@@ -52,18 +73,56 @@ export async function createJob(input: JobInput) {
       issueDate: toDate(d.issueDate) ?? new Date(),
       dueDate: toDate(d.dueDate) ?? null,
       notes: d.notes || null,
-      items: {
-        create: d.items.map((it) => ({
-          productId: it.productId,
-          qtyOrdered: it.qtyOrdered,
-          rate: it.rate ?? null,
-          unit: it.unit,
-        })),
-      },
+      items: { create: d.items.map(jobItemData) },
     },
   });
   revalidatePath("/jobs");
   redirect(`/jobs/${job.id}`);
+}
+
+export async function updateJob(id: string, input: JobInput) {
+  await requireUser();
+  const parsed = JobSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid job" };
+  const d = parsed.data;
+
+  const current = await prisma.job.findUnique({ where: { id }, select: { status: true, items: { select: { id: true, qtyReceived: true } } } });
+  if (!current) return { error: "Job not found." };
+  if (current.status === "CANCELLED") return { error: "This job is cancelled and can't be edited." };
+
+  const existingById = new Map(current.items.map((i) => [i.id, i]));
+  const incomingIds = new Set(d.items.map((it) => it.id).filter(Boolean) as string[]);
+  const toDelete = current.items.filter((i) => !incomingIds.has(i.id));
+  if (toDelete.some((i) => i.qtyReceived > 0)) {
+    return { error: "A line that's already been received can't be removed." };
+  }
+  for (const it of d.items) {
+    const ex = it.id ? existingById.get(it.id) : undefined;
+    if (ex && it.qtyOrdered < ex.qtyReceived) {
+      return { error: `A line's quantity can't be less than what's already received (${ex.qtyReceived}).` };
+    }
+  }
+
+  const newLines = d.items.filter((it) => !(it.id && existingById.has(it.id)));
+  const ops = [];
+  if (toDelete.length) ops.push(prisma.jobItem.deleteMany({ where: { id: { in: toDelete.map((i) => i.id) } } }));
+  ops.push(prisma.job.update({
+    where: { id },
+    data: { vendorId: d.vendorId, kind: d.kind, currency: d.currency, issueDate: toDate(d.issueDate) ?? undefined, dueDate: toDate(d.dueDate) ?? null, notes: d.notes || null },
+  }));
+  for (const it of d.items) {
+    if (it.id && existingById.has(it.id)) ops.push(prisma.jobItem.update({ where: { id: it.id }, data: jobItemData(it) }));
+  }
+  if (newLines.length) ops.push(prisma.jobItem.createMany({ data: newLines.map((it) => ({ jobId: id, ...jobItemData(it) })) }));
+  await prisma.$transaction(ops);
+
+  // Editing quantities can change the received/ordered balance — recompute status.
+  const items = await prisma.jobItem.findMany({ where: { jobId: id }, select: { qtyOrdered: true, qtyReceived: true } });
+  await prisma.job.update({ where: { id }, data: { status: jobStatusFrom(items) } });
+
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${id}`);
+  redirect(`/jobs/${id}`);
 }
 
 // Record received quantities (deltas) per line: add to stock and to qtyReceived,

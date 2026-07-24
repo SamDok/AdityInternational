@@ -5,41 +5,59 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import { CURRENCIES } from "@/lib/format";
+import { useToast } from "@/components/Toast";
 import ProductPicker from "../orders/ProductPicker";
 import type { JobInput } from "./actions";
 
 type Vendor = { id: string; name: string };
 type ProductOpt = { id: string; label: string; group: string; unit: string };
-type Line = { key: string; productId: string; qty: string; rate: string; unit: string };
+type Line = { key: string; id?: string; productId: string; qty: string; rate: string; unit: string; dueDate: string; note: string };
+
+export type JobInitial = {
+  vendorId: string;
+  kind: string;
+  currency: string;
+  issueDate: string;
+  dueDate: string;
+  notes: string;
+  items: { id: string; productId: string; qty: string; rate: string; unit: string; dueDate: string; note: string }[];
+};
 
 let counter = 0;
 const newKey = () => `j${counter++}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const emptyLine = (): Line => ({ key: newKey(), productId: "", qty: "", rate: "", unit: "mtr" });
+const emptyLine = (): Line => ({ key: newKey(), productId: "", qty: "", rate: "", unit: "mtr", dueDate: "", note: "" });
 
 export default function JobForm({
   vendors,
   products,
   defaultVendorId,
+  initial,
   action,
   submitLabel,
 }: {
   vendors: Vendor[];
   products: ProductOpt[];
   defaultVendorId?: string;
+  initial?: JobInitial;
   action: (input: JobInput) => Promise<{ error?: string } | void>;
   submitLabel: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [vendorId, setVendorId] = useState(defaultVendorId ?? "");
-  const [kind, setKind] = useState("JOB_WORK");
-  const [currency, setCurrency] = useState("INR");
-  const [issueDate, setIssueDate] = useState(todayStr());
-  const [dueDate, setDueDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<Line[]>([emptyLine()]);
+  const [vendorId, setVendorId] = useState(initial?.vendorId ?? defaultVendorId ?? "");
+  const [kind, setKind] = useState(initial?.kind ?? "JOB_WORK");
+  const [currency, setCurrency] = useState(initial?.currency ?? "INR");
+  const [issueDate, setIssueDate] = useState(initial?.issueDate ?? todayStr());
+  const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [lines, setLines] = useState<Line[]>(
+    initial?.items.length
+      ? initial.items.map((it) => ({ key: newKey(), id: it.id, productId: it.productId, qty: it.qty, rate: it.rate, unit: it.unit, dueDate: it.dueDate, note: it.note }))
+      : [emptyLine()],
+  );
 
   const noProducts = products.length === 0;
 
@@ -58,11 +76,12 @@ export default function JobForm({
     if (clean.length === 0) return setError("Add at least one product with a quantity.");
     const input: JobInput = {
       vendorId, kind: kind as "JOB_WORK" | "PURCHASE", currency, issueDate, dueDate: dueDate || null, notes: notes || null,
-      items: clean.map((l) => ({ productId: l.productId, qtyOrdered: Number(l.qty), rate: l.rate === "" ? null : Number(l.rate), unit: l.unit })),
+      items: clean.map((l) => ({ id: l.id, productId: l.productId, qtyOrdered: Number(l.qty), rate: l.rate === "" ? null : Number(l.rate), unit: l.unit, dueDate: l.dueDate || null, note: l.note || null })),
     };
     startTransition(async () => {
       const res = await action(input);
       if (res?.error) setError(res.error);
+      else toast(initial ? "Job updated" : "Job created");
     });
   }
 
@@ -131,6 +150,16 @@ export default function JobForm({
                 <div>
                   <label className="field-label">Rate you pay</label>
                   <input value={l.rate} onChange={(e) => updateLine(l.key, { rate: e.target.value })} type="number" inputMode="decimal" step="0.01" min="0" className="field-input" placeholder="Making charge / cost" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="field-label">Due by</label>
+                  <input value={l.dueDate} onChange={(e) => updateLine(l.key, { dueDate: e.target.value })} type="date" className="field-input" />
+                </div>
+                <div>
+                  <label className="field-label">Line note</label>
+                  <input value={l.note} onChange={(e) => updateLine(l.key, { note: e.target.value })} className="field-input" placeholder="e.g. colour, base given" />
                 </div>
               </div>
             </div>
