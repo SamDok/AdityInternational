@@ -58,6 +58,12 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
           <img src={design.imageData} alt={design.code} className="h-48 w-full rounded-2xl object-cover" />
         )}
 
+        {design.vendorId && !design.archived && (
+          <Link href={`/jobs/new?vendorId=${design.vendorId}`} className="btn-primary w-full">
+            <PlusIcon className="h-5 w-5" /> New job for {design.vendor?.name ?? "this vendor"}
+          </Link>
+        )}
+
         <section className="card divide-y divide-gray-50">
           <Row label="Type" value={design.category.name} />
           <Row label="Composition" value={design.composition} />

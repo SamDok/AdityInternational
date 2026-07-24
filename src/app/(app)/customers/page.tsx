@@ -130,33 +130,37 @@ export default async function CustomersPage({
             <ul className="divide-y divide-gray-100 p-2">
               {pagedCustomers.map((c) => (
                 <li key={c.id}>
-                  <Link
-                    href={`/customers/${c.id}`}
-                    className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-gray-50"
-                  >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base font-semibold text-brand-600">
-                      {c.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-2 truncate font-semibold text-gray-900">
-                        {c.name}
-                        {c.archived && (
-                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                            Archived
-                          </span>
-                        )}
-                      </p>
-                      <p className="truncate text-sm text-gray-500">
-                        {[c.code, c.contactPerson || c.country || c.phone].filter(Boolean).join(" · ") || "—"}
-                        {c._count.orders > 0 && ` · ${c._count.orders} order${c._count.orders > 1 ? "s" : ""}`}
-                        {c.orders[0] && ` · last ${formatDate(c.orders[0].orderDate)}`}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                      {c.currency}
-                    </span>
-                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300" />
-                  </Link>
+                  <div className="flex items-center gap-2 rounded-xl px-2 py-3 hover:bg-gray-50">
+                    <Link href={`/customers/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base font-semibold text-brand-600">
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 truncate font-semibold text-gray-900">
+                          {c.name}
+                          {c.archived && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                              Archived
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate text-sm text-gray-500">
+                          {[c.code, c.contactPerson || c.country || c.phone].filter(Boolean).join(" · ") || "—"}
+                          {c._count.orders > 0 && ` · ${c._count.orders} order${c._count.orders > 1 ? "s" : ""}`}
+                          {c.orders[0] && ` · last ${formatDate(c.orders[0].orderDate)}`}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                        {c.currency}
+                      </span>
+                      {c.archived && <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300" />}
+                    </Link>
+                    {!c.archived && (
+                      <Link href={`/orders/new?customerId=${c.id}`} className="shrink-0 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white active:bg-brand-700">
+                        Order
+                      </Link>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

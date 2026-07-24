@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import ProductSearch from "../products/ProductSearch";
-import { UsersIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
+import { UsersIcon, PlusIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -75,19 +75,23 @@ export default async function VendorsPage({
             <ul className="divide-y divide-gray-100 p-2">
               {vendors.map((v) => (
                 <li key={v.id}>
-                  <Link href={`/vendors/${v.id}`} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-gray-50">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base font-semibold text-brand-600">
-                      {v.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-gray-900">{v.name}</p>
-                      <p className="truncate text-sm text-gray-500">
-                        {[v.code, KIND_LABEL[v.kind], v.phone].filter(Boolean).join(" · ")}
-                        {v._count.jobs > 0 && ` · ${v._count.jobs} job${v._count.jobs > 1 ? "s" : ""}`}
-                      </p>
-                    </div>
-                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300" />
-                  </Link>
+                  <div className="flex items-center gap-2 rounded-xl px-2 py-3 hover:bg-gray-50">
+                    <Link href={`/vendors/${v.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base font-semibold text-brand-600">
+                        {v.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-gray-900">{v.name}</p>
+                        <p className="truncate text-sm text-gray-500">
+                          {[v.code, KIND_LABEL[v.kind], v.phone].filter(Boolean).join(" · ")}
+                          {v._count.jobs > 0 && ` · ${v._count.jobs} job${v._count.jobs > 1 ? "s" : ""}`}
+                        </p>
+                      </div>
+                    </Link>
+                    <Link href={`/jobs/new?vendorId=${v.id}`} className="shrink-0 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white active:bg-brand-700">
+                      Job
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>
