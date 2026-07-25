@@ -22,3 +22,13 @@ export function jobDocNo(job: { kind: string; number: number; seq?: number | nul
   const prefix = job.kind === "PURCHASE" ? "PO" : "JW";
   return `${prefix}/${job.fyLabel}/${String(job.seq).padStart(3, "0")}`;
 }
+
+// Shipment document numbers share one financial-year series; the same seq is
+// shown as INV/25-26/001 on the invoice and PL/25-26/001 on the packing list.
+export function shipmentDocNo(
+  s: { number: number; seq?: number | null; fyLabel?: string | null },
+  prefix: "INV" | "PL" = "INV",
+): string {
+  if (s.seq == null || !s.fyLabel) return `#${s.number}`;
+  return `${prefix}/${s.fyLabel}/${String(s.seq).padStart(3, "0")}`;
+}

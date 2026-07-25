@@ -8,6 +8,7 @@ export type StockMove = {
   reason: "JOB_RECEIVE" | "ORDER_SHIP" | "ORDER_UNSHIP" | "MANUAL_ADJUST";
   orderId?: string | null;
   jobId?: string | null;
+  shipmentId?: string | null;
   userId?: string | null;
   note?: string | null;
 };
@@ -30,6 +31,7 @@ export async function applyMovements(moves: StockMove[]) {
           reason: m.reason,
           orderId: m.orderId ?? null,
           jobId: m.jobId ?? null,
+          shipmentId: m.shipmentId ?? null,
           userId: m.userId ?? null,
           note: m.note ?? null,
         },

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { UsersIcon, ClipboardIcon, GearIcon, BoxIcon, ChevronRightIcon } from "@/components/Icons";
+import { UsersIcon, ClipboardIcon, GearIcon, BoxIcon, ChevronRightIcon, DocumentIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export default async function MorePage() {
   const items = [
     { href: "/customers", label: "Customers", sub: `${customers} total`, icon: UsersIcon },
     { href: "/products", label: "Products & designs", sub: `${products} in the catalogue`, icon: BoxIcon },
+    { href: "/shipments", label: "Shipments", sub: "dispatches, invoices & packing lists", icon: DocumentIcon },
     { href: "/vendors", label: "Vendors", sub: `${vendors} kaarigars & suppliers`, icon: UsersIcon },
     { href: "/products/low-stock", label: "Low stock", sub: lowStock ? "items to watch" : "nothing tracked", icon: BoxIcon },
     { href: "/products/movements", label: "Stock movements", sub: "recent stock changes", icon: ClipboardIcon },

@@ -3,8 +3,6 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import StagePicker from "../StagePicker";
-import ShipForm from "../ShipForm";
-import UnshipButton from "../UnshipButton";
 import DropLineButton from "../DropLineButton";
 import GenerateProcurement from "../GenerateProcurement";
 import { planProcurement } from "../procurement";
@@ -19,13 +17,10 @@ export const dynamic = "force-dynamic";
 
 export default async function OrderDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ship?: string }>;
 }) {
   const { id } = await params;
-  const { ship } = await searchParams;
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
@@ -42,15 +37,8 @@ export default async function OrderDetailPage({
   // Offer a manual "mark complete" on a confirmed order that isn't fully shipped
   // by metres and hasn't already been closed by hand.
   const canMarkComplete = order.status === "CONFIRMED" && !autoFull && !order.manualComplete;
-  const shipItems = order.items.map((it) => ({
-    id: it.id,
-    label: it.product.name,
-    quantity: it.quantity,
-    shippedQty: it.shippedQty,
-    unit: it.unit,
-    stockQty: it.product.stockQty,
-    perPieceQty: it.perPieceQty,
-  }));
+  // Shippable when it's live, not complete, and something is left to send.
+  const canShip = order.status !== "CANCELLED" && !order.manualComplete && !autoFull;
 
   const plan = await planProcurement(id);
   const openJobCount = plan?.existingJobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL").length ?? 0;
@@ -106,7 +94,11 @@ export default async function OrderDetailPage({
           fulfillment={order.status !== "CANCELLED" ? badge : undefined}
         />
 
-        {order.status !== "CANCELLED" && !order.manualComplete && <ShipForm orderId={order.id} items={shipItems} defaultOpen={ship === "1"} />}
+        {canShip && (
+          <Link href={`/shipments/new?customerId=${order.customerId}&orderId=${order.id}`} className="btn-primary w-full">
+            Create shipment · invoice &amp; packing list
+          </Link>
+        )}
 
         {order.manualComplete ? (
           <div className="card flex items-center justify-between gap-3 bg-green-50">
@@ -249,7 +241,6 @@ export default async function OrderDetailPage({
                       {(it.dueDate || order.dueDate) && (
                         <span className="text-gray-500">Due {formatDate(it.dueDate ?? order.dueDate!)}</span>
                       )}
-                      {it.shippedQty > 0 && <UnshipButton itemId={it.id} shippedQty={it.shippedQty} unit={it.unit} />}
                       {order.status !== "CANCELLED" && it.shippedQty === 0 && order.items.length > 1 && (
                         <DropLineButton itemId={it.id} hasJob={productsWithOpenJob.has(it.productId)} />
                       )}

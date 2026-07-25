@@ -63,9 +63,12 @@ export default async function OrdersPage({
         title="Orders"
         subtitle={all.length ? `${all.length} total` : undefined}
         action={
-          <Link href="/orders/new" aria-label="New order" className="btn-primary !px-3 !py-2">
-            <PlusIcon className="h-5 w-5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/shipments" className="btn-secondary !px-3 !py-2 text-sm">Shipments</Link>
+            <Link href="/orders/new" aria-label="New order" className="btn-primary !px-3 !py-2">
+              <PlusIcon className="h-5 w-5" />
+            </Link>
+          </div>
         }
       />
 
@@ -127,7 +130,7 @@ export default async function OrdersPage({
                         {!ready && <ChevronRightIcon className="h-5 w-5 text-gray-300" />}
                       </Link>
                       {ready && (
-                        <Link href={`/orders/${o.id}?ship=1`} className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white active:bg-green-700">
+                        <Link href={`/shipments/new?customerId=${o.customerId}&orderId=${o.id}`} className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white active:bg-green-700">
                           Ship
                         </Link>
                       )}
