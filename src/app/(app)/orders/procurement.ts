@@ -43,6 +43,56 @@ function earliest(dates: (Date | null)[]): Date | null {
   return valid.reduce((a, b) => (a < b ? a : b));
 }
 
+// The single source of truth for "what still needs making/buying". Allocates the
+// on-hand stock (a SHARED pool) and jobs-already-raised to every active order
+// line, EARLIEST DELIVERY FIRST, and returns the leftover shortfall per
+// order-item. Because stock is a shared pool, a product in short supply is
+// counted once — not once per order — so the schedule, the board and the
+// per-order generate all agree.
+export async function allocateShortfalls(): Promise<Map<string, number>> {
+  const orders = await prisma.order.findMany({
+    where: { status: "CONFIRMED" },
+    select: {
+      id: true, dueDate: true, manualComplete: true,
+      items: { select: { id: true, productId: true, quantity: true, shippedQty: true, dueDate: true, product: { select: { stockQty: true } } } },
+    },
+  });
+  const active = orders.filter((o) => !o.manualComplete && fulfillmentOf(o.items) !== "FULL");
+
+  const orderIds = active.map((o) => o.id);
+  const linkedJobs = orderIds.length
+    ? await prisma.job.findMany({ where: { orderId: { in: orderIds }, status: { not: "CANCELLED" } }, select: { orderId: true, items: { select: { productId: true, qtyOrdered: true } } } })
+    : [];
+  const linked = new Map<string, number>();
+  for (const j of linkedJobs) for (const it of j.items) {
+    const k = `${j.orderId}:${it.productId}`;
+    linked.set(k, (linked.get(k) ?? 0) + it.qtyOrdered);
+  }
+
+  // Flatten all active lines and allocate to the most urgent (line due, else order due) first.
+  const INF = Number.POSITIVE_INFINITY;
+  const flat = active.flatMap((o) => o.items.map((it) => ({ o, it, due: (it.dueDate ?? o.dueDate)?.getTime() ?? INF })));
+  flat.sort((a, b) => a.due - b.due);
+
+  const stockPool = new Map<string, number>();
+  const linkedPool = new Map<string, number>();
+  const shortfalls = new Map<string, number>();
+  for (const { o, it } of flat) {
+    const remaining = it.quantity - it.shippedQty;
+    if (remaining <= 1e-9) { shortfalls.set(it.id, 0); continue; }
+    if (!stockPool.has(it.productId)) stockPool.set(it.productId, it.product.stockQty || 0);
+    const lkey = `${o.id}:${it.productId}`;
+    if (!linkedPool.has(lkey)) linkedPool.set(lkey, linked.get(lkey) ?? 0);
+    const fromStock = Math.min(remaining, stockPool.get(it.productId)!);
+    stockPool.set(it.productId, stockPool.get(it.productId)! - fromStock);
+    const rem2 = remaining - fromStock;
+    const fromLinked = Math.min(rem2, linkedPool.get(lkey)!);
+    linkedPool.set(lkey, linkedPool.get(lkey)! - fromLinked);
+    shortfalls.set(it.id, Math.max(0, rem2 - fromLinked));
+  }
+  return shortfalls;
+}
+
 // Work out what needs making / buying for an order: per line, the shortfall
 // after current stock and any jobs already raised for THIS order, grouped by the
 // design's assigned kaarigar (job work) or supplier (trading). Shortfall-only.
@@ -61,14 +111,10 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
     orderBy: { number: "asc" },
   });
 
-  // Coverage pool per product = current stock + quantity already on this order's jobs.
-  const linkedByProduct = new Map<string, number>();
-  for (const j of existingJobs) {
-    for (const it of j.items) {
-      linkedByProduct.set(it.productId, (linkedByProduct.get(it.productId) ?? 0) + it.qtyOrdered);
-    }
-  }
-  const pool = new Map<string, number>();
+  // Shortfall per line comes from the shared, global allocation (stock netted
+  // against MORE-URGENT orders and jobs already raised), so this order only asks
+  // to procure what's genuinely left for it.
+  const shortfalls = await allocateShortfalls();
 
   const groupsMap = new Map<string, ProcGroup>();
   const unassigned: ProcLine[] = [];
@@ -78,16 +124,12 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
     const pid = it.productId;
     const prod = it.product;
     const design = prod.design;
-    if (!pool.has(pid)) pool.set(pid, (prod.stockQty || 0) + (linkedByProduct.get(pid) ?? 0));
-    const cover = pool.get(pid)!;
-    const use = Math.min(it.quantity, cover);
-    pool.set(pid, cover - use);
-    const shortfall = it.quantity - use;
+    const shortfall = shortfalls.get(it.id) ?? 0;
 
     const line: ProcLine = {
       productId: pid,
       name: prod.name,
-      needed: it.quantity,
+      needed: it.quantity - it.shippedQty,
       available: prod.stockQty,
       shortfall,
       perPieceQty: it.perPieceQty ?? null,
@@ -146,12 +188,14 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     select: {
       id: true, number: true, dueDate: true, manualComplete: true,
       customer: { select: { id: true, name: true } },
-      items: { select: { productId: true, quantity: true, shippedQty: true } },
+      items: { select: { id: true, productId: true, quantity: true, shippedQty: true } },
     },
     orderBy: { number: "asc" },
   });
   const active = orders.filter((o) => !o.manualComplete && fulfillmentOf(o.items) !== "FULL");
-  const orderIds = active.map((o) => o.id);
+
+  // Shortfall per line from the shared global allocation (stock counted once).
+  const shortfalls = await allocateShortfalls();
 
   // 2. The products those orders reference, with sourcing (one query).
   const pidSet = new Set<string>();
@@ -164,17 +208,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     : [];
   const pmap = new Map(products.map((p) => [p.id, p]));
 
-  // 3. Jobs already raised for these orders (one query) — already-covered per (order, product).
-  const linkedJobs = orderIds.length
-    ? await prisma.job.findMany({ where: { orderId: { in: orderIds }, status: { not: "CANCELLED" } }, select: { orderId: true, items: { select: { productId: true, qtyOrdered: true } } } })
-    : [];
-  const linked = new Map<string, number>();
-  for (const j of linkedJobs) for (const it of j.items) {
-    const k = `${j.orderId}:${it.productId}`;
-    linked.set(k, (linked.get(k) ?? 0) + it.qtyOrdered);
-  }
-
-  // 4. All open/partial jobs (one query) — the "awaiting" side + aggregate on-order.
+  // All open/partial jobs (one query) — the "awaiting" side + aggregate on-order.
   const openJobs = await prisma.job.findMany({
     where: { status: { in: ["OPEN", "PARTIAL"] } },
     include: { vendor: { select: { id: true, name: true } }, order: { select: { id: true, number: true } }, items: { include: { product: { select: { name: true } } } } },
@@ -184,17 +218,12 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   // Per-order needs (same shortfall logic as planProcurement, but from bulk data).
   const needs: OrderNeed[] = [];
   for (const o of active) {
-    const pool = new Map<string, number>();
     const groups = new Map<string, NeedGroup>();
     let unassignedCount = 0;
     for (const it of o.items) {
       const prod = pmap.get(it.productId);
       if (!prod) continue;
-      if (!pool.has(it.productId)) pool.set(it.productId, (prod.stockQty || 0) + (linked.get(`${o.id}:${it.productId}`) ?? 0));
-      const cover = pool.get(it.productId)!;
-      const use = Math.min(it.quantity, cover);
-      pool.set(it.productId, cover - use);
-      const shortfall = it.quantity - use;
+      const shortfall = shortfalls.get(it.id) ?? 0;
       if (shortfall <= 1e-9) continue;
       const d = prod.design;
       if (!d?.vendorId || !d?.sourcingType) { unassignedCount++; continue; }
@@ -227,9 +256,9 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   }
   const awaiting = [...avMap.values()];
 
-  // By-design rollup: true aggregate net demand across all live orders.
+  // By-design rollup: true aggregate net demand (remaining to fulfil) across all live orders.
   const demand = new Map<string, number>();
-  for (const o of active) for (const it of o.items) demand.set(it.productId, (demand.get(it.productId) ?? 0) + it.quantity);
+  for (const o of active) for (const it of o.items) demand.set(it.productId, (demand.get(it.productId) ?? 0) + Math.max(0, it.quantity - it.shippedQty));
   const rollup: DesignRollup[] = [];
   for (const [pid, dem] of demand) {
     const prod = pmap.get(pid);

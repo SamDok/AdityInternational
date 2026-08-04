@@ -79,57 +79,68 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   const today = dayStart(new Date());
   const items: ScheduleItem[] = [];
 
+  // Flatten every unshipped, schedulable line, then allocate the shared stock to
+  // the MOST URGENT deliveries first — so a product in short supply is counted
+  // once, not once per order. Job coverage stays per (order, product).
+  type Line = { o: (typeof orders)[number]; it: (typeof orders)[number]["items"][number]; remaining: number; due: Date };
+  const lines: Line[] = [];
   for (const o of orders) {
-    const stockPool = new Map<string, number>();
-    const jobPool = new Map<string, number>();
     for (const it of o.items) {
       const remaining = it.quantity - it.shippedQty;
       if (remaining <= 1e-9) continue; // already shipped
       const due = it.dueDate ?? o.dueDate;
       if (!due) continue; // nothing to schedule against
-
-      const pid = it.productId;
-      if (!stockPool.has(pid)) stockPool.set(pid, it.product.stockQty || 0);
-      const jc = cover.get(`${o.id}:${pid}`);
-      if (!jobPool.has(pid)) jobPool.set(pid, jc?.outstanding ?? 0);
-
-      const fromStock = Math.min(remaining, stockPool.get(pid)!);
-      stockPool.set(pid, stockPool.get(pid)! - fromStock);
-      const rem2 = remaining - fromStock;
-      const fromJob = Math.min(rem2, jobPool.get(pid)!);
-      jobPool.set(pid, jobPool.get(pid)! - fromJob);
-
-      let readiness: Readiness;
-      if (fromStock >= remaining - 1e-9) readiness = "READY";
-      else if (fromStock + fromJob >= remaining - 1e-9) readiness = "MAKING";
-      else readiness = "NOT_PROCURED";
-
-      const leadDays = it.product.design?.leadDays ?? it.product.design?.vendor?.leadDays ?? it.product.design?.category.leadDays ?? null;
-      const dDay = dayStart(due);
-      const startBy = leadDays != null ? dDay - leadDays * DAY : null;
-      const urgency = readiness === "READY" ? dDay : (startBy ?? dDay);
-
-      const jobDue = readiness === "MAKING" ? jc?.jobDue ?? null : null;
-      const jobLate = !!(jobDue && dayStart(jobDue) > dDay);
-
-      let bucket: Bucket | null = null;
-      if (dDay < today) bucket = "OVERDUE";
-      else if (urgency < today) bucket = "BEHIND";
-      else if (urgency <= today + SOON_WINDOW_DAYS * DAY) bucket = "SOON";
-      // A MAKING line whose job will land late is worth surfacing even if the
-      // start-by hasn't passed.
-      else if (jobLate) bucket = "SOON";
-      if (!bucket) continue;
-
-      items.push({
-        orderId: o.id, orderNumber: o.number, customerName: o.customer.name,
-        productName: it.product.name, remaining, unit: it.unit,
-        deliveryDate: due, startBy: startBy != null ? new Date(startBy) : null, leadDays,
-        readiness, jobNumber: readiness === "MAKING" ? jc?.jobNumber ?? null : null,
-        jobDocNo: readiness === "MAKING" ? jc?.jobDocNo ?? null : null,
-        jobId: readiness === "MAKING" ? jc?.jobId ?? null : null, jobDueDate: jobDue, jobLate, bucket,
-      });
+      lines.push({ o, it, remaining, due });
     }
+  }
+  lines.sort((a, b) => dayStart(a.due) - dayStart(b.due));
+
+  const stockPool = new Map<string, number>(); // GLOBAL, per product
+  const jobPool = new Map<string, number>(); // per order:product
+
+  for (const { o, it, remaining, due } of lines) {
+    const pid = it.productId;
+    if (!stockPool.has(pid)) stockPool.set(pid, it.product.stockQty || 0);
+    const jc = cover.get(`${o.id}:${pid}`);
+    const jkey = `${o.id}:${pid}`;
+    if (!jobPool.has(jkey)) jobPool.set(jkey, jc?.outstanding ?? 0);
+
+    const fromStock = Math.min(remaining, stockPool.get(pid)!);
+    stockPool.set(pid, stockPool.get(pid)! - fromStock);
+    const rem2 = remaining - fromStock;
+    const fromJob = Math.min(rem2, jobPool.get(jkey)!);
+    jobPool.set(jkey, jobPool.get(jkey)! - fromJob);
+
+    let readiness: Readiness;
+    if (fromStock >= remaining - 1e-9) readiness = "READY";
+    else if (fromStock + fromJob >= remaining - 1e-9) readiness = "MAKING";
+    else readiness = "NOT_PROCURED";
+
+    const leadDays = it.product.design?.leadDays ?? it.product.design?.vendor?.leadDays ?? it.product.design?.category.leadDays ?? null;
+    const dDay = dayStart(due);
+    const startBy = leadDays != null ? dDay - leadDays * DAY : null;
+    const urgency = readiness === "READY" ? dDay : (startBy ?? dDay);
+
+    const jobDue = readiness === "MAKING" ? jc?.jobDue ?? null : null;
+    const jobLate = !!(jobDue && dayStart(jobDue) > dDay);
+
+    let bucket: Bucket | null = null;
+    if (dDay < today) bucket = "OVERDUE";
+    else if (urgency < today) bucket = "BEHIND";
+    else if (urgency <= today + SOON_WINDOW_DAYS * DAY) bucket = "SOON";
+    // A MAKING line whose job will land late is worth surfacing even if the
+    // start-by hasn't passed.
+    else if (jobLate) bucket = "SOON";
+    if (!bucket) continue;
+
+    items.push({
+      orderId: o.id, orderNumber: o.number, customerName: o.customer.name,
+      productName: it.product.name, remaining, unit: it.unit,
+      deliveryDate: due, startBy: startBy != null ? new Date(startBy) : null, leadDays,
+      readiness, jobNumber: readiness === "MAKING" ? jc?.jobNumber ?? null : null,
+      jobDocNo: readiness === "MAKING" ? jc?.jobDocNo ?? null : null,
+      jobId: readiness === "MAKING" ? jc?.jobId ?? null : null, jobDueDate: jobDue, jobLate, bucket,
+    });
   }
 
   const byUrgency = (a: ScheduleItem, b: ScheduleItem) => dayStart(a.deliveryDate) - dayStart(b.deliveryDate);

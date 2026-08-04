@@ -42,7 +42,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     <div>
       <PageHeader
         title="Production"
-        subtitle={jobs.length ? `${jobs.length} jobs` : undefined}
+        subtitle={jobs.length ? `${jobs.length} job${jobs.length === 1 ? "" : "s"}` : undefined}
         action={<Link href="/jobs/new" aria-label="New job" className="btn-primary !px-3 !py-2"><PlusIcon className="h-5 w-5" /></Link>}
       />
 
