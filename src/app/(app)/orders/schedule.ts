@@ -21,6 +21,7 @@ export type ScheduleItem = {
   jobId: string | null;
   jobDueDate: Date | null;
   jobLate: boolean; // job's date lands after the delivery date
+  jobOverdue: boolean; // job's own due date has already passed (chase the vendor)
   bucket: Bucket;
 };
 
@@ -119,18 +120,37 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     const leadDays = it.product.design?.leadDays ?? it.product.design?.vendor?.leadDays ?? it.product.design?.category.leadDays ?? null;
     const dDay = dayStart(due);
     const startBy = leadDays != null ? dDay - leadDays * DAY : null;
-    const urgency = readiness === "READY" ? dDay : (startBy ?? dDay);
+    const withinSoon = (d: number) => d <= today + SOON_WINDOW_DAYS * DAY;
 
     const jobDue = readiness === "MAKING" ? jc?.jobDue ?? null : null;
-    const jobLate = !!(jobDue && dayStart(jobDue) > dDay);
+    const jobDueDay = jobDue ? dayStart(jobDue) : null;
+    const jobLate = !!(jobDueDay != null && jobDueDay > dDay); // arrives after the deadline
+    const jobOverdue = !!(jobDueDay != null && jobDueDay < today); // job's own date already passed
 
     let bucket: Bucket | null = null;
-    if (dDay < today) bucket = "OVERDUE";
-    else if (urgency < today) bucket = "BEHIND";
-    else if (urgency <= today + SOON_WINDOW_DAYS * DAY) bucket = "SOON";
-    // A MAKING line whose job will land late is worth surfacing even if the
-    // start-by hasn't passed.
-    else if (jobLate) bucket = "SOON";
+    if (dDay < today) {
+      bucket = "OVERDUE"; // delivery date already passed, whatever the readiness
+    } else if (readiness === "MAKING") {
+      // Judge a being-made line by when its JOB will actually arrive, not the
+      // original start-by. A job on track to land in time needs no attention.
+      if (jobDueDay == null) {
+        // No ETA on the job — fall back to the planning start-by, conservatively.
+        const u = startBy ?? dDay;
+        bucket = u < today ? "BEHIND" : withinSoon(u) ? "SOON" : null;
+      } else if (jobOverdue || jobLate) {
+        bucket = "BEHIND"; // vendor is late, or the job lands after the deadline
+      } else {
+        bucket = null; // arrives in time — drop off the board
+      }
+    } else if (readiness === "NOT_PROCURED" && leadDays == null) {
+      // No lead time to plan by — always surface (with a nudge), never hide it
+      // behind the 7-day window.
+      bucket = "SOON";
+    } else {
+      // READY, or NOT_PROCURED with a known lead time.
+      const u = readiness === "READY" ? dDay : (startBy ?? dDay);
+      bucket = u < today ? "BEHIND" : withinSoon(u) ? "SOON" : null;
+    }
     if (!bucket) continue;
 
     items.push({
@@ -139,7 +159,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       deliveryDate: due, startBy: startBy != null ? new Date(startBy) : null, leadDays,
       readiness, jobNumber: readiness === "MAKING" ? jc?.jobNumber ?? null : null,
       jobDocNo: readiness === "MAKING" ? jc?.jobDocNo ?? null : null,
-      jobId: readiness === "MAKING" ? jc?.jobId ?? null : null, jobDueDate: jobDue, jobLate, bucket,
+      jobId: readiness === "MAKING" ? jc?.jobId ?? null : null, jobDueDate: jobDue, jobLate, jobOverdue, bucket,
     });
   }
 

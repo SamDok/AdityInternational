@@ -76,19 +76,27 @@ function Readiness({ it }: { it: ScheduleItem }) {
     return <p className="mt-1 text-xs font-medium text-green-600">✓ Ready to ship — just dispatch it</p>;
   }
   if (it.readiness === "MAKING") {
+    const flag = it.jobOverdue ? " — job overdue, chase the vendor" : it.jobLate ? " — arrives after the deadline" : "";
     return (
-      <p className={`mt-1 text-xs font-medium ${it.jobLate ? "text-red-600" : "text-amber-600"}`}>
+      <p className={`mt-1 text-xs font-medium ${it.jobLate || it.jobOverdue ? "text-red-600" : "text-amber-600"}`}>
         Being made{it.jobDocNo ? <> · <Link href={`/jobs/${it.jobId}`} className="underline">Job {it.jobDocNo}</Link></> : ""}
         {it.jobDueDate ? ` due ${formatDate(it.jobDueDate)}` : ""}
-        {it.jobLate ? " — arrives after the deadline" : ""}
+        {flag}
       </p>
     );
   }
   // NOT_PROCURED
+  if (it.leadDays == null) {
+    return (
+      <p className="mt-1 text-xs font-medium text-red-600">
+        Not procured — <span className="underline decoration-dotted">no lead time set</span>, add one on the product type to plan this.
+      </p>
+    );
+  }
   return (
     <p className="mt-1 text-xs font-medium text-red-600">
       Not procured yet{it.startBy ? ` — needed to start by ${formatDate(it.startBy)}` : ""}
-      {it.leadDays != null ? ` (${it.leadDays}-day lead)` : ""}
+      {` (${it.leadDays}-day lead)`}
     </p>
   );
 }
