@@ -45,12 +45,12 @@ export default function CategoryForm({ initial, action, submitLabel, resetOnSucc
             className="field-input" placeholder="e.g. 21" />
         </div>
         <div>
-          <label className="field-label" htmlFor="sortOrder">Order</label>
+          <label className="field-label" htmlFor="sortOrder">Sort</label>
           <input id="sortOrder" name="sortOrder" type="number" defaultValue={initial?.sortOrder ?? 0}
             className="field-input" />
         </div>
       </div>
-      <p className="-mt-1 px-1 text-xs text-gray-400">Lead days = how long this type takes to make/procure. Powers the due-date warnings.</p>
+      <p className="-mt-1 px-1 text-xs text-gray-400">Lead days = how long this type takes to make/procure (powers the due-date warnings). Sort = where this type appears in the list (lower shows first).</p>
       <button type="submit" disabled={isPending} className="btn-primary w-full">
         {isPending ? "Saving…" : submitLabel}
       </button>
