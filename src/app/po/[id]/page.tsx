@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, formatQty } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import PrintBar from "./PrintBar";
@@ -115,9 +115,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   </div>
                 </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">
-                  {it.qtyOrdered} {it.unit}
+                  {formatQty(it.qtyOrdered)} {it.unit}
                   {it.pieces && it.perPieceQty != null && (
-                    <span className="block text-[10px] text-gray-500">{it.pieces} × {it.perPieceQty}</span>
+                    <span className="block text-[10px] text-gray-500">{it.pieces} × {formatQty(it.perPieceQty)}</span>
                   )}
                 </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right">{it.pieces ?? "—"}</td>

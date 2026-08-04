@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatQty } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import ToggleButton from "../../products/ToggleButton";
 import { cancelShipment } from "../actions";
@@ -70,7 +70,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900">{it.description ? `${it.description}` : ""}</p>
-                      <p className="text-sm text-gray-900">{it.quantity} {it.unit}{it.pieces ? ` · ${it.pieces} pcs` : ""}{it.netWeight ? ` · ${it.netWeight} kg` : ""}</p>
+                      <p className="text-sm text-gray-900">{formatQty(it.quantity)} {it.unit}{it.pieces ? ` · ${it.pieces} pcs` : ""}{it.netWeight ? ` · ${formatQty(it.netWeight)} kg` : ""}</p>
                       <p className="mt-0.5 text-xs text-gray-500">{formatMoney(it.rate, shipment.currency)}/{it.unit}</p>
                     </div>
                     <p className="shrink-0 font-semibold text-gray-900">{formatMoney(it.rate * it.quantity, shipment.currency)}</p>
@@ -82,10 +82,10 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
         ))}
 
         <div className="card space-y-1">
-          <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Total metres</span><span className="font-medium text-gray-900">{totalMetres}</span></div>
+          <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Total metres</span><span className="font-medium text-gray-900">{formatQty(totalMetres)}</span></div>
           {totalPieces > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Total pieces</span><span className="font-medium text-gray-900">{totalPieces}</span></div>}
-          {totalNet > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Net weight</span><span className="font-medium text-gray-900">{totalNet} kg</span></div>}
-          {shipment.grossWeight != null && <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Gross weight</span><span className="font-medium text-gray-900">{shipment.grossWeight} kg</span></div>}
+          {totalNet > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Net weight</span><span className="font-medium text-gray-900">{formatQty(totalNet)} kg</span></div>}
+          {shipment.grossWeight != null && <div className="flex items-center justify-between"><span className="text-sm text-gray-500">Gross weight</span><span className="font-medium text-gray-900">{formatQty(shipment.grossWeight)} kg</span></div>}
           <div className="flex items-center justify-between border-t border-gray-100 pt-1"><span className="text-base font-semibold text-gray-700">Invoice value</span><span className="text-xl font-bold text-gray-900">{formatMoney(value, shipment.currency)}</span></div>
         </div>
 

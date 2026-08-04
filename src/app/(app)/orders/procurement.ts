@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fulfillmentOf } from "@/lib/format";
+import { fulfillmentOf, roundQty } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 
 // One order line's procurement view: how much is needed, what's coverable from
@@ -88,7 +88,7 @@ export async function allocateShortfalls(): Promise<Map<string, number>> {
     const rem2 = remaining - fromStock;
     const fromLinked = Math.min(rem2, linkedPool.get(lkey)!);
     linkedPool.set(lkey, linkedPool.get(lkey)! - fromLinked);
-    shortfalls.set(it.id, Math.max(0, rem2 - fromLinked));
+    shortfalls.set(it.id, roundQty(Math.max(0, rem2 - fromLinked)));
   }
   return shortfalls;
 }
@@ -129,8 +129,8 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
     const line: ProcLine = {
       productId: pid,
       name: prod.name,
-      needed: it.quantity - it.shippedQty,
-      available: prod.stockQty,
+      needed: roundQty(it.quantity - it.shippedQty),
+      available: roundQty(prod.stockQty),
       shortfall,
       perPieceQty: it.perPieceQty ?? null,
       dueDate: it.dueDate ?? order.dueDate,
@@ -250,7 +250,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     let av = avMap.get(j.vendorId);
     if (!av) { av = { vendorId: j.vendorId, vendorName: j.vendor.name, items: [], anyOverdue: false }; avMap.set(j.vendorId, av); }
     for (const i of outstanding) {
-      av.items.push({ productName: i.product.name, outstanding: i.qtyOrdered - i.qtyReceived, unit: i.unit, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), orderNumber: j.order?.number ?? null, orderId: j.order?.id ?? null, dueDate: j.dueDate, overdue });
+      av.items.push({ productName: i.product.name, outstanding: roundQty(i.qtyOrdered - i.qtyReceived), unit: i.unit, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), orderNumber: j.order?.number ?? null, orderId: j.order?.id ?? null, dueDate: j.dueDate, overdue });
     }
     if (overdue) av.anyOverdue = true;
   }
@@ -266,7 +266,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     const onOrder = openByProduct.get(pid) ?? 0;
     const stock = prod.stockQty || 0;
     const toProcure = dem - stock - onOrder;
-    if (toProcure > 1e-9) rollup.push({ productId: pid, name: prod.name, unit: prod.unit, demand: dem, stock, onOrder, toProcure });
+    if (toProcure > 1e-9) rollup.push({ productId: pid, name: prod.name, unit: prod.unit, demand: roundQty(dem), stock: roundQty(stock), onOrder: roundQty(onOrder), toProcure: roundQty(toProcure) });
   }
   rollup.sort((a, b) => b.toProcure - a.toProcure);
 

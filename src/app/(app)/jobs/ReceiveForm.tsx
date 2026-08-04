@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { receiveJob } from "./actions";
 import { useToast } from "@/components/Toast";
+import { formatQty } from "@/lib/format";
 
 type Item = {
   id: string;
@@ -70,14 +71,14 @@ export default function ReceiveForm({ jobId, items, defaultOpen = false }: { job
           const nominalPer = it.perPieceQty ?? null;
           // Hint the likely metres from the pieces just entered × nominal per-piece.
           const enteredPcs = parseInt(row.pieces, 10);
-          const metresHint = pieceWise && nominalPer && enteredPcs > 0 ? String(enteredPcs * nominalPer) : String(pendingMtr || "");
+          const metresHint = pieceWise && nominalPer && enteredPcs > 0 ? formatQty(enteredPcs * nominalPer) : String(pendingMtr ? formatQty(pendingMtr) : "");
           return (
             <li key={it.id} className="rounded-xl bg-gray-50 p-3 ring-1 ring-inset ring-gray-100">
               <p className="text-sm font-medium text-gray-900">{it.label}</p>
               <p className="mb-2 text-xs text-gray-500">
                 {pieceWise
                   ? `${it.piecesReceived}/${it.pieces} pcs in · ${pendingPcs} pending`
-                  : `${it.qtyReceived}/${it.qtyOrdered} ${it.unit} in · ${pendingMtr} pending`}
+                  : `${formatQty(it.qtyReceived)}/${formatQty(it.qtyOrdered)} ${it.unit} in · ${formatQty(pendingMtr)} pending`}
               </p>
               <div className={`grid ${pieceWise ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
                 {pieceWise && (

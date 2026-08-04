@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { adjustStock } from "./actions";
 import { useToast } from "@/components/Toast";
+import { formatQty } from "@/lib/format";
 
 export default function StockAdjust({ variantId, stockQty, unit }: { variantId: string; stockQty: number; unit: string }) {
   const [open, setOpen] = useState(false);
@@ -18,14 +19,14 @@ export default function StockAdjust({ variantId, stockQty, unit }: { variantId: 
       setQty("");
       setOpen(false);
       if (res?.error) toast(res.error, { kind: "error" });
-      else toast(`Stock ${sign > 0 ? "added" : "removed"}: ${res?.stockQty ?? ""} ${unit} on hand`);
+      else toast(`Stock ${sign > 0 ? "added" : "removed"}: ${res?.stockQty != null ? formatQty(res.stockQty) : ""} ${unit} on hand`);
     });
   }
 
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200">
-        {stockQty} {unit} · adjust
+        {formatQty(stockQty)} {unit} · adjust
       </button>
     );
   }

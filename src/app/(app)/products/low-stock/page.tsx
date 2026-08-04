@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
+import { formatQty } from "@/lib/format";
 import { ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export default async function LowStockPage() {
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-sm font-semibold text-red-700">
-                  {v.stockQty} {v.unit}
+                  {formatQty(v.stockQty)} {v.unit}
                 </span>
                 <ChevronRightIcon className="h-5 w-5 text-gray-300" />
               </Link>

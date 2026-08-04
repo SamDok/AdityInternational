@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { orderComplete } from "@/lib/format";
+import { orderComplete, roundQty } from "@/lib/format";
 
 // One shippable order line for the builder, with a suggested "ready" quantity
 // (stock on hand, allocated greedily across lines that share a product).
@@ -43,8 +43,8 @@ export async function customerReadyLines(customerId: string): Promise<ReadyLine[
       lines.push({
         orderItemId: it.id, orderId: o.id, orderNumber: o.number,
         productName: it.product.name, designImage: it.product.design?.imageData ?? null,
-        unit: it.unit, perPieceQty: it.perPieceQty, ordered: it.quantity, shipped: it.shippedQty,
-        remaining, stock: it.product.stockQty || 0, ready, rate: it.rate,
+        unit: it.unit, perPieceQty: it.perPieceQty, ordered: roundQty(it.quantity), shipped: roundQty(it.shippedQty),
+        remaining: roundQty(remaining), stock: roundQty(it.product.stockQty || 0), ready: roundQty(ready), rate: it.rate,
       });
     }
   }

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { BoxIcon } from "@/components/Icons";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatQty } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -58,10 +58,10 @@ export default async function MovementsPage() {
                   </p>
                 </div>
                 <span className={`shrink-0 text-right text-sm font-semibold tabular-nums ${up ? "text-green-600" : "text-red-600"}`}>
-                  {up ? "+" : ""}{m.delta} {m.product.unit}
+                  {up ? "+" : ""}{formatQty(m.delta)} {m.product.unit}
                   {(m.pieces != null || m.weight != null) && (
                     <span className="block text-[11px] font-normal text-gray-400">
-                      {[m.pieces != null ? `${up ? "+" : ""}${m.pieces} pcs` : null, m.weight != null ? `${m.weight > 0 ? "+" : ""}${m.weight} kg` : null].filter(Boolean).join(" · ")}
+                      {[m.pieces != null ? `${up ? "+" : ""}${m.pieces} pcs` : null, m.weight != null ? `${m.weight > 0 ? "+" : ""}${formatQty(m.weight)} kg` : null].filter(Boolean).join(" · ")}
                     </span>
                   )}
                 </span>

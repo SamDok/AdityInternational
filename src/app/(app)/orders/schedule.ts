@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { roundQty } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 
 // Readiness of an unshipped line toward its delivery date.
@@ -155,7 +156,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
 
     items.push({
       orderId: o.id, orderNumber: o.number, customerName: o.customer.name,
-      productName: it.product.name, remaining, unit: it.unit,
+      productName: it.product.name, remaining: roundQty(remaining), unit: it.unit,
       deliveryDate: due, startBy: startBy != null ? new Date(startBy) : null, leadDays,
       readiness, jobNumber: readiness === "MAKING" ? jc?.jobNumber ?? null : null,
       jobDocNo: readiness === "MAKING" ? jc?.jobDocNo ?? null : null,

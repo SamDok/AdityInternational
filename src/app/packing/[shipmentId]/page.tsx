@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatQty } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import DocPrintBar from "@/components/DocPrintBar";
@@ -95,8 +95,8 @@ export default async function PackingListPage({ params }: { params: Promise<{ sh
                   </div>
                 </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right">{it.pieces ?? "—"}</td>
-                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.quantity} {it.unit}</td>
-                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.netWeight ? `${it.netWeight} kg` : "—"}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatQty(it.quantity)} {it.unit}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.netWeight ? `${formatQty(it.netWeight)} kg` : "—"}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right">{it.cartons ?? "—"}</td>
               </tr>
             ))}
@@ -105,8 +105,8 @@ export default async function PackingListPage({ params }: { params: Promise<{ sh
             <tr className="font-semibold">
               <td className="border border-gray-300 px-2 py-1.5" colSpan={2}>Total</td>
               <td className="border border-gray-300 px-2 py-1.5 text-right">{totalPieces || "—"}</td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{totalMetres}</td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{totalNet ? `${totalNet} kg` : "—"}</td>
+              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatQty(totalMetres)}</td>
+              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{totalNet ? `${formatQty(totalNet)} kg` : "—"}</td>
               <td className="border border-gray-300 px-2 py-1.5 text-right">{totalCartons || "—"}</td>
             </tr>
           </tfoot>
@@ -115,8 +115,8 @@ export default async function PackingListPage({ params }: { params: Promise<{ sh
         <div className="mt-4 flex items-start justify-between gap-6 text-xs">
           <div className="text-gray-700">
             <p><span className="text-gray-500">Total pieces:</span> <span className="font-medium">{totalPieces || "—"}</span></p>
-            <p><span className="text-gray-500">Net weight:</span> <span className="font-medium">{totalNet ? `${totalNet} kg` : "—"}</span></p>
-            <p><span className="text-gray-500">Gross weight:</span> <span className="font-medium">{shipment.grossWeight != null ? `${shipment.grossWeight} kg` : "—"}</span></p>
+            <p><span className="text-gray-500">Net weight:</span> <span className="font-medium">{totalNet ? `${formatQty(totalNet)} kg` : "—"}</span></p>
+            <p><span className="text-gray-500">Gross weight:</span> <span className="font-medium">{shipment.grossWeight != null ? `${formatQty(shipment.grossWeight)} kg` : "—"}</span></p>
             <p><span className="text-gray-500">Total cartons:</span> <span className="font-medium">{totalCartons || "—"}</span></p>
           </div>
           <div className="min-w-[200px] pt-2 text-center">

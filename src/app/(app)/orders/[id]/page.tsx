@@ -6,7 +6,7 @@ import StagePicker from "../StagePicker";
 import DropLineButton from "../DropLineButton";
 import GenerateProcurement from "../GenerateProcurement";
 import { planProcurement } from "../procurement";
-import { formatMoney, formatDate, fulfillmentOf, orderBadge } from "@/lib/format";
+import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty } from "@/lib/format";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
 import { setOrderComplete } from "../actions";
@@ -225,15 +225,15 @@ export default async function OrderDetailPage({
                     {it.description && <p className="text-sm text-gray-500">{it.description}</p>}
                     <p className="mt-1 text-sm text-gray-500">
                       {it.pieces && it.perPieceQty != null
-                        ? `${it.pieces} pcs × ${it.perPieceQty} ${it.unit} = ${it.quantity} ${it.unit}`
-                        : `${it.quantity} ${it.unit}`}
+                        ? `${it.pieces} pcs × ${formatQty(it.perPieceQty)} ${it.unit} = ${formatQty(it.quantity)} ${it.unit}`
+                        : `${formatQty(it.quantity)} ${it.unit}`}
                       {" × "}{formatMoney(it.rate, order.currency)}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                       {it.shippedQty > 0 ? (
                         <span className={it.shippedQty >= it.quantity ? "font-medium text-green-600" : "font-medium text-amber-600"}>
-                          {it.shippedQty >= it.quantity ? "Shipped" : `Shipped ${it.shippedQty}/${it.quantity} ${it.unit}`}
-                          {it.shippedWeight > 0 ? ` · ${it.shippedWeight} kg` : ""}
+                          {it.shippedQty >= it.quantity ? "Shipped" : `Shipped ${formatQty(it.shippedQty)}/${formatQty(it.quantity)} ${it.unit}`}
+                          {it.shippedWeight > 0 ? ` · ${formatQty(it.shippedWeight)} kg` : ""}
                         </span>
                       ) : (
                         <span className="text-gray-400">Not shipped</span>

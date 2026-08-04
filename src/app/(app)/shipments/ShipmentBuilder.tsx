@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CURRENCIES, formatMoney } from "@/lib/format";
+import { CURRENCIES, formatMoney, formatQty } from "@/lib/format";
 import { useToast } from "@/components/Toast";
 import type { ShipmentInput } from "./actions";
 import type { ReadyLine } from "./ready";
@@ -273,7 +273,7 @@ export default function ShipmentBuilder({
       </details>
 
       <div className="card flex items-center justify-between bg-brand-50">
-        <span className="text-sm font-semibold text-brand-900">{totals.count} line{totals.count === 1 ? "" : "s"} · {totals.metres} mtr{totals.pieces ? ` · ${totals.pieces} pcs` : ""}</span>
+        <span className="text-sm font-semibold text-brand-900">{totals.count} line{totals.count === 1 ? "" : "s"} · {formatQty(totals.metres)} mtr{totals.pieces ? ` · ${totals.pieces} pcs` : ""}</span>
         <span className="text-lg font-bold text-brand-900">{formatMoney(totals.value, currency)}</span>
       </div>
 

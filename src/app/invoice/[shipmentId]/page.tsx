@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, formatQty } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import DocPrintBar from "@/components/DocPrintBar";
@@ -125,7 +125,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
                   </div>
                 </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-center">{it.product.design?.hsnCode || "—"}</td>
-                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{it.quantity} {it.unit}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatQty(it.quantity)} {it.unit}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right">{it.pieces ?? "—"}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(it.rate, shipment.currency)}</td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(it.quantity * it.rate, shipment.currency)}</td>
@@ -144,8 +144,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
 
         {(totalNet > 0 || shipment.grossWeight != null) && (
           <p className="mt-2 text-xs text-gray-700">
-            {totalNet > 0 ? <>Net weight: <span className="font-medium">{totalNet} kg</span></> : null}
-            {shipment.grossWeight != null ? <>{totalNet > 0 ? "  ·  " : ""}Gross weight: <span className="font-medium">{shipment.grossWeight} kg</span></> : null}
+            {totalNet > 0 ? <>Net weight: <span className="font-medium">{formatQty(totalNet)} kg</span></> : null}
+            {shipment.grossWeight != null ? <>{totalNet > 0 ? "  ·  " : ""}Gross weight: <span className="font-medium">{formatQty(shipment.grossWeight)} kg</span></> : null}
           </p>
         )}
 

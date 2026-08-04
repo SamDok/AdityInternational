@@ -13,6 +13,18 @@ export function formatMoney(amount: number, currency: string): string {
   }
 }
 
+// Clean a quantity/weight of binary floating-point noise numerically
+// (11.600000000000001 → 11.6). Use at the source of any subtraction/sum.
+export function roundQty(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+// Same, but as a display string (drops trailing zeros): 11.600000000000001 → "11.6".
+export function formatQty(n: number): string {
+  if (n == null || isNaN(n)) return "0";
+  return String(roundQty(n));
+}
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   // Dates are entered as calendar dates (YYYY-MM-DD → UTC midnight); format in UTC

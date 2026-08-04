@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, formatQty } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 import ReceiveForm from "../ReceiveForm";
 import ToggleButton from "../../products/ToggleButton";
@@ -86,13 +86,13 @@ export default async function JobPage({ params, searchParams }: { params: Promis
                       ) : it.product.name}
                     </p>
                     {it.pieces && it.perPieceQty != null && (
-                      <p className="mt-1 text-sm text-gray-500">{it.pieces} pcs × {it.perPieceQty} {it.unit} = {it.qtyOrdered} {it.unit}</p>
+                      <p className="mt-1 text-sm text-gray-500">{it.pieces} pcs × {formatQty(it.perPieceQty)} {it.unit} = {formatQty(it.qtyOrdered)} {it.unit}</p>
                     )}
                     <p className="mt-1 text-sm text-gray-500">
                       {it.pieces != null
-                        ? `${it.piecesReceived}/${it.pieces} pcs received · ${it.qtyReceived} ${it.unit}`
-                        : `${it.qtyReceived}/${it.qtyOrdered} ${it.unit} received`}
-                      {it.weightReceived > 0 ? ` · ${it.weightReceived} kg` : ""}
+                        ? `${it.piecesReceived}/${it.pieces} pcs received · ${formatQty(it.qtyReceived)} ${it.unit}`
+                        : `${formatQty(it.qtyReceived)}/${formatQty(it.qtyOrdered)} ${it.unit} received`}
+                      {it.weightReceived > 0 ? ` · ${formatQty(it.weightReceived)} kg` : ""}
                       {it.rate != null ? ` · ${formatMoney(it.rate, job.currency)}/${it.unit}` : ""}
                     </p>
                     {it.dueDate && <p className="mt-0.5 text-sm text-gray-500">Due by {formatDate(it.dueDate)}</p>}
