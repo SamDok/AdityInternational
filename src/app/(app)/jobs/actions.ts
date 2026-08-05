@@ -206,6 +206,72 @@ export async function cancelJob(id: string) {
   revalidatePath("/jobs");
 }
 
+// Close a short-delivered job: the vendor won't send the rest, so treat what
+// arrived as final (keeps whatever's in stock, stops it showing as outstanding
+// in procurement / due-soon). Only meaningful for an open or partial job.
+export async function closeJobShort(id: string) {
+  await requireUser();
+  const job = await prisma.job.findUnique({ where: { id }, select: { status: true } });
+  if (!job) return { error: "Job not found." };
+  if (job.status === "CANCELLED") return { error: "This job is cancelled." };
+  if (job.status === "RECEIVED") return { error: "This job is already complete." };
+  await prisma.job.update({ where: { id }, data: { status: "RECEIVED" } });
+  revalidatePath(`/jobs/${id}`);
+  revalidatePath("/jobs");
+  revalidatePath("/procurement");
+  revalidatePath("/");
+}
+
+// Record a quality rejection: goods already received are found defective and
+// sent back. Stock goes down, the job's received total drops (so what we owe the
+// vendor falls with it), and the line reopens for a fresh delivery.
+export async function recordRejection(jobId: string, lines: { itemId: string; qty: number; pieces?: number | null }[]) {
+  await requireUser();
+  const job = await prisma.job.findUnique({ where: { id: jobId }, include: { items: true } });
+  if (!job) return { error: "Job not found." };
+  if (job.status === "CANCELLED") return { error: "This job is cancelled." };
+
+  const byId = new Map(job.items.map((it) => [it.id, it]));
+  const work = lines
+    .map((l) => ({ it: byId.get(l.itemId), qty: l.qty, pieces: l.pieces ?? null }))
+    .filter((w): w is { it: NonNullable<typeof w.it>; qty: number; pieces: number | null } => !!w.it && w.qty > 0);
+  if (work.length === 0) return { error: "Enter a quantity to reject." };
+  for (const w of work) {
+    if (w.qty > w.it.qtyReceived + 1e-9) return { error: `Can't reject more than the ${w.it.qtyReceived} received on a line.` };
+  }
+
+  const userId = (await getCurrentUser())?.id ?? null;
+  const moves: StockMove[] = [];
+  const ops = [];
+  for (const w of work) {
+    const frac = w.it.qtyReceived > 0 ? w.qty / w.it.qtyReceived : 0;
+    const weightBack = Math.round(w.it.weightReceived * frac * 1000) / 1000;
+    const piecesBack = w.pieces ?? (w.it.piecesReceived ? Math.round(w.it.piecesReceived * frac) : 0);
+    ops.push(prisma.jobItem.update({
+      where: { id: w.it.id },
+      data: {
+        qtyReceived: { decrement: w.qty },
+        piecesReceived: { decrement: piecesBack },
+        weightReceived: { decrement: weightBack },
+      },
+    }));
+    moves.push({ productId: w.it.productId, delta: -w.qty, pieces: piecesBack ? -piecesBack : null, weight: weightBack ? -weightBack : null, reason: "VENDOR_REJECT", jobId, userId });
+  }
+  await applyMovements(moves);
+  await prisma.$transaction(ops);
+
+  const items = await prisma.jobItem.findMany({ where: { jobId } });
+  const allDone = items.every((i) => (i.pieces != null ? i.piecesReceived >= i.pieces : i.qtyReceived >= i.qtyOrdered));
+  const anyReceived = items.some((i) => i.piecesReceived > 0 || i.qtyReceived > 0);
+  await prisma.job.update({ where: { id: jobId }, data: { status: allDone ? "RECEIVED" : anyReceived ? "PARTIAL" : "OPEN" } });
+
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/jobs");
+  revalidatePath("/products");
+  revalidatePath("/money");
+  return { ok: true };
+}
+
 export async function deleteJob(id: string) {
   await requireUser();
   if (!(await isOwner())) return { error: "Only the owner can delete jobs." };

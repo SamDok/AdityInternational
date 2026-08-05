@@ -7,6 +7,7 @@ import { z } from "zod";
 import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { financialYearLabel } from "@/lib/jobNumber";
+import { roundQty } from "@/lib/format";
 
 const nullableStr = () => z.string().optional().nullable();
 
@@ -241,6 +242,59 @@ export async function updateShipmentDetails(id: string, input: unknown) {
   revalidatePath(`/shipments/${id}`);
   revalidatePath(`/invoice/${id}`);
   revalidatePath("/money");
+  return { ok: true };
+}
+
+// Record a customer return: goods come back on one or more lines. Stock goes
+// back up, the order line's shipped total drops, and the shipment line shrinks —
+// so the invoice value (and the customer's receivable) falls by the returned
+// amount. A fully returned line is left at zero, not deleted, for the record.
+export async function recordReturn(shipmentId: string, lines: { itemId: string; qty: number; pieces?: number | null }[]) {
+  await requireUser();
+  const shipment = await prisma.shipment.findUnique({ where: { id: shipmentId }, include: { items: true } });
+  if (!shipment) return { error: "Shipment not found." };
+  if (shipment.status === "CANCELLED") return { error: "This shipment is cancelled." };
+
+  const byId = new Map(shipment.items.map((it) => [it.id, it]));
+  const work = lines
+    .map((l) => ({ it: byId.get(l.itemId), qty: l.qty, pieces: l.pieces ?? null }))
+    .filter((w): w is { it: NonNullable<typeof w.it>; qty: number; pieces: number | null } => !!w.it && w.qty > 0);
+  if (work.length === 0) return { error: "Enter a quantity to return." };
+  for (const w of work) {
+    if (w.qty > w.it.quantity + 1e-9) return { error: `Can't return more than the ${w.it.quantity} shipped on a line.` };
+  }
+
+  const userId = (await getCurrentUser())?.id ?? null;
+  const moves: StockMove[] = [];
+  const ops = [];
+  for (const w of work) {
+    const frac = w.it.quantity > 0 ? w.qty / w.it.quantity : 0;
+    const weightBack = roundQty(w.it.netWeight * frac);
+    const piecesBack = w.pieces ?? (w.it.pieces ? Math.round(w.it.pieces * frac) : null);
+    // Shrink the shipment line (invoice value falls with it).
+    ops.push(prisma.shipmentItem.update({
+      where: { id: w.it.id },
+      data: {
+        quantity: { decrement: w.qty },
+        netWeight: { decrement: weightBack },
+        ...(piecesBack ? { pieces: { decrement: piecesBack } } : {}),
+      },
+    }));
+    // Reverse the order line's shipped totals.
+    ops.push(prisma.orderItem.update({
+      where: { id: w.it.orderItemId },
+      data: { shippedQty: { decrement: w.qty }, shippedWeight: { decrement: weightBack } },
+    }));
+    moves.push({ productId: w.it.productId, delta: w.qty, pieces: piecesBack, weight: weightBack || null, reason: "CUSTOMER_RETURN", orderId: null, shipmentId, userId });
+  }
+  await applyMovements(moves);
+  await prisma.$transaction(ops);
+
+  revalidatePath(`/shipments/${shipmentId}`);
+  revalidatePath("/orders");
+  revalidatePath("/products");
+  revalidatePath("/money");
+  revalidatePath("/");
   return { ok: true };
 }
 

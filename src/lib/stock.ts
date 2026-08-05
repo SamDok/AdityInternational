@@ -5,7 +5,7 @@ export type StockMove = {
   delta: number; // + in / - out (metres)
   pieces?: number | null; // pieces moved in this event
   weight?: number | null; // weight (kg) moved in this event
-  reason: "JOB_RECEIVE" | "ORDER_SHIP" | "ORDER_UNSHIP" | "MANUAL_ADJUST";
+  reason: "JOB_RECEIVE" | "ORDER_SHIP" | "ORDER_UNSHIP" | "MANUAL_ADJUST" | "CUSTOMER_RETURN" | "VENDOR_REJECT";
   orderId?: string | null;
   jobId?: string | null;
   shipmentId?: string | null;

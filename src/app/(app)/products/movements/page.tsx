@@ -12,6 +12,8 @@ const REASON_LABEL: Record<string, string> = {
   ORDER_SHIP: "Shipped on order",
   ORDER_UNSHIP: "Shipment reversed",
   MANUAL_ADJUST: "Manual adjustment",
+  CUSTOMER_RETURN: "Customer return",
+  VENDOR_REJECT: "Rejected to vendor",
 };
 
 export default async function MovementsPage() {

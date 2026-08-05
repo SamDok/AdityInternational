@@ -5,9 +5,10 @@ import PageHeader from "@/components/PageHeader";
 import { formatMoney, formatDate, formatQty } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 import ReceiveForm from "../ReceiveForm";
+import ReturnForm from "../../shipments/ReturnForm";
 import ToggleButton from "../../products/ToggleButton";
 import DeleteButton from "@/components/DeleteButton";
-import { cancelJob, deleteJob } from "../actions";
+import { cancelJob, deleteJob, closeJobShort, recordRejection } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,9 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const s = STATUS[job.status] ?? { label: job.status, cls: "bg-gray-100 text-gray-700" };
   const total = job.items.reduce((sum, it) => sum + (it.rate ?? 0) * it.qtyOrdered, 0);
   const canReceive = job.status === "OPEN" || job.status === "PARTIAL";
+  const anyReceived = job.items.some((it) => it.qtyReceived > 0);
+  // A partly-received job the vendor won't finish can be closed short.
+  const canCloseShort = job.status === "PARTIAL";
 
   return (
     <div>
@@ -119,7 +123,21 @@ export default async function JobPage({ params, searchParams }: { params: Promis
           </section>
         )}
 
+        {job.status !== "CANCELLED" && anyReceived && (
+          <ReturnForm
+            items={job.items.map((it) => ({ id: it.id, label: it.product.name, available: it.qtyReceived, unit: it.unit }))}
+            action={recordRejection.bind(null, job.id)}
+            buttonLabel="Reject received goods (quality)"
+            heading="Quality rejection — sending goods back"
+            availableLabel="received"
+            toastMessage="Rejection recorded — stock removed"
+          />
+        )}
+
         <div className="space-y-2 pt-2">
+          {canCloseShort && (
+            <ToggleButton action={closeJobShort.bind(null, job.id)} label="Close job (short-delivered)" toastMessage="Job closed" />
+          )}
           {job.status !== "CANCELLED" && job.status !== "RECEIVED" && (
             <ToggleButton action={cancelJob.bind(null, job.id)} label="Cancel job" toastMessage="Job cancelled" />
           )}

@@ -6,7 +6,8 @@ import { formatDate, formatMoney, formatQty } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import ToggleButton from "../../products/ToggleButton";
 import ShipmentDetailsForm from "../ShipmentDetailsForm";
-import { cancelShipment, updateShipmentDetails } from "../actions";
+import ReturnForm from "../ReturnForm";
+import { cancelShipment, updateShipmentDetails, recordReturn } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
     where: { id },
     include: {
       customer: true,
-      items: { include: { orderItem: { select: { order: { select: { id: true, number: true } } } } }, orderBy: { createdAt: "asc" } },
+      items: { include: { product: { select: { name: true } }, orderItem: { select: { order: { select: { id: true, number: true } } } } }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!shipment) notFound();
@@ -105,6 +106,17 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
               eInvoiceIrn: shipment.eInvoiceIrn, ewayBillNo: shipment.ewayBillNo, notes: shipment.notes,
             }}
             action={updateShipmentDetails.bind(null, shipment.id)}
+          />
+        )}
+
+        {!cancelled && (
+          <ReturnForm
+            items={shipment.items.map((it) => ({ id: it.id, label: it.description || it.product?.name || "Line", available: it.quantity, unit: it.unit }))}
+            action={recordReturn.bind(null, shipment.id)}
+            buttonLabel="Record a return"
+            heading="Customer return — goods coming back"
+            availableLabel="shipped"
+            toastMessage="Return recorded — stock restored"
           />
         )}
 
