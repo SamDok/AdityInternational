@@ -118,16 +118,18 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
   `src/app/(app)/customers/actions.ts`).
 - **🟢 Price history / effective dates.** Keep past prices instead of
   overwriting on the `CustomerPrice` upsert.
-- **🟢 Colour-based reporting** once Reports exists (cost/margin by colour).
+- **🟢 Colour-based reporting** (cost/margin by colour) on the Reports page,
+  which now exists (`src/app/(app)/reports/page.tsx`).
 - Product CSV import/export, images, low-stock alerts, bulk-width entry,
   duplicate-design, quick stock adjust, catalogue filters and a searchable order
   picker are **built**. Remaining:
   - **🟢 Object storage for images** (beyond base64-in-DB) once photos get large
     or numerous — swap `Design.imageData` for an uploaded URL + a storage bucket.
-  - **🟡 Global recent-movements view** — the per-variant stock history is built
-    (shown on `products/width/[id]/edit`, powered by the `StockMovement` log). A
-    catalogue-wide "recent stock movements" feed and a per-variant stock report
-    would round it out.
+  - The catalogue-wide **recent stock movements** feed is now built
+    (`src/app/(app)/products/movements/page.tsx`, powered by the `StockMovement`
+    log, including the new `CUSTOMER_RETURN` / `VENDOR_REJECT` reasons). A
+    **🟢 per-variant stock report** (opening/closing over a date range) would
+    round it out.
   - **🟢 Reserve stock on Confirmed** — stock now leaves **per shipment**
     (`recordShipment` in `src/app/(app)/orders/actions.ts`). If the workflow ever
     needs soft allocation, add a "reserved" concept that holds stock from Confirmed
@@ -137,38 +139,75 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
 
 ## Ties to future modules (parked until that module exists)
 
-### 🔴 Credit-limit enforcement & outstanding balance
-`creditLimit` and `defaultDiscount` are **stored and displayed** but not yet
-*acted on*. When invoicing/payments exist: compute each customer's outstanding
-balance, warn when a new order would exceed their credit limit, and auto-apply
-`defaultDiscount` to new order lines. Belongs with the **Invoicing** phase.
+The **Money** (receivables + payables, `src/lib/money.ts`, `src/app/(app)/money/`),
+**Reports** (`src/app/(app)/reports/page.tsx`), **GST/invoice** (`src/lib/tax.ts`,
+`src/lib/words.ts`, discount + freight/insurance + FX + export-doc fields on the
+commercial invoice), and **returns/QC/short-close** (`recordReturn`,
+`recordRejection`, `closeJobShort`) phases are now **built**. Also built:
+outstanding balance + a soft credit-limit warning, auto-applied `defaultDiscount`,
+vendor payables/ledger, the named-dispatch Shipment with packing list &
+commercial invoice, and the catalogue-wide stock-movements feed
+(`src/app/(app)/products/movements/page.tsx`). Remaining follow-ups:
 
-### 🟡 Vendor payables & the rest of inventory
-Vendors (kaarigars/suppliers), design sourcing, job-work/purchase **receiving
-(stock-in)**, **item-wise order shipping** (per-line `shippedQty`, stock out per
-shipment via `recordShipment`, derived Stage + fulfillment, full `StockMovement`
-audit log), and **auto-generated procurement** (a confirmed order's shortfall
-becomes one job/PO per kaarigar/supplier via `planProcurement` +
-`generateProcurement`, linked back through `Job.orderId`) are built — the full
-make→receive→ship loop closes. Follow-ups:
-- **Regenerate granularity** — `generateProcurement` tops up only the uncovered
-  shortfall (idempotent), but there's no UI to edit an auto-job before it's saved
-  or to split a group across vendors; both are manual for now.
-- **Vendor payables/ledger** — total owed per vendor from job `rate × qty`,
-  payments against it, and statements (pairs with the Invoicing phase).
-- **Per-shipment record / packing list** — currently shipments bump `shippedQty`
-  and the ledger but aren't grouped into a named dispatch; a packing-list / partial
-  commercial-invoice document would build on this.
-- **Finer shipment correction** — `unshipLine` resets a line to 0; a "reduce by N"
-  correction would be gentler.
-- **Push job cost into `Product.costPrice`** (making charge + base material).
-- **Base material issued to a kaarigar** (material out) if you want to track the
-  fabric you hand over.
-- **Edit a job** (currently create + receive + cancel/delete only).
+- **🟡 Hard credit-limit block at order creation.** Today the customer page only
+  *warns* when outstanding exceeds `creditLimit`. Optionally block (or require
+  override) when a new **order/shipment** would push them over — guard in
+  `createOrder` / `createShipment`.
+- **🟢 Regenerate granularity** — `generateProcurement` tops up only the
+  uncovered shortfall (idempotent), but there's no UI to edit an auto-job before
+  it's saved or to split a group across vendors; both are manual for now.
+- **🟡 Finer shipment correction** — a full "reduce a shipment line by N" as a
+  gentler alternative to `cancelShipment`; `recordReturn` covers the goods-back
+  case, but a plain quantity correction (no stock return) is still manual.
+- **🟢 Push job cost into `Product.costPrice`** (making charge + base material),
+  so margins use real landed cost instead of the standing cost price.
+- **🟢 Base material issued to a kaarigar** (material out) if you want to track
+  the fabric you hand over.
 
-### Salesperson performance
-With orders + invoicing, report sales grouped by `salespersonId`. Belongs with
-the **Reports** phase.
+### 🟡 Ranked reports (top customers / top designs)
+**Why:** The Reports dashboard shows per-currency totals but no rankings.
+**Where:** `src/app/(app)/reports/page.tsx`. Held back because ranking sales
+**across currencies** is misleading without a common unit — do it once an FX/base-
+currency conversion exists (see below), or rank **within** each currency.
+**Effort:** small once the currency question is settled.
+
+### 🟢 Salesperson performance
+With orders + invoicing in place, report sales grouped by `salespersonId` on the
+Reports page. **Effort:** small–medium.
+
+---
+
+## Money & trade documents (deferred from the invoicing/returns work)
+
+### 🟡 FX-based cross-currency margin & a base currency
+**Why:** Order margin (`src/app/(app)/orders/[id]/page.tsx`) only shows a blended
+%/amount when cost and sale are the **same currency**; export orders (INR cost,
+USD/EUR sale) show cost and revenue side by side but no margin. The shipment now
+carries an `fxRate` — wire it (and/or a company base currency) so export margins,
+and cross-currency report/ranking totals, can be expressed in one unit.
+**Where:** margin block in the order page; `src/lib/money.ts`; Reports page.
+**Effort:** medium.
+
+### 🟡 Formal credit note for returns
+**Why:** `recordReturn` reduces the invoice value directly (fine for a business
+this size). Some buyers require a **numbered credit note** document instead.
+**Where:** a `CreditNote` model + FY numbering (mirror `shipmentDocNo` in
+`src/lib/jobNumber.ts`) + a print page like `src/app/invoice/[shipmentId]`.
+**Effort:** medium.
+
+### 🟢 Real e-invoice (IRN) / e-way-bill generation
+**Why:** We **store and print** `eInvoiceIrn` / `ewayBillNo` (entered by hand),
+but don't generate them. Full compliance means calling a GSP/IRP API to mint the
+IRN + signed QR and the e-way bill.
+**Where:** a server integration + fields already on `Shipment`. **Blocked on**
+choosing a GSP provider and credentials. **Effort:** large (external integration).
+
+### 🟢 Trade-document attachments
+**Why:** Attach the customer's PO, the LC copy, and the B/L / shipping-bill scans
+to an **order or shipment** (the Customers section already lists KYC attachments —
+same infra). **Blocked on** an object-storage provider (app FS is ephemeral).
+**Where:** an `Attachment` model + upload UI on order/shipment detail.
+**Effort:** large (infra decision required).
 
 ---
 
