@@ -334,65 +334,116 @@ export async function recordShipment(orderId: string, lines: { itemId: string; s
   return { ok: true };
 }
 
-// Review-then-generate: create one job (kaarigar) / purchase order (supplier) per
-// vendor for the order's shortfall. Recomputes the plan server-side so it can't be
-// tampered with, and tops up only what isn't already covered by stock or existing
-// jobs for this order.
-export async function generateProcurement(orderId: string) {
+// One job the caller wants to create at the review step: a vendor + kind, and the
+// products (with an optionally-overridden rate) to make/buy from them.
+export type GenJob = { kind: "JOB_WORK" | "PURCHASE"; vendorId: string; lines: { productId: string; rate: number | null }[] };
+
+// Review-then-generate: create one job (kaarigar) / purchase order (supplier) for
+// the order's shortfall. Quantities always come from the SERVER-side shortfall (so
+// the client can't inflate them); the client may only choose the vendor and rate
+// per group. With no `jobs` argument it falls back to the design-assigned vendors.
+export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
   await requireUser();
   const ord = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
   if (!ord) return { error: "Order not found." };
   if (ord.status !== "CONFIRMED") return { error: "Confirm the order before generating jobs." };
   const plan = await planProcurement(orderId);
   if (!plan) return { error: "Order not found." };
-  if (plan.groups.length === 0) {
+
+  // Every short line available to procure, indexed by product. A group's lines are
+  // the true source of quantity/pieces/due — the client only names vendor + rate.
+  type Proc = (typeof plan.groups)[number]["lines"][number];
+  const shortByProduct = new Map<string, Proc[]>();
+  for (const g of plan.groups) for (const l of g.lines) {
+    if (l.shortfall <= 1e-9) continue;
+    const arr = shortByProduct.get(l.productId) ?? [];
+    arr.push(l);
+    shortByProduct.set(l.productId, arr);
+  }
+
+  // Default to the design-assigned grouping when the caller doesn't review.
+  const chosen: GenJob[] = jobs && jobs.length
+    ? jobs
+    : plan.groups.map((g) => ({ kind: g.kind, vendorId: g.vendorId, lines: g.lines.map((l) => ({ productId: l.productId, rate: l.rate })) }));
+  if (chosen.length === 0) {
     return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
   }
 
+  const vendorIds = [...new Set(chosen.map((j) => j.vendorId))];
+  const validVendor = new Set((await prisma.vendor.findMany({ where: { id: { in: vendorIds }, archived: false }, select: { id: true } })).map((v) => v.id));
+
   const now = new Date();
-  const createdIds: string[] = [];
-  for (const g of plan.groups) {
-    const { number, seq, fyLabel } = await allocateJobNumbers(g.kind, now);
-    const job = await prisma.job.create({
+  let count = 0;
+  for (const j of chosen) {
+    if (!validVendor.has(j.vendorId)) return { error: "Pick a valid vendor for every job." };
+    const items = [];
+    let currency = "INR";
+    const dues: Date[] = [];
+    for (const chosenLine of j.lines) {
+      const procs = shortByProduct.get(chosenLine.productId);
+      if (!procs) continue; // already consumed or no longer short
+      for (const l of procs) {
+        const per = l.perPieceQty && l.perPieceQty > 0 ? l.perPieceQty : null;
+        const exact = per != null && Math.abs(l.shortfall / per - Math.round(l.shortfall / per)) < 1e-9;
+        const pieces = exact ? Math.round(l.shortfall / per!) : null;
+        currency = l.currency;
+        if (l.dueDate) dues.push(l.dueDate);
+        items.push({
+          productId: l.productId,
+          note: l.description || null, // carry the order line's colour / spec onto the job
+          pieces,
+          perPieceQty: pieces ? per : l.shortfall,
+          qtyOrdered: l.shortfall,
+          rate: chosenLine.rate ?? l.rate ?? null,
+          unit: l.unit,
+        });
+      }
+      shortByProduct.delete(chosenLine.productId); // don't create the same product twice
+    }
+    if (items.length === 0) continue;
+    const { number, seq, fyLabel } = await allocateJobNumbers(j.kind, now);
+    await prisma.job.create({
       data: {
-        number,
-        seq,
-        fyLabel,
-        vendorId: g.vendorId,
-        kind: g.kind,
+        number, seq, fyLabel,
+        vendorId: j.vendorId,
+        kind: j.kind,
         status: "OPEN",
-        currency: g.lines[0]?.currency ?? "INR",
+        currency,
         issueDate: now,
-        dueDate: g.jobDueDate ?? null,
+        dueDate: dues.length ? dues.reduce((a, b) => (a < b ? a : b)) : null,
         orderId,
         notes: `Auto-generated from order #${plan.orderNumber}`,
-        items: {
-          create: g.lines.map((l) => {
-            // Keep the job piece-wise when the shortfall is a whole number of the
-            // order line's pieces; otherwise fall back to a loose quantity.
-            const per = l.perPieceQty && l.perPieceQty > 0 ? l.perPieceQty : null;
-            const exact = per != null && Math.abs(l.shortfall / per - Math.round(l.shortfall / per)) < 1e-9;
-            const pieces = exact ? Math.round(l.shortfall / per!) : null;
-            return {
-              productId: l.productId,
-              note: l.description || null, // carry the order line's colour / spec onto the job
-              pieces,
-              perPieceQty: pieces ? per : l.shortfall, // loose → perPieceQty holds the total
-              qtyOrdered: l.shortfall,
-              rate: l.rate ?? null,
-              unit: l.unit,
-            };
-          }),
-        },
+        items: { create: items },
       },
     });
-    createdIds.push(job.id);
+    count++;
   }
+  if (count === 0) return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/jobs");
+  revalidatePath("/procurement");
   revalidatePath("/");
-  return { ok: true, count: createdIds.length };
+  return { ok: true, count };
+}
+
+// Assign a vendor (and derive its sourcing) to a product's design, straight from
+// the procurement view — so an "unassigned" line becomes generable without hunting
+// through the catalogue. Sets the design's kaarigar/supplier + sourcing type.
+export async function assignDesignVendor(productId: string, vendorId: string) {
+  await requireUser();
+  const [product, vendor] = await Promise.all([
+    prisma.product.findUnique({ where: { id: productId }, select: { designId: true } }),
+    prisma.vendor.findUnique({ where: { id: vendorId }, select: { id: true, kind: true } }),
+  ]);
+  if (!product?.designId) return { error: "This product has no design to assign a vendor to." };
+  if (!vendor) return { error: "Vendor not found." };
+  const sourcingType = vendor.kind === "SUPPLIER" ? "TRADING" : "JOB_WORK";
+  await prisma.design.update({ where: { id: product.designId }, data: { vendorId, sourcingType } });
+  revalidatePath("/orders");
+  revalidatePath("/procurement");
+  revalidatePath("/products");
+  return { ok: true };
 }
 
 // Reduce a line's shipped quantity by `amount` (a correction), adding that much

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import StagePicker from "../StagePicker";
 import DropLineButton from "../DropLineButton";
-import GenerateProcurement from "../GenerateProcurement";
+import GeneratePanel from "../GeneratePanel";
 import { planProcurement } from "../procurement";
 import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty } from "@/lib/format";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
@@ -54,6 +54,8 @@ export default async function OrderDetailPage({
 
   const plan = await planProcurement(id);
   const openJobCount = plan?.existingJobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL").length ?? 0;
+  // Vendors offered in the generate/assign controls (any active kaarigar or supplier).
+  const vendors = await prisma.vendor.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
 
   // Products still being made on an open job for this order (drives the per-line
   // "Can't make this" toast wording).
@@ -178,34 +180,16 @@ export default async function OrderDetailPage({
               </div>
             )}
 
-            {order.status === "CONFIRMED" && plan.groups.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs text-gray-500">{plan.existingJobs.length > 0 ? "Still to make / buy:" : "To fulfil this order, make / buy the shortfall:"}</p>
-                {plan.groups.map((g) => (
-                  <div key={g.vendorId + g.kind} className="rounded-xl bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {g.vendorName}
-                      <span className="text-xs font-normal text-gray-400"> · {g.kind === "JOB_WORK" ? "Job work" : "Purchase"}{g.jobDueDate ? ` · due ${formatDate(g.jobDueDate)}` : ""}</span>
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {g.lines.map((l) => (
-                        <li key={l.productId} className="text-xs text-gray-600">
-                          {l.name} — <span className="font-medium text-gray-800">{l.shortfall} {l.unit}</span>
-                          <span className="text-gray-400"> (need {l.needed}, {l.available} in stock)</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-                <GenerateProcurement orderId={order.id} label={plan.existingJobs.length > 0 ? "Generate remaining jobs" : "Generate jobs & purchase orders"} />
-              </div>
+            {order.status === "CONFIRMED" && (plan.groups.length > 0 || plan.unassigned.length > 0) && (
+              <GeneratePanel
+                orderId={order.id}
+                groups={plan.groups}
+                unassigned={plan.unassigned}
+                vendors={vendors}
+                existingCount={plan.existingJobs.length}
+              />
             )}
 
-            {plan.unassigned.length > 0 && (
-              <p className="text-xs text-amber-600">
-                {plan.unassigned.length} line{plan.unassigned.length > 1 ? "s" : ""} need a kaarigar/supplier set on the design (sourcing) before a job can be generated.
-              </p>
-            )}
             {order.status === "CONFIRMED" && plan.groups.length === 0 && plan.existingJobs.length === 0 && plan.unassigned.length === 0 && (
               <p className="text-sm text-gray-500">Everything is covered by stock — no jobs needed.</p>
             )}
