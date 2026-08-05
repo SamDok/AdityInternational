@@ -1,8 +1,11 @@
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty, roundMoney } from "@/lib/format";
+import { formatMoney, formatDate, formatQty } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
+import { computeTax } from "@/lib/tax";
+import { amountInWords } from "@/lib/words";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import DocPrintBar from "@/components/DocPrintBar";
 
@@ -13,7 +16,16 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
   const { shipmentId } = await params;
   const shipment = await prisma.shipment.findUnique({
     where: { id: shipmentId },
-    include: { customer: true, items: { orderBy: { createdAt: "asc" }, include: { product: { include: { design: true } } } } },
+    include: {
+      customer: true,
+      items: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          product: { include: { design: true } },
+          orderItem: { select: { order: { select: { number: true } } } },
+        },
+      },
+    },
   });
   if (!shipment) notFound();
 
@@ -22,10 +34,31 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
     prisma.bankAccount.findUnique({ where: { currency: shipment.currency } }),
   ]);
 
-  const total = shipment.items.reduce((s, i) => s + roundMoney(i.quantity * i.rate), 0);
   const cancelled = shipment.status === "CANCELLED";
   const totalPieces = shipment.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
   const totalNet = shipment.items.reduce((s, i) => s + i.netWeight, 0);
+
+  // GST: per-line rate from the design (fallback to the company default). Exports
+  // (non-INR) come back zero-rated with the LUT declaration.
+  const tax = computeTax({
+    currency: shipment.currency,
+    sellerGstin: company.gstin,
+    buyerGstin: shipment.billToTaxId,
+    lines: shipment.items.map((i) => ({
+      amount: i.quantity * i.rate,
+      gstRate: i.product.design?.gstRate ?? company.defaultGstRate ?? 0,
+    })),
+  });
+  const grandInWords = amountInWords(tax.grandTotal, shipment.currency);
+  const hasTax = tax.tax > 0;
+
+  // The customer orders this dispatch draws from, for the buyer to reconcile.
+  const orderRefs = [...new Set(shipment.items.map((i) => i.orderItem?.order?.number).filter(Boolean))].sort(
+    (a, b) => (a as number) - (b as number),
+  );
+
+  const originCountry = company.country || "India";
+  const destCountry = shipment.destinationCountry;
 
   const billToName = shipment.billToName || shipment.customer.company || shipment.customer.name;
   const billToAddress = shipment.billToAddress || shipment.customer.address;
@@ -105,6 +138,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
 
         {shipment.paymentTerms && <p className="mt-3 text-xs"><span className="font-semibold">Payment terms:</span> {shipment.paymentTerms}</p>}
 
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700">
+          {orderRefs.length > 0 && (
+            <span><span className="text-gray-500">Buyer&apos;s order{orderRefs.length > 1 ? "s" : ""}:</span> {orderRefs.map((n) => `#${n}`).join(", ")}</span>
+          )}
+          <span><span className="text-gray-500">Country of origin:</span> {originCountry}</span>
+          {destCountry && <span><span className="text-gray-500">Final destination:</span> {destCountry}</span>}
+        </div>
+
         <table className="mt-4 w-full border-collapse text-xs">
           <thead>
             <tr className="bg-gray-100 text-left">
@@ -143,20 +184,59 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
           </tbody>
           <tfoot>
             <tr className="font-semibold">
-              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>Total</td>
+              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>{hasTax ? "Taxable value" : "Total"}</td>
               <td className="border border-gray-300 px-2 py-1.5 text-right">{totalPieces || "—"}</td>
               <td className="border border-gray-300 px-2 py-1.5"></td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(total, shipment.currency)}</td>
+              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, shipment.currency)}</td>
             </tr>
           </tfoot>
         </table>
 
-        {(totalNet > 0 || shipment.grossWeight != null) && (
-          <p className="mt-2 text-xs text-gray-700">
-            {totalNet > 0 ? <>Net weight: <span className="font-medium">{formatQty(totalNet)} kg</span></> : null}
-            {shipment.grossWeight != null ? <>{totalNet > 0 ? "  ·  " : ""}Gross weight: <span className="font-medium">{formatQty(shipment.grossWeight)} kg</span></> : null}
-          </p>
-        )}
+        <div className="mt-3 flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="text-xs text-gray-700">
+            {(totalNet > 0 || shipment.grossWeight != null) && (
+              <p>
+                {totalNet > 0 ? <>Net weight: <span className="font-medium">{formatQty(totalNet)} kg</span></> : null}
+                {shipment.grossWeight != null ? <>{totalNet > 0 ? "  ·  " : ""}Gross weight: <span className="font-medium">{formatQty(shipment.grossWeight)} kg</span></> : null}
+              </p>
+            )}
+            {tax.note && <p className="mt-1 font-medium text-gray-800">{tax.note}</p>}
+          </div>
+
+          <table className="min-w-[240px] border-collapse text-xs">
+            <tbody>
+              <tr>
+                <td className="py-0.5 pr-4 text-gray-500">Taxable value</td>
+                <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, shipment.currency)}</td>
+              </tr>
+              {tax.groups.map((g) =>
+                g.igst > 0 ? (
+                  <tr key={`i-${g.rate}`}>
+                    <td className="py-0.5 pr-4 text-gray-500">IGST @ {formatQty(g.rate)}%</td>
+                    <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(g.igst, shipment.currency)}</td>
+                  </tr>
+                ) : g.cgst > 0 || g.sgst > 0 ? (
+                  <Fragment key={`cs-${g.rate}`}>
+                    <tr>
+                      <td className="py-0.5 pr-4 text-gray-500">CGST @ {formatQty(g.rate / 2)}%</td>
+                      <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(g.cgst, shipment.currency)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-0.5 pr-4 text-gray-500">SGST @ {formatQty(g.rate / 2)}%</td>
+                      <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(g.sgst, shipment.currency)}</td>
+                    </tr>
+                  </Fragment>
+                ) : null,
+              )}
+              <tr className="border-t border-gray-300 font-bold">
+                <td className="py-1 pr-4">Grand total</td>
+                <td className="py-1 text-right whitespace-nowrap">{formatMoney(tax.grandTotal, shipment.currency)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p className="mt-2 text-xs text-gray-700"><span className="font-semibold">Amount in words:</span> {grandInWords}</p>
 
         <div className="mt-6 flex items-start justify-between gap-6">
           <div className="text-xs">

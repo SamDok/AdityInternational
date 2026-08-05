@@ -1,7 +1,10 @@
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty, roundMoney } from "@/lib/format";
+import { formatMoney, formatDate, formatQty } from "@/lib/format";
+import { computeTax } from "@/lib/tax";
+import { amountInWords } from "@/lib/words";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import PrintBar from "./PrintBar";
 
@@ -24,9 +27,22 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
     prisma.bankAccount.findUnique({ where: { currency: order.currency } }),
   ]);
 
-  const total = order.items.reduce((s, i) => s + roundMoney(i.quantity * i.rate), 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
   const cancelled = order.status === "CANCELLED";
+
+  const tax = computeTax({
+    currency: order.currency,
+    sellerGstin: company.gstin,
+    buyerGstin: order.billToTaxId,
+    lines: order.items.map((i) => ({
+      amount: i.quantity * i.rate,
+      gstRate: i.product.design?.gstRate ?? company.defaultGstRate ?? 0,
+    })),
+  });
+  const grandInWords = amountInWords(tax.grandTotal, order.currency);
+  const hasTax = tax.tax > 0;
+  const originCountry = company.country || "India";
+  const destCountry = order.customer.country;
 
   const billToName = order.billToName || order.customer.company || order.customer.name;
   const billToAddress = order.billToAddress || order.customer.address;
@@ -117,6 +133,11 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
           <p className="mt-3 text-xs"><span className="font-semibold">Payment terms:</span> {order.paymentTerms}</p>
         )}
 
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700">
+          <span><span className="text-gray-500">Country of origin:</span> {originCountry}</span>
+          {destCountry && <span><span className="text-gray-500">Final destination:</span> {destCountry}</span>}
+        </div>
+
         {/* Items */}
         <table className="mt-4 w-full border-collapse text-xs">
           <thead>
@@ -162,13 +183,52 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
           </tbody>
           <tfoot>
             <tr className="font-semibold">
-              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>Total</td>
+              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>{hasTax ? "Taxable value" : "Total"}</td>
               <td className="border border-gray-300 px-2 py-1.5 text-right">{totalPieces || "—"}</td>
               <td className="border border-gray-300 px-2 py-1.5"></td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(total, order.currency)}</td>
+              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, order.currency)}</td>
             </tr>
           </tfoot>
         </table>
+
+        <div className="mt-3 flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="text-xs text-gray-700">
+            {tax.note && <p className="font-medium text-gray-800">{tax.note}</p>}
+          </div>
+          <table className="min-w-[240px] border-collapse text-xs">
+            <tbody>
+              <tr>
+                <td className="py-0.5 pr-4 text-gray-500">Taxable value</td>
+                <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, order.currency)}</td>
+              </tr>
+              {tax.groups.map((g) =>
+                g.igst > 0 ? (
+                  <tr key={`i-${g.rate}`}>
+                    <td className="py-0.5 pr-4 text-gray-500">IGST @ {formatQty(g.rate)}%</td>
+                    <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(g.igst, order.currency)}</td>
+                  </tr>
+                ) : g.cgst > 0 || g.sgst > 0 ? (
+                  <Fragment key={`cs-${g.rate}`}>
+                    <tr>
+                      <td className="py-0.5 pr-4 text-gray-500">CGST @ {formatQty(g.rate / 2)}%</td>
+                      <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(g.cgst, order.currency)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-0.5 pr-4 text-gray-500">SGST @ {formatQty(g.rate / 2)}%</td>
+                      <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(g.sgst, order.currency)}</td>
+                    </tr>
+                  </Fragment>
+                ) : null,
+              )}
+              <tr className="border-t border-gray-300 font-bold">
+                <td className="py-1 pr-4">Grand total</td>
+                <td className="py-1 text-right whitespace-nowrap">{formatMoney(tax.grandTotal, order.currency)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p className="mt-2 text-xs text-gray-700"><span className="font-semibold">Amount in words:</span> {grandInWords}</p>
 
         {/* Bank + signature */}
         <div className="mt-6 flex items-start justify-between gap-6">

@@ -14,6 +14,7 @@ type Snapshot = {
   shipToName: string;
   shipToAddress: string;
   destinationPort: string;
+  destinationCountry: string;
   incoterms: string;
   paymentTerms: string;
 };
@@ -118,6 +119,7 @@ export default function ShipmentBuilder({
       shipToName: snap.shipToName || null,
       shipToAddress: snap.shipToAddress || null,
       destinationPort: snap.destinationPort || null,
+      destinationCountry: snap.destinationCountry || null,
       incoterms: snap.incoterms || null,
       paymentTerms: snap.paymentTerms || null,
       marksNumbers: marks || null,
@@ -263,11 +265,15 @@ export default function ShipmentBuilder({
               <input value={snap.destinationPort} onChange={(e) => setSnapField("destinationPort", e.target.value)} className="field-input" />
             </div>
             <div>
-              <label className="field-label">Incoterms</label>
-              <select value={snap.incoterms} onChange={(e) => setSnapField("incoterms", e.target.value)} className="field-input">
-                {INCOTERMS.map((t) => <option key={t} value={t}>{t || "—"}</option>)}
-              </select>
+              <label className="field-label">Destination country</label>
+              <input value={snap.destinationCountry} onChange={(e) => setSnapField("destinationCountry", e.target.value)} className="field-input" placeholder="For export docs" />
             </div>
+          </div>
+          <div>
+            <label className="field-label">Incoterms</label>
+            <select value={snap.incoterms} onChange={(e) => setSnapField("incoterms", e.target.value)} className="field-input">
+              {INCOTERMS.map((t) => <option key={t} value={t}>{t || "—"}</option>)}
+            </select>
           </div>
         </div>
       </details>

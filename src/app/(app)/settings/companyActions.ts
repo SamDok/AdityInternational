@@ -14,6 +14,7 @@ const ProfileSchema = z.object({
   legalName: str(),
   address: str(),
   gstin: str(),
+  country: str(),
   phone: str(),
   email: str(),
   website: str(),
@@ -64,10 +65,15 @@ export async function saveCompanyProfile(formData: FormData) {
   const clean = Object.fromEntries(
     Object.entries(d).map(([k, v]) => [k, v && v.length ? v : null]),
   );
+  // Default GST rate is numeric — parse separately (blank clears it).
+  const rawRate = (formData.get("defaultGstRate") as string | null)?.trim();
+  const parsedRate = rawRate ? Number(rawRate) : NaN;
+  const defaultGstRate = rawRate && !isNaN(parsedRate) && parsedRate >= 0 ? parsedRate : null;
+
   await prisma.companyProfile.upsert({
     where: { id: PROFILE_ID },
-    update: clean,
-    create: { id: PROFILE_ID, ...clean },
+    update: { ...clean, defaultGstRate },
+    create: { id: PROFILE_ID, ...clean, defaultGstRate },
   });
 
   // Per-currency bank accounts. Fields arrive namespaced as bank_<CUR>_<field>.

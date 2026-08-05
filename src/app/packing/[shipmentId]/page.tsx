@@ -69,6 +69,7 @@ export default async function PackingListPage({ params }: { params: Promise<{ sh
             <p className="font-semibold">{shipToName}</p>
             {shipToAddress && <p className="whitespace-pre-line text-xs text-gray-700">{shipToAddress}</p>}
             {shipment.destinationPort && <p className="mt-1 text-xs text-gray-700">Port of discharge: {shipment.destinationPort}</p>}
+            {shipment.destinationCountry && <p className="text-xs text-gray-700">Final destination: {shipment.destinationCountry}</p>}
           </div>
           <div className="rounded border border-gray-200 p-3">
             <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Marks &amp; Numbers</p>

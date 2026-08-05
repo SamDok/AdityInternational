@@ -20,6 +20,8 @@ model CompanyProfile {
   legalName      String?
   address        String? // multi-line billing/registered address
   gstin          String?
+  country        String? // country of origin for export docs (defaults to India)
+  defaultGstRate Float? // fallback GST % for domestic sales when a design has none
   phone          String?
   email          String?
   website        String?
@@ -149,6 +151,7 @@ model Design {
   name        String?
   composition String? // e.g. "100% Silk"
   hsnCode     String? // defaults from the category, editable
+  gstRate     Float? // GST % for domestic sales (e.g. 5 for fabric, 12 for made-ups)
   leadDays    Int? // override the type's make/procure lead time for this design
   description String?
   imageData   String? // downscaled JPEG as a base64 data URL
@@ -346,6 +349,7 @@ model Shipment {
   shipToName      String?
   shipToAddress   String?
   destinationPort String?
+  destinationCountry String? // country of final destination for export docs
   incoterms       String?
   paymentTerms    String?
 

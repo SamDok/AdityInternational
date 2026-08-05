@@ -9,6 +9,8 @@ type Profile = {
   legalName?: string | null;
   address?: string | null;
   gstin?: string | null;
+  country?: string | null;
+  defaultGstRate?: number | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;
@@ -104,12 +106,24 @@ export default function CompanyProfileForm({ initial, banks }: { initial: Profil
         </div>
         <div className="grid grid-cols-2 gap-3">
           {field("gstin", "GSTIN")}
+          {field("country", "Country", "India")}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="field-label" htmlFor="defaultGstRate">Default GST rate (%)</label>
+            <input id="defaultGstRate" name="defaultGstRate" type="number" step="0.01" min="0"
+              defaultValue={initial.defaultGstRate ?? ""} className="field-input" placeholder="e.g. 5" />
+          </div>
           {field("phone", "Phone")}
         </div>
         <div className="grid grid-cols-2 gap-3">
           {field("email", "Email")}
           {field("website", "Website")}
         </div>
+        <p className="text-xs text-gray-500">
+          GST rate is used for domestic (INR) invoices when a design has no rate of its own.
+          Exports (foreign currency) are billed zero-rated under LUT. Country sets the origin shown on export documents.
+        </p>
       </div>
 
       <div className="space-y-3">

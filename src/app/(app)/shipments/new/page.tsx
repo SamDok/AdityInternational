@@ -70,6 +70,7 @@ export default async function NewShipmentPage({
     shipToName: "",
     shipToAddress: customer.shippingAddress || "",
     destinationPort: customer.destinationPort || "",
+    destinationCountry: customer.country || "",
     incoterms: customer.incoterms || "",
     paymentTerms: customer.paymentTerms || "",
   };
