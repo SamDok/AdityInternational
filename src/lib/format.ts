@@ -19,6 +19,13 @@ export function roundQty(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
+// Round money to 2 decimals so a printed total equals the sum of the line
+// amounts shown against it (each line is displayed to 2 decimals). Sum the
+// per-line roundMoney values rather than the raw products.
+export function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 // Same, but as a display string (drops trailing zeros): 11.600000000000001 → "11.6".
 export function formatQty(n: number): string {
   if (n == null || isNaN(n)) return "0";

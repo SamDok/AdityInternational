@@ -26,10 +26,19 @@ export default async function PackingListPage({ params }: { params: Promise<{ sh
 
   const shipToName = shipment.shipToName || shipment.billToName || shipment.customer.company || shipment.customer.name;
   const shipToAddress = shipment.shipToAddress || shipment.billToAddress || shipment.customer.address;
+  const cancelled = shipment.status === "CANCELLED";
 
   return (
     <div className="min-h-screen bg-gray-100">
       <DocPrintBar backHref={`/shipments/${shipment.id}`} backLabel="Back to shipment" />
+
+      {cancelled && (
+        <div className="mx-auto max-w-[820px] px-8 pt-6 print:px-0 print:pt-0">
+          <p className="rounded border-2 border-red-600 bg-red-50 px-4 py-2 text-center text-sm font-bold uppercase tracking-wide text-red-700">
+            Cancelled — not a valid packing list
+          </p>
+        </div>
+      )}
 
       <div className="proforma mx-auto my-6 max-w-[820px] bg-white p-8 text-[13px] leading-relaxed text-gray-900 shadow-sm print:my-0 print:max-w-none print:p-0 print:shadow-none">
         <div className="flex items-start justify-between gap-4 border-b-2 border-gray-800 pb-4">

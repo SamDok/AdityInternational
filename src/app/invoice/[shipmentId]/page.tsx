@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty } from "@/lib/format";
+import { formatMoney, formatDate, formatQty, roundMoney } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import DocPrintBar from "@/components/DocPrintBar";
@@ -22,7 +22,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
     prisma.bankAccount.findUnique({ where: { currency: shipment.currency } }),
   ]);
 
-  const total = shipment.items.reduce((s, i) => s + i.quantity * i.rate, 0);
+  const total = shipment.items.reduce((s, i) => s + roundMoney(i.quantity * i.rate), 0);
+  const cancelled = shipment.status === "CANCELLED";
   const totalPieces = shipment.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
   const totalNet = shipment.items.reduce((s, i) => s + i.netWeight, 0);
 
@@ -47,6 +48,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
   return (
     <div className="min-h-screen bg-gray-100">
       <DocPrintBar backHref={`/shipments/${shipment.id}`} backLabel="Back to shipment" />
+
+      {cancelled && (
+        <div className="mx-auto max-w-[820px] px-8 pt-6 print:px-0 print:pt-0">
+          <p className="rounded border-2 border-red-600 bg-red-50 px-4 py-2 text-center text-sm font-bold uppercase tracking-wide text-red-700">
+            Cancelled — not a valid invoice
+          </p>
+        </div>
+      )}
 
       <div className="proforma mx-auto my-6 max-w-[820px] bg-white p-8 text-[13px] leading-relaxed text-gray-900 shadow-sm print:my-0 print:max-w-none print:p-0 print:shadow-none">
         <div className="flex items-start justify-between gap-4 border-b-2 border-gray-800 pb-4">

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty } from "@/lib/format";
+import { formatMoney, formatDate, formatQty, roundMoney } from "@/lib/format";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import PrintBar from "./PrintBar";
 
@@ -24,8 +24,9 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
     prisma.bankAccount.findUnique({ where: { currency: order.currency } }),
   ]);
 
-  const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
+  const total = order.items.reduce((s, i) => s + roundMoney(i.quantity * i.rate), 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
+  const cancelled = order.status === "CANCELLED";
 
   const billToName = order.billToName || order.customer.company || order.customer.name;
   const billToAddress = order.billToAddress || order.customer.address;
@@ -51,6 +52,14 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
   return (
     <div className="min-h-screen bg-gray-100">
       <PrintBar backHref={`/orders/${order.id}`} />
+
+      {cancelled && (
+        <div className="mx-auto max-w-[820px] px-8 pt-6 print:px-0 print:pt-0">
+          <p className="rounded border-2 border-red-600 bg-red-50 px-4 py-2 text-center text-sm font-bold uppercase tracking-wide text-red-700">
+            Cancelled — not a valid proforma
+          </p>
+        </div>
+      )}
 
       <div className="proforma mx-auto my-6 max-w-[820px] bg-white p-8 text-[13px] leading-relaxed text-gray-900 shadow-sm print:my-0 print:max-w-none print:p-0 print:shadow-none">
         {/* Letterhead */}

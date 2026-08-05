@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty } from "@/lib/format";
+import { formatMoney, formatDate, formatQty, roundMoney } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import PrintBar from "./PrintBar";
@@ -26,9 +26,10 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const isPurchase = job.kind === "PURCHASE";
   const title = isPurchase ? "Purchase Order" : "Job Work Order";
   const docNo = jobDocNo(job);
-  const total = job.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyOrdered, 0);
+  const total = job.items.reduce((s, i) => s + roundMoney((i.rate ?? 0) * i.qtyOrdered), 0);
   const totalPieces = job.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
   const hasRates = job.items.some((i) => i.rate != null);
+  const cancelled = job.status === "CANCELLED";
 
   const v = job.vendor;
   const vendorContact = [v.contactPerson, v.altPhone || v.phone].filter(Boolean).join(" · ");
@@ -36,6 +37,14 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   return (
     <div className="min-h-screen bg-gray-100">
       <PrintBar backHref={`/jobs/${job.id}`} backLabel="Back to job" />
+
+      {cancelled && (
+        <div className="mx-auto max-w-[820px] px-8 pt-6 print:px-0 print:pt-0">
+          <p className="rounded border-2 border-red-600 bg-red-50 px-4 py-2 text-center text-sm font-bold uppercase tracking-wide text-red-700">
+            Cancelled — no longer active
+          </p>
+        </div>
+      )}
 
       <div className="proforma mx-auto my-6 max-w-[820px] bg-white p-8 text-[13px] leading-relaxed text-gray-900 shadow-sm print:my-0 print:max-w-none print:p-0 print:shadow-none">
         {/* Letterhead */}
