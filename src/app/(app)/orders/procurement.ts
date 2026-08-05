@@ -7,6 +7,7 @@ import { jobDocNo } from "@/lib/jobNumber";
 export type ProcLine = {
   productId: string;
   name: string;
+  description: string | null; // the order line's colour / spec, carried onto the job
   needed: number;
   available: number; // current stock on hand for this variant
   shortfall: number; // needed minus what stock + existing linked jobs already cover
@@ -129,6 +130,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
     const line: ProcLine = {
       productId: pid,
       name: prod.name,
+      description: it.description ?? null,
       needed: roundQty(it.quantity - it.shippedQty),
       available: roundQty(prod.stockQty),
       shortfall,

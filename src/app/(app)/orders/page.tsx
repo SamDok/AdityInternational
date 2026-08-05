@@ -49,12 +49,18 @@ export default async function OrdersPage({
 
   const DAY = 86400000;
   const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
-  function dueChip(dueDate: Date | null, complete: boolean, status: string) {
-    if (status === "CANCELLED" || complete || !dueDate) return null;
-    const d = Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
+  // Always show the due date on a live order — the earliest of the order's own
+  // date and any per-line dates — colour-coded: red overdue, amber within a
+  // week, grey otherwise.
+  function dueChip(o: (typeof all)[number]) {
+    if (o.status === "CANCELLED" || orderComplete(o)) return null;
+    const dues = [o.dueDate, ...o.items.map((i) => i.dueDate)].filter((d): d is Date => !!d);
+    if (dues.length === 0) return null;
+    const due = dues.reduce((a, b) => (a < b ? a : b));
+    const d = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
     if (d < today) return { label: "Overdue", cls: "bg-red-100 text-red-700" };
-    if (d <= today + 7 * DAY) return { label: `Due ${formatDate(dueDate)}`, cls: "bg-amber-100 text-amber-700" };
-    return null;
+    if (d <= today + 7 * DAY) return { label: `Due ${formatDate(due)}`, cls: "bg-amber-100 text-amber-700" };
+    return { label: `Due ${formatDate(due)}`, cls: "bg-gray-100 text-gray-600" };
   }
 
   return (
@@ -115,7 +121,7 @@ export default async function OrdersPage({
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <div className="flex flex-wrap justify-end gap-1">
-                            {(() => { const dc = dueChip(o.dueDate, orderComplete(o), o.status); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
+                            {(() => { const dc = dueChip(o); return dc ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dc.cls}`}>{dc.label}</span> : null; })()}
                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>
                               {STAGE_LABELS[o.status as OrderStage] ?? o.status}
                             </span>

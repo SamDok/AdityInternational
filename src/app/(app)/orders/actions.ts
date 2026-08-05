@@ -9,6 +9,7 @@ import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 import { allocateJobNumbers } from "../jobs/actions";
+import { shipmentDocNo } from "@/lib/jobNumber";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -374,6 +375,7 @@ export async function generateProcurement(orderId: string) {
             const pieces = exact ? Math.round(l.shortfall / per!) : null;
             return {
               productId: l.productId,
+              note: l.description || null, // carry the order line's colour / spec onto the job
               pieces,
               perPieceQty: pieces ? per : l.shortfall, // loose → perPieceQty holds the total
               qtyOrdered: l.shortfall,
@@ -424,12 +426,27 @@ export async function reduceShipment(itemId: string, amount: number) {
 export async function deleteOrder(id: string) {
   await requireUser();
   if (!(await isOwner())) return { error: "Only the owner can delete orders." };
-  const shipped = await prisma.orderItem.count({ where: { orderId: id, shippedQty: { gt: 0 } } });
-  if (shipped > 0) {
-    return { error: "This order has shipped items — un-ship them before deleting." };
+
+  // The order's lines may be referenced by shipment lines. A live (DISPATCHED)
+  // shipment means the order was actually invoiced — block and point at it. Any
+  // remaining references belong only to cancelled shipments (voided): remove
+  // those rows so the order-item cascade can delete cleanly instead of hitting a
+  // foreign-key error.
+  const shipItems = await prisma.shipmentItem.findMany({
+    where: { orderItem: { orderId: id } },
+    select: { id: true, shipment: { select: { status: true, number: true, seq: true, fyLabel: true } } },
+  });
+  const live = shipItems.find((s) => s.shipment.status !== "CANCELLED");
+  if (live) {
+    return { error: `This order is on shipment ${shipmentDocNo(live.shipment)}. Cancel that shipment before deleting the order.` };
   }
-  await prisma.order.delete({ where: { id } }); // items cascade
+  if (shipItems.length > 0) {
+    await prisma.shipmentItem.deleteMany({ where: { id: { in: shipItems.map((s) => s.id) } } });
+  }
+
+  await prisma.order.delete({ where: { id } }); // items + jobs (orderId → null) handled by the schema
   revalidatePath("/orders");
+  revalidatePath("/shipments");
   revalidatePath("/");
   redirect("/orders");
 }
