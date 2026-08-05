@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CURRENCIES, UNITS, ORDER_STAGES, STAGE_LABELS, formatMoney, type OrderStage } from "@/lib/format";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import ProductPicker from "./ProductPicker";
+import DesignGallery from "./DesignGallery";
 import type { OrderInput } from "./actions";
 import { saveCustomerRegularPrice } from "../customers/actions";
 import { useToast } from "@/components/Toast";
@@ -125,6 +126,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   const [orderDate, setOrderDate] = useState(initial?.orderDate?.slice(0, 10) ?? todayStr());
   const [dueDate, setDueDate] = useState(initial?.dueDate?.slice(0, 10) ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [galleryForLine, setGalleryForLine] = useState<string | null>(null);
   // Header discount %, from the saved order when editing else the customer's standing discount.
   const [discountPct, setDiscountPct] = useState(() => {
     if (initial) return initial.discountPct != null ? String(initial.discountPct) : "";
@@ -316,6 +318,12 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
 
   return (
     <div className="space-y-5 p-4">
+      {galleryForLine && (
+        <DesignGallery
+          onPick={(variantId) => { onProductChange(galleryForLine, variantId); setGalleryForLine(null); }}
+          onClose={() => setGalleryForLine(null)}
+        />
+      )}
       {error && (
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>
       )}
@@ -426,7 +434,10 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                 </div>
                 <div>
                   <label className="field-label">Product</label>
-                  <ProductPicker options={products} value={l.productId} onChange={(pid) => onProductChange(l.key, pid)} />
+                  <div className="flex gap-2">
+                    <div className="min-w-0 flex-1"><ProductPicker options={products} value={l.productId} onChange={(pid) => onProductChange(l.key, pid)} /></div>
+                    <button type="button" onClick={() => setGalleryForLine(l.key)} className="btn-secondary shrink-0 !px-3" aria-label="Browse designs by photo" title="Browse designs by photo">▦</button>
+                  </div>
                 </div>
                 <div>
                   <label className="field-label">Description</label>

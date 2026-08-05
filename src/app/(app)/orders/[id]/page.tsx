@@ -9,7 +9,7 @@ import { planProcurement } from "../procurement";
 import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty } from "@/lib/format";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
-import { setOrderComplete } from "../actions";
+import { setOrderComplete, reorderOrder } from "../actions";
 
 const JOB_STATUS_LABEL: Record<string, string> = { OPEN: "Open", PARTIAL: "Partial", RECEIVED: "Received", CANCELLED: "Cancelled" };
 
@@ -82,6 +82,9 @@ export default async function OrderDetailPage({
             <Link href={`/proforma/${order.id}`} className="btn-secondary !px-3 !py-2 text-sm" aria-label="Proforma invoice">
               <DocumentIcon className="h-5 w-5" />
             </Link>
+            <form action={reorderOrder.bind(null, order.id)}>
+              <button type="submit" className="btn-secondary !px-3 !py-2 text-sm">Reorder</button>
+            </form>
             <Link href={`/orders/${order.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
               Edit
             </Link>

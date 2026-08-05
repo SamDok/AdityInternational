@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Opt = { id: string; label: string; group: string };
 
@@ -15,6 +15,16 @@ export default function ProductPicker({
 }) {
   const [query, setQuery] = useState(() => options.find((o) => o.id === value)?.label ?? "");
   const [open, setOpen] = useState(false);
+
+  // Keep the visible text in step when the value is set from OUTSIDE (e.g. the
+  // visual design gallery), which the internal dropdown selection doesn't cover.
+  const lastValue = useRef(value);
+  useEffect(() => {
+    if (value !== lastValue.current) {
+      lastValue.current = value;
+      setQuery(options.find((o) => o.id === value)?.label ?? "");
+    }
+  }, [value, options]);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();

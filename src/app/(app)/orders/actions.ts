@@ -446,6 +446,72 @@ export async function assignDesignVendor(productId: string, vendorId: string) {
   return { ok: true };
 }
 
+// Designs with their photo + width-variants, for the visual "browse designs"
+// picker. Loaded on demand (not with the order form) so the thumbnails don't
+// bloat every page load. Only designs that have a live variant are returned.
+export async function getDesignGallery() {
+  await requireUser();
+  const designs = await prisma.design.findMany({
+    where: { archived: false, variants: { some: { archived: false } } },
+    orderBy: [{ updatedAt: "desc" }],
+    select: {
+      id: true, code: true, name: true, imageData: true,
+      category: { select: { name: true } },
+      variants: { where: { archived: false }, select: { id: true, width: true, colour: true } },
+    },
+  });
+  return designs.map((d) => ({
+    designId: d.id,
+    code: d.code,
+    name: d.name,
+    image: d.imageData,
+    group: d.category.name,
+    variants: d.variants.map((v) => ({
+      id: v.id,
+      label: `${d.code}${v.width ? ` · ${v.width}` : ""}${v.colour ? ` · ${v.colour}` : ""}`,
+    })),
+  }));
+}
+
+export type GalleryDesign = Awaited<ReturnType<typeof getDesignGallery>>[number];
+
+// Clone a past order into a fresh DRAFT — for "same as last time" repeat orders.
+// Copies the customer, currency, discount, the party/terms snapshot and every
+// line (product, spec, pieces, rate), then opens it for editing. Nothing is
+// carried that's specific to the old order's fulfilment (shipped qty, due dates).
+export async function reorderOrder(sourceId: string) {
+  await requireUser();
+  const src = await prisma.order.findUnique({ where: { id: sourceId }, include: { items: true } });
+  if (!src) return { error: "Order not found." };
+  const number = await nextOrderNumber();
+  const created = await prisma.order.create({
+    data: {
+      number,
+      customerId: src.customerId,
+      currency: src.currency,
+      status: "DRAFT",
+      orderDate: new Date(),
+      discountPct: src.discountPct,
+      billToName: src.billToName, billToAddress: src.billToAddress, billToTaxId: src.billToTaxId,
+      shipToName: src.shipToName, shipToAddress: src.shipToAddress,
+      destinationPort: src.destinationPort, incoterms: src.incoterms, paymentTerms: src.paymentTerms,
+      items: {
+        create: src.items.map((it) => ({
+          productId: it.productId,
+          description: it.description,
+          quantity: it.quantity,
+          pieces: it.pieces,
+          perPieceQty: it.perPieceQty,
+          unit: it.unit,
+          rate: it.rate,
+        })),
+      },
+    },
+  });
+  revalidatePath("/orders");
+  redirect(`/orders/${created.id}/edit`);
+}
+
 // Reduce a line's shipped quantity by `amount` (a correction), adding that much
 // stock back. Clamped to what's currently shipped.
 export async function reduceShipment(itemId: string, amount: number) {
