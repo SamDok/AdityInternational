@@ -123,8 +123,17 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
 - Product CSV import/export, images, low-stock alerts, bulk-width entry,
   duplicate-design, quick stock adjust, catalogue filters and a searchable order
   picker are **built**. Remaining:
-  - **🟢 Object storage for images** (beyond base64-in-DB) once photos get large
-    or numerous — swap `Design.imageData` for an uploaded URL + a storage bucket.
+  - **🟡 Object storage for images** (beyond base64-in-DB) — now more pressing at
+    ~2000+ designs: photos live as base64 in `Design.imageData`. The visual
+    gallery already avoids the payload blow-up by serving thumbnails from
+    `/designs/[designId]/image` (lazy-loaded, capped + server-searched), but the
+    bytes still sit in the main DB row. Move `imageData` to an uploaded URL + a
+    storage bucket so design reads stay light and images get CDN caching.
+  - **🟡 Server-side product typeahead for the order form.** `getProductOptions`
+    ships **every** width-variant to the order form (fine for hundreds, heavy at
+    2000+ designs × widths). Swap `ProductPicker` for a debounced server search
+    (query → top matches) like the design gallery now does, so the form payload
+    stays small regardless of catalogue size.
   - The catalogue-wide **recent stock movements** feed is now built
     (`src/app/(app)/products/movements/page.tsx`, powered by the `StockMovement`
     log, including the new `CUSTOMER_RETURN` / `VENDOR_REJECT` reasons). A

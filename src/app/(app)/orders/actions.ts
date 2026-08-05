@@ -446,34 +446,53 @@ export async function assignDesignVendor(productId: string, vendorId: string) {
   return { ok: true };
 }
 
-// Designs with their photo + width-variants, for the visual "browse designs"
-// picker. Loaded on demand (not with the order form) so the thumbnails don't
-// bloat every page load. Only designs that have a live variant are returned.
-export async function getDesignGallery() {
+// Designs + their width-variants for the visual "browse designs" picker. This is
+// deliberately LIGHTWEIGHT — no image bytes — so it stays small even with
+// thousands of designs; each thumbnail is fetched on demand from the design image
+// route and lazy-loaded by the browser. `hasImage` just tells the grid whether to
+// request one. Optional `q` filters server-side by code/name so the payload and
+// DOM stay bounded for very large catalogues.
+export async function getDesignGallery(q?: string) {
   await requireUser();
+  const query = (q ?? "").trim();
+  const where = {
+    archived: false,
+    variants: { some: { archived: false } },
+    ...(query
+      ? { OR: [{ code: { contains: query, mode: "insensitive" as const } }, { name: { contains: query, mode: "insensitive" as const } }] }
+      : {}),
+  };
   const designs = await prisma.design.findMany({
-    where: { archived: false, variants: { some: { archived: false } } },
+    where,
     orderBy: [{ updatedAt: "desc" }],
+    take: 200, // cap the grid; refine the search to reach the rest
     select: {
-      id: true, code: true, name: true, imageData: true,
+      id: true, code: true, name: true, // note: imageData deliberately not selected
       category: { select: { name: true } },
       variants: { where: { archived: false }, select: { id: true, width: true, colour: true } },
     },
   });
-  return designs.map((d) => ({
-    designId: d.id,
-    code: d.code,
-    name: d.name,
-    image: d.imageData,
-    group: d.category.name,
-    variants: d.variants.map((v) => ({
-      id: v.id,
-      label: `${d.code}${v.width ? ` · ${v.width}` : ""}${v.colour ? ` · ${v.colour}` : ""}`,
+  // Whether each design has a photo, without shipping the bytes.
+  const withImg = await prisma.design.findMany({ where: { id: { in: designs.map((d) => d.id) }, NOT: { imageData: null } }, select: { id: true } });
+  const hasImg = new Set(withImg.map((d) => d.id));
+  const total = await prisma.design.count({ where });
+  return {
+    total,
+    designs: designs.map((d) => ({
+      designId: d.id,
+      code: d.code,
+      name: d.name,
+      hasImage: hasImg.has(d.id),
+      group: d.category.name,
+      variants: d.variants.map((v) => ({
+        id: v.id,
+        label: `${d.code}${v.width ? ` · ${v.width}` : ""}${v.colour ? ` · ${v.colour}` : ""}`,
+      })),
     })),
-  }));
+  };
 }
 
-export type GalleryDesign = Awaited<ReturnType<typeof getDesignGallery>>[number];
+export type GalleryDesign = Awaited<ReturnType<typeof getDesignGallery>>["designs"][number];
 
 // Clone a past order into a fresh DRAFT — for "same as last time" repeat orders.
 // Copies the customer, currency, discount, the party/terms snapshot and every
