@@ -152,7 +152,7 @@ export default function DesignForm({ categories, vendors, initial, initialImageU
         {preview ? (
           <div className="space-y-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt="" className="h-40 w-full rounded-xl object-cover" />
+            <img src={preview} alt="" className="h-40 w-full rounded-xl bg-gray-50 object-contain" />
             <button type="button" onClick={() => { setNewImage(""); setPreview(""); setRemoved(true); }} className="btn-secondary w-full text-sm">Remove photo</button>
           </div>
         ) : (

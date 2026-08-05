@@ -12,6 +12,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ designI
   const img = await prisma.designImage.findUnique({ where: { designId }, select: { data: true } });
   if (!img?.data) return new Response("Not found", { status: 404 });
 
+  // Bulk-imported photos live on the CDN (Vercel Blob) — the field holds their
+  // URL, so redirect the browser there. Small manual uploads are still inlined
+  // as a data URL and served as bytes below.
+  if (/^https?:\/\//.test(img.data)) {
+    return Response.redirect(img.data, 302);
+  }
+
   // Stored as a data URL, e.g. "data:image/jpeg;base64,…".
   const m = /^data:(.+?);base64,(.*)$/s.exec(img.data);
   if (!m) return new Response("Unsupported", { status: 415 });

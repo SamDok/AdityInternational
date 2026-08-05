@@ -207,7 +207,7 @@ export default async function OrderDetailPage({
                 <div className="flex items-start gap-3">
                   {it.product.design?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={`/designs/${it.product.design.id}/image`} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-gray-100" />
+                    <img src={`/designs/${it.product.design.id}/image`} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-lg bg-gray-50 object-contain ring-1 ring-gray-100" />
                   ) : (
                     <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[10px] text-gray-300 ring-1 ring-gray-100">No image</div>
                   )}

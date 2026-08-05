@@ -115,7 +115,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   <div className="flex items-start gap-2">
                     {it.product.design?.image && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/designs/${it.product.design.id}/image`} alt="" className="h-12 w-12 shrink-0 rounded object-cover ring-1 ring-gray-200" />
+                      <img src={`/designs/${it.product.design.id}/image`} alt="" className="h-12 w-12 shrink-0 rounded bg-gray-50 object-contain ring-1 ring-gray-200" />
                     )}
                     <div>
                       <p className="font-medium">{it.product.name}</p>

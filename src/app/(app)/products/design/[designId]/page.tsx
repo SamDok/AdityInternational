@@ -56,7 +56,7 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
 
         {design.image && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/designs/${design.id}/image`} alt={design.code} className="h-48 w-full rounded-2xl object-cover" />
+          <img src={`/designs/${design.id}/image`} alt={design.code} className="h-48 w-full rounded-2xl bg-gray-50 object-contain" />
         )}
 
         {design.vendorId && !design.archived && (

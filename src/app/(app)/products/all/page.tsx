@@ -108,7 +108,7 @@ export default async function CataloguePage({
               <Link href={`/products/design/${d.id}`} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-gray-50">
                 {d.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={`/designs/${d.id}/image`} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                  <img src={`/designs/${d.id}/image`} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg bg-gray-50 object-contain" />
                 ) : (
                   <div className="h-11 w-11 shrink-0 rounded-lg bg-brand-50" />
                 )}

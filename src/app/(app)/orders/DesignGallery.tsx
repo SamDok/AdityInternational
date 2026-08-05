@@ -58,7 +58,7 @@ export default function DesignGallery({ onPick, onClose }: { onPick: (variantId:
                   <button type="button" onClick={() => choose(d)} className="block w-full text-left">
                     {d.hasImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/designs/${d.designId}/image`} alt={d.code} loading="lazy" className="aspect-square w-full bg-gray-50 object-cover" />
+                      <img src={`/designs/${d.designId}/image`} alt={d.code} loading="lazy" className="aspect-square w-full bg-gray-50 object-contain" />
                     ) : (
                       <div className="flex aspect-square w-full items-center justify-center bg-gray-50 text-xs text-gray-300">No image</div>
                     )}
