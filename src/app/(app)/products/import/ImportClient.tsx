@@ -47,6 +47,7 @@ export default function ImportClient() {
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ designsCreated: number; variantsCreated: number; skipped: number; warnings: string[] } | null>(null);
+  const [progress, setProgress] = useState(0);
   const [isPending, startTransition] = useTransition();
 
   function downloadTemplate() {
@@ -82,9 +83,26 @@ export default function ImportClient() {
     reader.readAsText(file);
   }
 
+  // Send the rows in batches so no single request is too big (server-action body
+  // limit) or too slow (execution timeout) — essential for a large catalogue.
   function doImport() {
     setError(null);
-    startTransition(async () => setResult(await importProducts(rows)));
+    setProgress(0);
+    startTransition(async () => {
+      const BATCH = 250;
+      const acc = { designsCreated: 0, variantsCreated: 0, skipped: 0, warnings: [] as string[] };
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const res = await importProducts(rows.slice(i, i + BATCH));
+        if (res) {
+          acc.designsCreated += res.designsCreated;
+          acc.variantsCreated += res.variantsCreated;
+          acc.skipped += res.skipped;
+          acc.warnings.push(...res.warnings);
+        }
+        setProgress(Math.min(i + BATCH, rows.length));
+      }
+      setResult({ ...acc });
+    });
   }
 
   return (
@@ -110,7 +128,7 @@ export default function ImportClient() {
 
       {rows.length > 0 && !result && (
         <button type="button" onClick={doImport} disabled={isPending} className="btn-primary w-full">
-          {isPending ? "Importing…" : `Import ${rows.length} row${rows.length > 1 ? "s" : ""}`}
+          {isPending ? `Importing… ${progress} / ${rows.length}` : `Import ${rows.length} row${rows.length > 1 ? "s" : ""}`}
         </button>
       )}
 

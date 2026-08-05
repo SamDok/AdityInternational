@@ -395,65 +395,85 @@ export async function exportProductsCsv(): Promise<string> {
 }
 
 // Bulk-import designs + widths from parsed spreadsheet rows.
+// Import a BATCH of width rows (the client sends the CSV in chunks so no single
+// request is too big or too slow). Uses set-based inserts — a few queries per
+// batch instead of one round-trip per row — so a 2000-design catalogue imports
+// without hitting request-size or execution-time limits.
 export async function importProducts(rows: Record<string, string>[]) {
   await requireUser();
   const cats = await prisma.productCategory.findMany({ select: { id: true, name: true, sortOrder: true } });
   const catByName = new Map(cats.map((c) => [c.name.trim().toLowerCase(), c.id]));
   let maxSort = cats.reduce((m, c) => Math.max(m, c.sortOrder), 0);
-  const designs = await prisma.design.findMany({ select: { id: true, code: true } });
-  const designByCode = new Map(designs.map((d) => [d.code.trim().toLowerCase(), d.id]));
+  const existing = await prisma.design.findMany({ select: { id: true, code: true } });
+  const designByCode = new Map(existing.map((d) => [d.code.trim().toLowerCase(), d.id]));
 
   let designsCreated = 0;
   let variantsCreated = 0;
   let skipped = 0;
   const warnings: string[] = [];
 
+  // 1. Create any new product types up front (there are few of them).
+  for (const r of rows) {
+    const typeName = (r.type ?? "").trim();
+    if (!typeName || catByName.has(typeName.toLowerCase())) continue;
+    maxSort++;
+    const c = await prisma.productCategory.create({ data: { name: typeName, sortOrder: maxSort } });
+    catByName.set(typeName.toLowerCase(), c.id);
+  }
+
+  // 2. Collect the new designs this batch introduces (first row per code wins),
+  //    insert them in one createMany, then read back their ids.
+  const newDesigns = new Map<string, { code: string; categoryId: string; composition: string | null; hsnCode: string | null }>();
+  for (const r of rows) {
+    const code = (r.code ?? "").trim();
+    const width = (r.width ?? "").trim();
+    if (!code || !width) continue;
+    const key = code.toLowerCase();
+    if (designByCode.has(key) || newDesigns.has(key)) continue;
+    const categoryId = catByName.get((r.type ?? "").trim().toLowerCase());
+    if (!categoryId) continue; // reported per-row below
+    newDesigns.set(key, { code, categoryId, composition: (r.composition ?? "").trim() || null, hsnCode: (r.hsn ?? "").trim() || null });
+  }
+  if (newDesigns.size) {
+    await prisma.design.createMany({ data: [...newDesigns.values()], skipDuplicates: true });
+    const created = await prisma.design.findMany({
+      where: { code: { in: [...newDesigns.values()].map((d) => d.code) } },
+      select: { id: true, code: true },
+    });
+    for (const d of created) designByCode.set(d.code.trim().toLowerCase(), d.id);
+    designsCreated = newDesigns.size;
+  }
+
+  // 3. Build every width-variant and insert them in one createMany.
+  const productData: {
+    designId: string; name: string; width: string; colour: string | null; gsm: number | null;
+    costPrice: number | null; stockQty: number; unit: string; sku: string | null; currency: string;
+  }[] = [];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const line = i + 2;
     const code = (r.code ?? "").trim();
     const width = (r.width ?? "").trim();
     if (!code || !width) { skipped++; continue; }
-
-    const typeName = (r.type ?? "").trim();
-    let categoryId: string | undefined;
-    if (typeName) {
-      categoryId = catByName.get(typeName.toLowerCase());
-      if (!categoryId) {
-        maxSort++;
-        const c = await prisma.productCategory.create({ data: { name: typeName, sortOrder: maxSort } });
-        categoryId = c.id;
-        catByName.set(typeName.toLowerCase(), c.id);
-      }
-    }
-
-    let designId = designByCode.get(code.toLowerCase());
-    if (!designId) {
-      if (!categoryId) { warnings.push(`Row ${line}: "${code}" has no type — skipped.`); skipped++; continue; }
-      const d = await prisma.design.create({
-        data: { categoryId, code, composition: (r.composition ?? "").trim() || null, hsnCode: (r.hsn ?? "").trim() || null },
-      });
-      designId = d.id;
-      designByCode.set(code.toLowerCase(), d.id);
-      designsCreated++;
-    }
-
+    const designId = designByCode.get(code.toLowerCase());
+    if (!designId) { warnings.push(`Row ${line}: "${code}" has no type — skipped.`); skipped++; continue; }
     const colour = (r.colour ?? "").trim() || null;
-    await prisma.product.create({
-      data: {
-        designId,
-        name: variantName(code, width, colour),
-        width,
-        colour,
-        gsm: numOrNull(r.gsm),
-        costPrice: numOrNull(r.cost),
-        stockQty: numOrNull(r.stock) ?? 0,
-        unit: (r.unit ?? "").trim() || "mtr",
-        sku: (r.sku ?? "").trim() || null,
-        currency: "INR",
-      },
+    productData.push({
+      designId,
+      name: variantName(code, width, colour),
+      width,
+      colour,
+      gsm: numOrNull(r.gsm),
+      costPrice: numOrNull(r.cost),
+      stockQty: numOrNull(r.stock) ?? 0,
+      unit: (r.unit ?? "").trim() || "mtr",
+      sku: (r.sku ?? "").trim() || null,
+      currency: "INR",
     });
-    variantsCreated++;
+  }
+  if (productData.length) {
+    await prisma.product.createMany({ data: productData });
+    variantsCreated = productData.length;
   }
 
   revalidatePath("/products");
