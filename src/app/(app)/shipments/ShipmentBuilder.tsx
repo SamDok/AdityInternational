@@ -31,6 +31,7 @@ export default function ShipmentBuilder({
   snapshot,
   lines,
   preselectOrderId,
+  defaultDiscount,
   action,
 }: {
   customerId: string;
@@ -39,6 +40,7 @@ export default function ShipmentBuilder({
   snapshot: Snapshot;
   lines: ReadyLine[];
   preselectOrderId?: string;
+  defaultDiscount?: number | null;
   action: (input: ShipmentInput) => Promise<{ error?: string } | void>;
 }) {
   const router = useRouter();
@@ -50,6 +52,7 @@ export default function ShipmentBuilder({
   const [date, setDate] = useState(todayStr());
   const [marks, setMarks] = useState("");
   const [grossWeight, setGrossWeight] = useState("");
+  const [discountPct, setDiscountPct] = useState(defaultDiscount != null ? String(defaultDiscount) : "");
   const [notes, setNotes] = useState("");
   const [snap, setSnap] = useState<Snapshot>(snapshot);
   const setSnapField = (k: keyof Snapshot, v: string) => setSnap((p) => ({ ...p, [k]: v }));
@@ -124,6 +127,7 @@ export default function ShipmentBuilder({
       paymentTerms: snap.paymentTerms || null,
       marksNumbers: marks || null,
       grossWeight: grossWeight === "" ? null : Number(grossWeight),
+      discountPct: discountPct === "" ? null : Number(discountPct),
       notes: notes || null,
       lines: chosen,
     };
@@ -222,6 +226,11 @@ export default function ShipmentBuilder({
             <input id="marks" value={marks} onChange={(e) => setMarks(e.target.value)} className="field-input" placeholder="Shipping marks" />
           </div>
         </div>
+        <div>
+          <label className="field-label" htmlFor="disc">Discount % <span className="text-gray-400">(on the invoice, before GST)</span></label>
+          <input id="disc" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} type="number" step="0.01" min="0" max="100" inputMode="decimal" className="field-input" placeholder="Optional" />
+        </div>
+        <p className="text-xs text-gray-500">Freight, insurance, FX rate and export document numbers (B/L, IRN, e-way) can be added on the shipment after it&apos;s created.</p>
         <div>
           <label className="field-label" htmlFor="notes">Notes</label>
           <input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="field-input" placeholder="For the documents" />

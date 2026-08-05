@@ -21,7 +21,7 @@ export default async function EditOrderPage({
       select: {
         id: true, name: true, company: true, currency: true, address: true,
         gstin: true, taxId: true, shippingAddress: true, destinationPort: true,
-        incoterms: true, paymentTerms: true,
+        incoterms: true, paymentTerms: true, defaultDiscount: true,
       },
     }),
     getProductOptions(),
@@ -48,6 +48,7 @@ export default async function EditOrderPage({
     destinationPort: order.destinationPort,
     incoterms: order.incoterms,
     paymentTerms: order.paymentTerms,
+    discountPct: order.discountPct,
     items: order.items.map((it) => ({
       id: it.id,
       productId: it.productId,

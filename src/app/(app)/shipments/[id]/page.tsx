@@ -5,7 +5,8 @@ import PageHeader from "@/components/PageHeader";
 import { formatDate, formatMoney, formatQty } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import ToggleButton from "../../products/ToggleButton";
-import { cancelShipment } from "../actions";
+import ShipmentDetailsForm from "../ShipmentDetailsForm";
+import { cancelShipment, updateShipmentDetails } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,20 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
 
         {shipment.notes && (
           <section className="card"><p className="text-sm text-gray-500">Notes</p><p className="mt-1 text-sm text-gray-900">{shipment.notes}</p></section>
+        )}
+
+        {!cancelled && (
+          <ShipmentDetailsForm
+            currency={shipment.currency}
+            initial={{
+              discountPct: shipment.discountPct, freight: shipment.freight, insurance: shipment.insurance,
+              otherCharges: shipment.otherCharges, fxRate: shipment.fxRate, marksNumbers: shipment.marksNumbers,
+              grossWeight: shipment.grossWeight, portOfLoading: shipment.portOfLoading, vessel: shipment.vessel,
+              blAwbNo: shipment.blAwbNo, containerNo: shipment.containerNo, shippingBillNo: shipment.shippingBillNo,
+              eInvoiceIrn: shipment.eInvoiceIrn, ewayBillNo: shipment.ewayBillNo, notes: shipment.notes,
+            }}
+            action={updateShipmentDetails.bind(null, shipment.id)}
+          />
         )}
 
         {!cancelled && (

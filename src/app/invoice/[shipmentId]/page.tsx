@@ -44,6 +44,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
     currency: shipment.currency,
     sellerGstin: company.gstin,
     buyerGstin: shipment.billToTaxId,
+    discountPct: shipment.discountPct,
+    charges: (shipment.freight ?? 0) + (shipment.insurance ?? 0) + (shipment.otherCharges ?? 0),
     lines: shipment.items.map((i) => ({
       amount: i.quantity * i.rate,
       gstRate: i.product.design?.gstRate ?? company.defaultGstRate ?? 0,
@@ -51,6 +53,18 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
   });
   const grandInWords = amountInWords(tax.grandTotal, shipment.currency);
   const hasTax = tax.tax > 0;
+  const inrEquivalent = shipment.currency !== "INR" && shipment.fxRate ? tax.grandTotal * shipment.fxRate : null;
+
+  // Logistics / compliance lines to print when present.
+  const logistics = [
+    ["Port of loading", shipment.portOfLoading],
+    ["Vessel / flight", shipment.vessel],
+    ["B/L or AWB no.", shipment.blAwbNo],
+    ["Container no.", shipment.containerNo],
+    ["Shipping bill no.", shipment.shippingBillNo],
+    ["e-Invoice IRN", shipment.eInvoiceIrn],
+    ["e-Way bill no.", shipment.ewayBillNo],
+  ].filter(([, v]) => v) as [string, string][];
 
   // The customer orders this dispatch draws from, for the buyer to reconcile.
   const orderRefs = [...new Set(shipment.items.map((i) => i.orderItem?.order?.number).filter(Boolean))].sort(
@@ -146,6 +160,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
           {destCountry && <span><span className="text-gray-500">Final destination:</span> {destCountry}</span>}
         </div>
 
+        {logistics.length > 0 && (
+          <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 rounded border border-gray-200 p-2 text-xs text-gray-700 sm:grid-cols-3">
+            {logistics.map(([k, v]) => (
+              <span key={k}><span className="text-gray-500">{k}:</span> {v}</span>
+            ))}
+          </div>
+        )}
+
         <table className="mt-4 w-full border-collapse text-xs">
           <thead>
             <tr className="bg-gray-100 text-left">
@@ -184,10 +206,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
           </tbody>
           <tfoot>
             <tr className="font-semibold">
-              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>{hasTax ? "Taxable value" : "Total"}</td>
+              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>{tax.discount > 0 ? "Sub-total" : hasTax ? "Taxable value" : "Total"}</td>
               <td className="border border-gray-300 px-2 py-1.5 text-right">{totalPieces || "—"}</td>
               <td className="border border-gray-300 px-2 py-1.5"></td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, shipment.currency)}</td>
+              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(tax.gross, shipment.currency)}</td>
             </tr>
           </tfoot>
         </table>
@@ -205,6 +227,18 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
 
           <table className="min-w-[240px] border-collapse text-xs">
             <tbody>
+              {tax.discount > 0 && (
+                <>
+                  <tr>
+                    <td className="py-0.5 pr-4 text-gray-500">Sub-total</td>
+                    <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(tax.gross, shipment.currency)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-0.5 pr-4 text-gray-500">Discount {formatQty(tax.discountPct)}%</td>
+                    <td className="py-0.5 text-right whitespace-nowrap">− {formatMoney(tax.discount, shipment.currency)}</td>
+                  </tr>
+                </>
+              )}
               <tr>
                 <td className="py-0.5 pr-4 text-gray-500">Taxable value</td>
                 <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, shipment.currency)}</td>
@@ -228,10 +262,25 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
                   </Fragment>
                 ) : null,
               )}
+              {shipment.freight ? (
+                <tr><td className="py-0.5 pr-4 text-gray-500">Freight</td><td className="py-0.5 text-right whitespace-nowrap">{formatMoney(shipment.freight, shipment.currency)}</td></tr>
+              ) : null}
+              {shipment.insurance ? (
+                <tr><td className="py-0.5 pr-4 text-gray-500">Insurance</td><td className="py-0.5 text-right whitespace-nowrap">{formatMoney(shipment.insurance, shipment.currency)}</td></tr>
+              ) : null}
+              {shipment.otherCharges ? (
+                <tr><td className="py-0.5 pr-4 text-gray-500">Other charges</td><td className="py-0.5 text-right whitespace-nowrap">{formatMoney(shipment.otherCharges, shipment.currency)}</td></tr>
+              ) : null}
               <tr className="border-t border-gray-300 font-bold">
                 <td className="py-1 pr-4">Grand total</td>
                 <td className="py-1 text-right whitespace-nowrap">{formatMoney(tax.grandTotal, shipment.currency)}</td>
               </tr>
+              {inrEquivalent != null && (
+                <tr className="text-gray-500">
+                  <td className="py-0.5 pr-4">INR equiv. @ {formatQty(shipment.fxRate!)}</td>
+                  <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(inrEquivalent, "INR")}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

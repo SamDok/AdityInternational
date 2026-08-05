@@ -360,6 +360,7 @@ model Order {
   destinationPort String?
   incoterms       String? // EXW, FOB, CFR, CIF, DAP, DDP
   paymentTerms    String?
+  discountPct     Float? // header discount %, prefilled from the customer's standing discount
 
   items      OrderItem[]
   jobs       Job[] // job-work / purchase orders auto-generated from this order
@@ -391,11 +392,25 @@ model Shipment {
   incoterms       String?
   paymentTerms    String?
 
-  // Export / packing detail.
-  marksNumbers String? // shipping marks & numbers
-  grossWeight  Float? // total gross weight (kg, incl. packing)
-  notes        String?
-  createdByName String?
+  // Pricing adjustments on the invoice.
+  discountPct   Float? // header discount %, applied before GST
+  freight       Float? // freight added after tax (FOB → C&F/CIF)
+  insurance     Float? // insurance added after tax (→ CIF)
+  otherCharges  Float? // any other charge added after tax
+  fxRate        Float? // INR per 1 unit of the invoice currency, for accounting
+
+  // Export / logistics detail (mostly for the documents; some issued post-dispatch).
+  marksNumbers   String? // shipping marks & numbers
+  grossWeight    Float? // total gross weight (kg, incl. packing)
+  portOfLoading  String?
+  vessel         String? // vessel / flight
+  blAwbNo        String? // Bill of Lading or Air Waybill number
+  containerNo    String?
+  shippingBillNo String? // export shipping bill / LEO number
+  eInvoiceIrn    String? // e-invoice IRN
+  ewayBillNo     String? // e-way bill number
+  notes          String?
+  createdByName  String?
 
   items     ShipmentItem[]
   movements StockMovement[]

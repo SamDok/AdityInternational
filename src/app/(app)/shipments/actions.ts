@@ -34,6 +34,19 @@ const ShipmentSchema = z.object({
   marksNumbers: nullableStr(),
   grossWeight: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
   notes: nullableStr(),
+  // Pricing adjustments + export/logistics detail.
+  discountPct: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).max(100).nullable().optional()),
+  freight: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  insurance: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  otherCharges: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  fxRate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  portOfLoading: nullableStr(),
+  vessel: nullableStr(),
+  blAwbNo: nullableStr(),
+  containerNo: nullableStr(),
+  shippingBillNo: nullableStr(),
+  eInvoiceIrn: nullableStr(),
+  ewayBillNo: nullableStr(),
   lines: z.array(LineSchema).min(1, "Add at least one line to ship"),
 });
 
@@ -120,6 +133,18 @@ export async function createShipment(input: ShipmentInput) {
       marksNumbers: d.marksNumbers || null,
       grossWeight: d.grossWeight ?? null,
       notes: d.notes || null,
+      discountPct: d.discountPct ?? null,
+      freight: d.freight ?? null,
+      insurance: d.insurance ?? null,
+      otherCharges: d.otherCharges ?? null,
+      fxRate: d.fxRate ?? null,
+      portOfLoading: d.portOfLoading || null,
+      vessel: d.vessel || null,
+      blAwbNo: d.blAwbNo || null,
+      containerNo: d.containerNo || null,
+      shippingBillNo: d.shippingBillNo || null,
+      eInvoiceIrn: d.eInvoiceIrn || null,
+      ewayBillNo: d.ewayBillNo || null,
       createdByName: me.name || me.email,
       items: {
         create: requests.map((r) => ({
@@ -166,26 +191,56 @@ export async function createShipment(input: ShipmentInput) {
   redirect(`/shipments/${shipment.id}`);
 }
 
-// Refine the packing-list detail after creating the shipment.
-export async function updatePackingDetails(
-  id: string,
-  input: { marksNumbers?: string | null; grossWeight?: number | null; notes?: string | null; cartons?: { itemId: string; cartons: number | null }[] },
-) {
+// Refine invoice / packing / export detail after creating the shipment — the
+// bits that are often issued only once the goods actually leave (IRN, e-way
+// bill, B/L number, freight, FX rate).
+const num = () => z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional());
+const DetailsSchema = z.object({
+  marksNumbers: nullableStr(),
+  grossWeight: num(),
+  notes: nullableStr(),
+  discountPct: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).max(100).nullable().optional()),
+  freight: num(),
+  insurance: num(),
+  otherCharges: num(),
+  fxRate: num(),
+  portOfLoading: nullableStr(),
+  vessel: nullableStr(),
+  blAwbNo: nullableStr(),
+  containerNo: nullableStr(),
+  shippingBillNo: nullableStr(),
+  eInvoiceIrn: nullableStr(),
+  ewayBillNo: nullableStr(),
+});
+
+export async function updateShipmentDetails(id: string, input: unknown) {
   await requireUser();
-  await prisma.$transaction([
-    prisma.shipment.update({
-      where: { id },
-      data: {
-        marksNumbers: input.marksNumbers || null,
-        grossWeight: input.grossWeight ?? null,
-        notes: input.notes || null,
-      },
-    }),
-    ...(input.cartons ?? []).map((c) =>
-      prisma.shipmentItem.update({ where: { id: c.itemId }, data: { cartons: c.cartons ?? null } }),
-    ),
-  ]);
+  const r = DetailsSchema.safeParse(input);
+  if (!r.success) return { error: r.error.issues[0]?.message ?? "Invalid input" };
+  const d = r.data;
+  await prisma.shipment.update({
+    where: { id },
+    data: {
+      marksNumbers: d.marksNumbers || null,
+      grossWeight: d.grossWeight ?? null,
+      notes: d.notes || null,
+      discountPct: d.discountPct ?? null,
+      freight: d.freight ?? null,
+      insurance: d.insurance ?? null,
+      otherCharges: d.otherCharges ?? null,
+      fxRate: d.fxRate ?? null,
+      portOfLoading: d.portOfLoading || null,
+      vessel: d.vessel || null,
+      blAwbNo: d.blAwbNo || null,
+      containerNo: d.containerNo || null,
+      shippingBillNo: d.shippingBillNo || null,
+      eInvoiceIrn: d.eInvoiceIrn || null,
+      ewayBillNo: d.ewayBillNo || null,
+    },
+  });
   revalidatePath(`/shipments/${id}`);
+  revalidatePath(`/invoice/${id}`);
+  revalidatePath("/money");
   return { ok: true };
 }
 

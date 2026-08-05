@@ -22,6 +22,7 @@ type CustomerOpt = {
   destinationPort?: string | null;
   incoterms?: string | null;
   paymentTerms?: string | null;
+  defaultDiscount?: number | null;
 };
 type ProductOpt = { id: string; label: string; group: string; unit: string };
 
@@ -63,6 +64,7 @@ type InitialOrder = {
   orderDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
+  discountPct?: number | null;
   items: { id?: string; productId: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; dueDate?: string | null; unit: string; rate: number }[];
 } & Partial<Record<keyof Snapshot, string | null>>;
 
@@ -123,6 +125,12 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   const [orderDate, setOrderDate] = useState(initial?.orderDate?.slice(0, 10) ?? todayStr());
   const [dueDate, setDueDate] = useState(initial?.dueDate?.slice(0, 10) ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  // Header discount %, from the saved order when editing else the customer's standing discount.
+  const [discountPct, setDiscountPct] = useState(() => {
+    if (initial) return initial.discountPct != null ? String(initial.discountPct) : "";
+    const c = customers.find((x) => x.id === startCustomerId);
+    return c?.defaultDiscount != null ? String(c.defaultDiscount) : "";
+  });
 
   // Customer-detail snapshot: from the saved order when editing, else prefilled
   // from the chosen customer on a new order.
@@ -197,8 +205,10 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
     if (c) {
       setCurrency(c.currency); // default to the customer's currency
       setSnap(snapshotFromCustomer(c)); // refresh the PDF snapshot from this customer
+      setDiscountPct(c.defaultDiscount != null ? String(c.defaultDiscount) : "");
     } else {
       setSnap({ ...EMPTY_SNAPSHOT });
+      setDiscountPct("");
     }
     // Re-price existing lines for the new customer.
     setLines((prev) => prev.map((l) => (l.productId ? { ...l, rate: rateFor(l.productId, id) } : l)));
@@ -271,6 +281,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
       destinationPort: snap.destinationPort || null,
       incoterms: snap.incoterms || null,
       paymentTerms: snap.paymentTerms || null,
+      discountPct: discountPct === "" ? null : Number(discountPct),
       items: cleanLines.map((l) => ({
         id: l.id,
         productId: l.productId,
@@ -361,6 +372,10 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                 <label className="field-label">Payment terms</label>
                 <input value={snap.paymentTerms} onChange={(e) => setSnapField("paymentTerms", e.target.value)} className="field-input" placeholder="e.g. Advance, Net 30" />
               </div>
+            </div>
+            <div>
+              <label className="field-label">Discount % <span className="text-gray-400">(applied on the invoice, before GST)</span></label>
+              <input value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} type="number" step="0.01" min="0" max="100" inputMode="decimal" className="field-input" placeholder="From the customer's standing discount" />
             </div>
             <div>
               <label className="field-label">Consignee / ship-to name <span className="text-gray-400">(if different)</span></label>

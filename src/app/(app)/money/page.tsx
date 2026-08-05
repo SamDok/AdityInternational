@@ -31,7 +31,7 @@ export default async function MoneyPage() {
         id: true, name: true, company: true,
         shipments: {
           where: { status: { not: "CANCELLED" } },
-          select: { currency: true, status: true, billToTaxId: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
+          select: { currency: true, status: true, billToTaxId: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
         },
         payments: { select: { amount: true, currency: true } },
       },

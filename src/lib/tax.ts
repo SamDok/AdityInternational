@@ -15,13 +15,17 @@ export type TaxGroup = { rate: number; taxable: number; cgst: number; sgst: numb
 
 export type TaxBreakdown = {
   mode: TaxMode;
-  taxable: number;
+  gross: number; // line total before discount
+  discountPct: number;
+  discount: number; // amount taken off
+  taxable: number; // gross − discount
   groups: TaxGroup[];
   cgst: number;
   sgst: number;
   igst: number;
   tax: number;
-  grandTotal: number;
+  charges: number; // freight + insurance + other, added after tax
+  grandTotal: number; // taxable + tax + charges
   note: string | null; // export declaration, when applicable
 };
 
@@ -36,21 +40,26 @@ export function computeTax(input: {
   currency: string;
   sellerGstin?: string | null;
   buyerGstin?: string | null;
+  discountPct?: number | null;
+  charges?: number | null; // freight + insurance + other, added after tax
   lines: { amount: number; gstRate: number }[];
 }): TaxBreakdown {
-  const taxable = roundMoney(input.lines.reduce((s, l) => s + roundMoney(l.amount), 0));
+  const gross = roundMoney(input.lines.reduce((s, l) => s + roundMoney(l.amount), 0));
+  const discountPct = input.discountPct && input.discountPct > 0 ? input.discountPct : 0;
+  const discount = roundMoney((gross * discountPct) / 100);
+  const taxable = roundMoney(gross - discount);
+  const charges = roundMoney(input.charges ?? 0);
+  // Spread the discount across every line so per-rate GST is on the net value.
+  const factor = gross > 0 ? taxable / gross : 1;
 
   // Any non-INR sale is an export — zero-rated under LUT.
   if (input.currency !== "INR") {
     return {
       mode: "EXPORT",
-      taxable,
-      groups: [],
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      tax: 0,
-      grandTotal: taxable,
+      gross, discountPct, discount, taxable,
+      groups: [], cgst: 0, sgst: 0, igst: 0, tax: 0,
+      charges,
+      grandTotal: roundMoney(taxable + charges),
       note: "Supply meant for export under LUT / bond without payment of IGST.",
     };
   }
@@ -61,7 +70,7 @@ export function computeTax(input: {
   const intra = seller != null && buyer != null && seller === buyer;
 
   const byRate = new Map<number, number>();
-  for (const l of input.lines) byRate.set(l.gstRate, (byRate.get(l.gstRate) ?? 0) + l.amount);
+  for (const l of input.lines) byRate.set(l.gstRate, (byRate.get(l.gstRate) ?? 0) + l.amount * factor);
 
   const groups: TaxGroup[] = [...byRate.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -81,13 +90,10 @@ export function computeTax(input: {
 
   return {
     mode: intra ? "INTRA" : "INTER",
-    taxable,
-    groups,
-    cgst,
-    sgst,
-    igst,
-    tax,
-    grandTotal: roundMoney(taxable + tax),
+    gross, discountPct, discount, taxable,
+    groups, cgst, sgst, igst, tax,
+    charges,
+    grandTotal: roundMoney(taxable + tax + charges),
     note: null,
   };
 }

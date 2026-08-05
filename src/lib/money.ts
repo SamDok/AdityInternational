@@ -15,16 +15,22 @@ type ShipmentForTotal = {
   currency: string;
   status: string;
   billToTaxId: string | null;
+  discountPct?: number | null;
+  freight?: number | null;
+  insurance?: number | null;
+  otherCharges?: number | null;
   items: { quantity: number; rate: number; product: { design: { gstRate: number | null } | null } }[];
 };
 
-// The full invoice value (incl. GST) of one shipment — the same number the
-// commercial invoice prints as its grand total.
+// The full invoice value (incl. discount, GST and charges) of one shipment — the
+// same number the commercial invoice prints as its grand total.
 export function shipmentGrandTotal(s: ShipmentForTotal, company: CompanyForTax): number {
   return computeTax({
     currency: s.currency,
     sellerGstin: company.gstin,
     buyerGstin: s.billToTaxId,
+    discountPct: s.discountPct,
+    charges: (s.freight ?? 0) + (s.insurance ?? 0) + (s.otherCharges ?? 0),
     lines: s.items.map((i) => ({
       amount: i.quantity * i.rate,
       gstRate: i.product.design?.gstRate ?? company.defaultGstRate ?? 0,

@@ -48,6 +48,7 @@ const OrderSchema = z.object({
   destinationPort: nullableStr(),
   incoterms: nullableStr(),
   paymentTerms: nullableStr(),
+  discountPct: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).max(100).nullable().optional()),
   items: z.array(ItemSchema).min(1, "Add at least one product line"),
 });
 
@@ -71,6 +72,7 @@ function snapshotFields(d: z.infer<typeof OrderSchema>) {
     destinationPort: d.destinationPort || null,
     incoterms: d.incoterms || null,
     paymentTerms: d.paymentTerms || null,
+    discountPct: d.discountPct ?? null,
   };
 }
 

@@ -85,6 +85,7 @@ export default async function NewShipmentPage({
         snapshot={snapshot}
         lines={lines}
         preselectOrderId={sp.orderId}
+        defaultDiscount={customer.defaultDiscount}
         action={createShipment}
       />
     </div>

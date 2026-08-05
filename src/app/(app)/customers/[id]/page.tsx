@@ -43,6 +43,7 @@ export default async function CustomerDetailPage({
           orderBy: { date: "asc" },
           select: {
             id: true, number: true, seq: true, fyLabel: true, date: true, currency: true, status: true, billToTaxId: true,
+            discountPct: true, freight: true, insurance: true, otherCharges: true,
             items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } },
           },
         },

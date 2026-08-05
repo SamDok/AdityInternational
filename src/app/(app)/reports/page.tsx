@@ -30,7 +30,7 @@ export default async function ReportsPage() {
   const [shipments, payments, jobs, vendorPayments, products, orders] = await Promise.all([
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" } },
-      select: { date: true, currency: true, billToTaxId: true, status: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
+      select: { date: true, currency: true, billToTaxId: true, status: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
     }),
     prisma.payment.findMany({ select: { amount: true, currency: true } }),
     prisma.job.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } }),

@@ -19,7 +19,7 @@ export default async function NewOrderPage({
       select: {
         id: true, name: true, company: true, currency: true, address: true,
         gstin: true, taxId: true, shippingAddress: true, destinationPort: true,
-        incoterms: true, paymentTerms: true,
+        incoterms: true, paymentTerms: true, defaultDiscount: true,
       },
     }),
     getProductOptions(),

@@ -34,6 +34,7 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
     currency: order.currency,
     sellerGstin: company.gstin,
     buyerGstin: order.billToTaxId,
+    discountPct: order.discountPct,
     lines: order.items.map((i) => ({
       amount: i.quantity * i.rate,
       gstRate: i.product.design?.gstRate ?? company.defaultGstRate ?? 0,
@@ -183,10 +184,10 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
           </tbody>
           <tfoot>
             <tr className="font-semibold">
-              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>{hasTax ? "Taxable value" : "Total"}</td>
+              <td className="border border-gray-300 px-2 py-1.5" colSpan={4}>{tax.discount > 0 ? "Sub-total" : hasTax ? "Taxable value" : "Total"}</td>
               <td className="border border-gray-300 px-2 py-1.5 text-right">{totalPieces || "—"}</td>
               <td className="border border-gray-300 px-2 py-1.5"></td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, order.currency)}</td>
+              <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatMoney(tax.gross, order.currency)}</td>
             </tr>
           </tfoot>
         </table>
@@ -197,6 +198,18 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
           </div>
           <table className="min-w-[240px] border-collapse text-xs">
             <tbody>
+              {tax.discount > 0 && (
+                <>
+                  <tr>
+                    <td className="py-0.5 pr-4 text-gray-500">Sub-total</td>
+                    <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(tax.gross, order.currency)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-0.5 pr-4 text-gray-500">Discount {formatQty(tax.discountPct)}%</td>
+                    <td className="py-0.5 text-right whitespace-nowrap">− {formatMoney(tax.discount, order.currency)}</td>
+                  </tr>
+                </>
+              )}
               <tr>
                 <td className="py-0.5 pr-4 text-gray-500">Taxable value</td>
                 <td className="py-0.5 text-right whitespace-nowrap">{formatMoney(tax.taxable, order.currency)}</td>
