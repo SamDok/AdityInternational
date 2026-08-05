@@ -6,6 +6,12 @@ import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
   fulfillmentOf, orderComplete, orderBadge,
 } from "@/lib/format";
+import { shipmentDocNo } from "@/lib/jobNumber";
+import { shipmentGrandTotal, sumByCurrency, balances, allocateFIFO, paidState, PAID_LABEL, PAID_COLOR } from "@/lib/money";
+import { getCompanyProfile } from "../../settings/companyActions";
+import PaymentForm from "../../money/PaymentForm";
+import PaymentList from "../../money/PaymentList";
+import { recordPayment, deletePayment } from "../../money/actions";
 import { ChevronRightIcon, PlusIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -26,15 +32,50 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-    include: {
-      salesperson: true,
-      orders: { orderBy: { orderDate: "desc" }, take: 20, include: { items: true } },
-    },
-  });
+  const [customer, company] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id },
+      include: {
+        salesperson: true,
+        orders: { orderBy: { orderDate: "desc" }, take: 20, include: { items: true } },
+        shipments: {
+          where: { status: { not: "CANCELLED" } },
+          orderBy: { date: "asc" },
+          select: {
+            id: true, number: true, seq: true, fyLabel: true, date: true, currency: true, status: true, billToTaxId: true,
+            items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } },
+          },
+        },
+        payments: { orderBy: { date: "desc" }, select: { id: true, amount: true, currency: true, date: true, method: true, reference: true, note: true, shipmentId: true } },
+      },
+    }),
+    getCompanyProfile(),
+  ]);
 
   if (!customer) notFound();
+
+  // Money: invoice totals (incl. GST), balances per currency, per-invoice paid state.
+  const invoices = customer.shipments.map((s) => ({
+    id: s.id,
+    docNo: shipmentDocNo(s, "INV"),
+    date: s.date,
+    currency: s.currency,
+    total: shipmentGrandTotal(s, company),
+  }));
+  const billed = sumByCurrency(invoices.map((i) => ({ amount: i.total, currency: i.currency })));
+  const paidByCur = sumByCurrency(customer.payments);
+  const bs = balances(billed, paidByCur);
+  // FIFO allocation per currency to derive each invoice's paid amount.
+  const paidPerInvoice = new Map<string, number>();
+  for (const [cur, total] of paidByCur) {
+    const invs = invoices.filter((i) => i.currency === cur);
+    const alloc = allocateFIFO(invs.map((i) => ({ id: i.id, total: i.total })), total);
+    for (const [id, amt] of alloc) paidPerInvoice.set(id, amt);
+  }
+  const paymentRows = customer.payments.map((p) => ({
+    ...p,
+    against: p.shipmentId ? invoices.find((i) => i.id === p.shipmentId)?.docNo ?? null : null,
+  }));
 
   const subtitleParts = [customer.code, customer.contactPerson].filter(Boolean);
   const waDigits = (customer.altPhone || customer.phone || "").replace(/[^\d]/g, "");
@@ -98,6 +139,55 @@ export default async function CustomerDetailPage({
           <Row label="Tax ID / VAT" value={customer.taxId} />
           <Row label="Notes" value={customer.notes} />
           <Row label="Added by" value={customer.createdByName} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="px-1 text-sm font-semibold text-gray-500">Money</h2>
+          {bs.length === 0 ? (
+            <p className="card text-sm text-gray-500">No invoices raised yet.</p>
+          ) : (
+            <div className="card space-y-2">
+              {bs.map((b) => (
+                <div key={b.currency} className="flex items-baseline justify-between">
+                  <span className="text-sm text-gray-500">Billed {formatMoney(b.billed, b.currency)} · Received {formatMoney(b.paid, b.currency)}</span>
+                  <span className={`text-base font-bold ${b.outstanding > 0.01 ? "text-red-700" : "text-green-700"}`}>
+                    {b.outstanding > 0.01 ? `${formatMoney(b.outstanding, b.currency)} due` : "Settled"}
+                  </span>
+                </div>
+              ))}
+              {customer.creditLimit != null && bs.some((b) => b.outstanding > customer.creditLimit!) && (
+                <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">Over the {formatMoney(customer.creditLimit, customer.currency)} credit limit.</p>
+              )}
+            </div>
+          )}
+
+          {invoices.length > 0 && (
+            <ul className="divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-gray-100">
+              {invoices.map((inv) => {
+                const st = paidState(inv.total, paidPerInvoice.get(inv.id) ?? 0);
+                return (
+                  <li key={inv.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <Link href={`/invoice/${inv.id}`} className="min-w-0 flex-1 hover:underline">
+                      <span className="text-sm font-medium text-gray-900">{inv.docNo}</span>
+                      <span className="ml-2 text-xs text-gray-500">{formatDate(inv.date)}</span>
+                    </Link>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAID_COLOR[st]}`}>{PAID_LABEL[st]}</span>
+                    <span className="text-sm font-semibold text-gray-900">{formatMoney(inv.total, inv.currency)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <PaymentForm
+            action={recordPayment.bind(null, customer.id)}
+            defaultCurrency={customer.currency}
+            allocations={invoices.map((i) => ({ id: i.id, label: `${i.docNo} · ${formatMoney(i.total, i.currency)}` }))}
+            allocationKey="shipmentId"
+            allocationLabel="Against invoice"
+            buttonLabel="Record payment"
+          />
+          {paymentRows.length > 0 && <PaymentList payments={paymentRows} onDelete={deletePayment} />}
         </section>
 
         <section>

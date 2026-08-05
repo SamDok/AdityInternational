@@ -109,9 +109,45 @@ model Customer {
   notes     String?
   orders    Order[]
   shipments Shipment[]
+  payments  Payment[] // money received from this customer
   prices    CustomerPrice[] // this customer's agreed prices per width-variant
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Money received from a customer. May be an advance (no invoice) or settle a
+// specific invoice (shipment). Outstanding is derived: invoiced − received.
+model Payment {
+  id            String    @id @default(cuid())
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId    String
+  shipment      Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId    String? // optional: receipt booked against a specific invoice
+  amount        Float
+  currency      String    @default("INR")
+  date          DateTime  @default(now())
+  method        String? // Bank / Cash / Cheque / LC / Other
+  reference     String? // UTR / cheque no. / LC no.
+  note          String?
+  createdByName String?
+  createdAt     DateTime  @default(now())
+}
+
+// Money paid to a vendor (kaarigar / supplier). May settle a specific job/PO.
+model VendorPayment {
+  id            String   @id @default(cuid())
+  vendor        Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId      String
+  job           Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobId         String? // optional: payment booked against a specific job / PO
+  amount        Float
+  currency      String   @default("INR")
+  date          DateTime @default(now())
+  method        String?
+  reference     String?
+  note          String?
+  createdByName String?
+  createdAt     DateTime @default(now())
 }
 
 // A customer's negotiated price for a specific width-variant (Product).
@@ -241,6 +277,7 @@ model Vendor {
   archived  Boolean  @default(false)
   designs   Design[]
   jobs      Job[]
+  payments  VendorPayment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -266,6 +303,7 @@ model Job {
   order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId   String?
   items     JobItem[]
+  payments  VendorPayment[] // payments booked against this job / PO
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -361,6 +399,7 @@ model Shipment {
 
   items     ShipmentItem[]
   movements StockMovement[]
+  payments  Payment[] // receipts booked against this invoice
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

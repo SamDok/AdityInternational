@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, formatMoney } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
+import { jobReceivedValue, sumByCurrency, balances, allocateFIFO, paidState, PAID_LABEL, PAID_COLOR } from "@/lib/money";
+import PaymentForm from "../../money/PaymentForm";
+import PaymentList from "../../money/PaymentList";
+import { recordVendorPayment, deleteVendorPayment } from "../../money/actions";
 import { ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +30,9 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
   const vendor = await prisma.vendor.findUnique({
     where: { id },
     include: {
-      jobs: { orderBy: { issueDate: "desc" }, take: 20, include: { items: { select: { rate: true, qtyOrdered: true } } } },
+      jobs: { orderBy: { issueDate: "desc" }, take: 20, include: { items: { select: { rate: true, qtyOrdered: true, qtyReceived: true } } } },
       designs: { orderBy: { code: "asc" }, take: 20, include: { category: true } },
+      payments: { orderBy: { date: "desc" }, select: { id: true, amount: true, currency: true, date: true, method: true, reference: true, note: true, jobId: true } },
     },
   });
   if (!vendor) notFound();
@@ -35,6 +40,22 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
   const waDigits = (vendor.altPhone || vendor.phone || "").replace(/[^\d]/g, "");
   const openJobs = vendor.jobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL");
   const openValue = openJobs.reduce((s, j) => s + j.items.reduce((a, i) => a + (i.rate ?? 0) * i.qtyOrdered, 0), 0);
+
+  // Payables: value of goods received per job (what we owe), balances, paid state.
+  const jobBills = vendor.jobs
+    .filter((j) => j.status !== "CANCELLED")
+    .map((j) => ({ id: j.id, docNo: jobDocNo(j), date: j.issueDate, currency: j.currency, total: jobReceivedValue(j) }))
+    .filter((j) => j.total > 0.01);
+  const billedV = sumByCurrency(jobBills.map((j) => ({ amount: j.total, currency: j.currency })));
+  const paidV = sumByCurrency(vendor.payments);
+  const bsV = balances(billedV, paidV);
+  const paidPerJob = new Map<string, number>();
+  for (const [cur, total] of paidV) {
+    const js = jobBills.filter((j) => j.currency === cur).sort((a, b) => +a.date - +b.date);
+    const alloc = allocateFIFO(js.map((j) => ({ id: j.id, total: j.total })), total);
+    for (const [jid, amt] of alloc) paidPerJob.set(jid, amt);
+  }
+  const vpaymentRows = vendor.payments.map((p) => ({ ...p, against: p.jobId ? jobBills.find((j) => j.id === p.jobId)?.docNo ?? null : null }));
   const bank = [
     ["Bank", vendor.bankName],
     ["Account name", vendor.bankAccountName],
@@ -93,6 +114,52 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
             {bank.map(([k, v]) => <Row key={k} label={k} value={v} />)}
           </section>
         )}
+
+        <section className="space-y-3">
+          <h2 className="px-1 text-sm font-semibold text-gray-500">Money</h2>
+          {bsV.length === 0 ? (
+            <p className="card text-sm text-gray-500">Nothing received to pay for yet.</p>
+          ) : (
+            <div className="card space-y-2">
+              {bsV.map((b) => (
+                <div key={b.currency} className="flex items-baseline justify-between">
+                  <span className="text-sm text-gray-500">Received {formatMoney(b.billed, b.currency)} · Paid {formatMoney(b.paid, b.currency)}</span>
+                  <span className={`text-base font-bold ${b.outstanding > 0.01 ? "text-red-700" : "text-green-700"}`}>
+                    {b.outstanding > 0.01 ? `${formatMoney(b.outstanding, b.currency)} to pay` : "Settled"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {jobBills.length > 0 && (
+            <ul className="divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-gray-100">
+              {jobBills.map((jb) => {
+                const st = paidState(jb.total, paidPerJob.get(jb.id) ?? 0);
+                return (
+                  <li key={jb.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <Link href={`/jobs/${jb.id}`} className="min-w-0 flex-1 hover:underline">
+                      <span className="text-sm font-medium text-gray-900">{jb.docNo}</span>
+                      <span className="ml-2 text-xs text-gray-500">{formatDate(jb.date)}</span>
+                    </Link>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAID_COLOR[st]}`}>{PAID_LABEL[st]}</span>
+                    <span className="text-sm font-semibold text-gray-900">{formatMoney(jb.total, jb.currency)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <PaymentForm
+            action={recordVendorPayment.bind(null, vendor.id)}
+            defaultCurrency={vendor.currency}
+            allocations={jobBills.map((j) => ({ id: j.id, label: `${j.docNo} · ${formatMoney(j.total, j.currency)}` }))}
+            allocationKey="jobId"
+            allocationLabel="Against job"
+            buttonLabel="Record vendor payment"
+          />
+          {vpaymentRows.length > 0 && <PaymentList payments={vpaymentRows} onDelete={deleteVendorPayment} />}
+        </section>
 
         <section>
           <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Jobs ({vendor.jobs.length})</h2>
