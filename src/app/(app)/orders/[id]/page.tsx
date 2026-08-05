@@ -25,7 +25,7 @@ export default async function OrderDetailPage({
     where: { id },
     include: {
       customer: true,
-      items: { include: { product: { include: { design: true } } } },
+      items: { include: { product: { include: { design: { include: { image: { select: { designId: true } } } } } } } },
     },
   });
   if (!order) notFound();
@@ -205,9 +205,9 @@ export default async function OrderDetailPage({
             {order.items.map((it) => (
               <li key={it.id} className="card">
                 <div className="flex items-start gap-3">
-                  {it.product.design?.imageData ? (
+                  {it.product.design?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={it.product.design.imageData} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-gray-100" />
+                    <img src={`/designs/${it.product.design.id}/image`} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-gray-100" />
                   ) : (
                     <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-[10px] text-gray-300 ring-1 ring-gray-100">No image</div>
                   )}

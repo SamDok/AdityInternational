@@ -80,7 +80,8 @@ const DesignSchema = z.object({
   gstRate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
   leadDays: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(0).nullable().optional()),
   description: str(),
-  imageData: str(),
+  imageData: str(), // new base64 upload (empty = no change)
+  removeImage: str(), // "1" when the user cleared the photo
   sourcingType: str(),
   vendorId: str(),
 });
@@ -116,11 +117,13 @@ export async function createDesign(formData: FormData) {
       gstRate: d.gstRate ?? null,
       leadDays: d.leadDays ?? null,
       description: d.description || null,
-      imageData: d.imageData || null,
       sourcingType: d.sourcingType || null,
       vendorId: d.vendorId || null,
     },
   });
+  if (d.imageData) {
+    await prisma.designImage.create({ data: { designId: design.id, data: d.imageData } });
+  }
   revalidatePath("/products");
   redirect(`/products/design/${design.id}`);
 }
@@ -142,11 +145,20 @@ export async function updateDesign(id: string, formData: FormData) {
       gstRate: d.gstRate ?? null,
       leadDays: d.leadDays ?? null,
       description: d.description || null,
-      imageData: d.imageData || null,
       sourcingType: d.sourcingType || null,
       vendorId: d.vendorId || null,
     },
   });
+  // Photo: a new upload replaces it, a clear removes it, otherwise leave as-is.
+  if (d.removeImage === "1") {
+    await prisma.designImage.deleteMany({ where: { designId: id } });
+  } else if (d.imageData) {
+    await prisma.designImage.upsert({
+      where: { designId: id },
+      create: { designId: id, data: d.imageData },
+      update: { data: d.imageData },
+    });
+  }
   revalidatePath("/products");
   revalidatePath(`/products/design/${id}`);
   redirect(`/products/design/${id}`);
@@ -301,7 +313,7 @@ export async function createVariantsBulk(
 // Clone a design and all its widths under a new, unique code (stock reset to 0).
 export async function duplicateDesign(id: string) {
   await requireUser();
-  const src = await prisma.design.findUnique({ where: { id }, include: { variants: true } });
+  const src = await prisma.design.findUnique({ where: { id }, include: { variants: true, image: true } });
   if (!src) return { error: "Design not found." };
   const base = `${src.code}-COPY`;
   let code = base;
@@ -318,9 +330,11 @@ export async function duplicateDesign(id: string) {
       composition: src.composition,
       hsnCode: src.hsnCode,
       description: src.description,
-      imageData: src.imageData,
     },
   });
+  if (src.image) {
+    await prisma.designImage.create({ data: { designId: copy.id, data: src.image.data } });
+  }
   for (const v of src.variants) {
     await prisma.product.create({
       data: {

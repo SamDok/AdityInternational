@@ -473,8 +473,8 @@ export async function getDesignGallery(q?: string) {
     },
   });
   // Whether each design has a photo, without shipping the bytes.
-  const withImg = await prisma.design.findMany({ where: { id: { in: designs.map((d) => d.id) }, NOT: { imageData: null } }, select: { id: true } });
-  const hasImg = new Set(withImg.map((d) => d.id));
+  const withImg = await prisma.designImage.findMany({ where: { designId: { in: designs.map((d) => d.id) } }, select: { designId: true } });
+  const hasImg = new Set(withImg.map((d) => d.designId));
   const total = await prisma.design.count({ where });
   return {
     total,
@@ -501,7 +501,7 @@ export type GalleryDesign = Awaited<ReturnType<typeof getDesignGallery>>["design
 export async function reorderOrder(sourceId: string) {
   await requireUser();
   const src = await prisma.order.findUnique({ where: { id: sourceId }, include: { items: true } });
-  if (!src) return { error: "Order not found." };
+  if (!src) redirect("/orders");
   const number = await nextOrderNumber();
   const created = await prisma.order.create({
     data: {

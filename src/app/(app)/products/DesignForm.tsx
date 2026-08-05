@@ -12,7 +12,6 @@ type Values = {
   gstRate?: number | null;
   leadDays?: number | null;
   description?: string | null;
-  imageData?: string | null;
   sourcingType?: string | null;
   vendorId?: string | null;
 };
@@ -24,14 +23,18 @@ type Props = {
   categories: Category[];
   vendors: Vendor[];
   initial?: Values;
+  initialImageUrl?: string | null; // existing photo, served from the design image route
   action: (formData: FormData) => Promise<{ error?: string } | void>;
   submitLabel: string;
 };
 
-export default function DesignForm({ categories, vendors, initial, action, submitLabel }: Props) {
+export default function DesignForm({ categories, vendors, initial, initialImageUrl, action, submitLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [imageData, setImageData] = useState(initial?.imageData ?? "");
+  // Existing photo shows via its URL; a fresh upload holds base64 in `newImage`.
+  const [preview, setPreview] = useState(initialImageUrl ?? "");
+  const [newImage, setNewImage] = useState(""); // base64 of a just-uploaded photo
+  const [removed, setRemoved] = useState(false);
   const router = useRouter();
 
   // Downscale the chosen photo to ~800px JPEG so it stays small in the database.
@@ -52,7 +55,10 @@ export default function DesignForm({ categories, vendors, initial, action, submi
         canvas.width = width;
         canvas.height = height;
         canvas.getContext("2d")?.drawImage(img, 0, 0, width, height);
-        setImageData(canvas.toDataURL("image/jpeg", 0.7));
+        const b64 = canvas.toDataURL("image/jpeg", 0.7);
+        setNewImage(b64);
+        setPreview(b64);
+        setRemoved(false);
       };
       img.src = String(reader.result);
     };
@@ -141,12 +147,13 @@ export default function DesignForm({ categories, vendors, initial, action, submi
 
       <div>
         <label className="field-label">Photo</label>
-        <input type="hidden" name="imageData" value={imageData} />
-        {imageData ? (
+        <input type="hidden" name="imageData" value={newImage} />
+        <input type="hidden" name="removeImage" value={removed ? "1" : ""} />
+        {preview ? (
           <div className="space-y-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imageData} alt="" className="h-40 w-full rounded-xl object-cover" />
-            <button type="button" onClick={() => setImageData("")} className="btn-secondary w-full text-sm">Remove photo</button>
+            <img src={preview} alt="" className="h-40 w-full rounded-xl object-cover" />
+            <button type="button" onClick={() => { setNewImage(""); setPreview(""); setRemoved(true); }} className="btn-secondary w-full text-sm">Remove photo</button>
           </div>
         ) : (
           <label className="btn-secondary w-full cursor-pointer">

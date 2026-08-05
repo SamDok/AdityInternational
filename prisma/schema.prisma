@@ -190,7 +190,10 @@ model Design {
   gstRate     Float? // GST % for domestic sales (e.g. 5 for fabric, 12 for made-ups)
   leadDays    Int? // override the type's make/procure lead time for this design
   description String?
-  imageData   String? // downscaled JPEG as a base64 data URL
+  // Photo lives in a separate 1:1 table (DesignImage) so the base64 bytes don't
+  // bloat every design read — critical with thousands of designs. Served via the
+  // /designs/[id]/image route.
+  image        DesignImage?
 
   // Supply side — nothing is made in-house.
   sourcingType String? // "JOB_WORK" or "TRADING"
@@ -201,6 +204,15 @@ model Design {
   variants  Product[] // its width-variants
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+}
+
+// One design's photo, kept out of the Design row (base64 is large). Loaded only
+// when a thumbnail/full image is actually shown.
+model DesignImage {
+  designId  String   @id
+  design    Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+  data      String // downscaled JPEG/PNG as a base64 data URL
+  updatedAt DateTime @updatedAt @default(now())
 }
 
 // One width-variant of a design — the actual sellable & stockable unit that

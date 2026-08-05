@@ -28,6 +28,7 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
       category: true,
       vendor: true,
       variants: { orderBy: { width: "asc" } },
+      image: { select: { designId: true } },
     },
   });
   if (!design) notFound();
@@ -53,9 +54,9 @@ export default async function DesignPage({ params }: { params: Promise<{ designI
           </div>
         )}
 
-        {design.imageData && (
+        {design.image && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={design.imageData} alt={design.code} className="h-48 w-full rounded-2xl object-cover" />
+          <img src={`/designs/${design.id}/image`} alt={design.code} className="h-48 w-full rounded-2xl object-cover" />
         )}
 
         {design.vendorId && !design.archived && (

@@ -41,6 +41,7 @@ export default async function CataloguePage({
       include: {
         category: true,
         variants: { select: { stockQty: true } },
+        image: { select: { designId: true } },
         _count: { select: { variants: true } },
       },
     }),
@@ -88,9 +89,9 @@ export default async function CataloguePage({
           {pagedDesigns.map((d) => (
             <li key={d.id}>
               <Link href={`/products/design/${d.id}`} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-gray-50">
-                {d.imageData ? (
+                {d.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={d.imageData} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                  <img src={`/designs/${d.id}/image`} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
                 ) : (
                   <div className="h-11 w-11 shrink-0 rounded-lg bg-brand-50" />
                 )}

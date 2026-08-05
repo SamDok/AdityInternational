@@ -21,7 +21,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
       items: {
         orderBy: { createdAt: "asc" },
         include: {
-          product: { include: { design: true } },
+          product: { include: { design: { include: { image: { select: { designId: true } } } } } },
           orderItem: { select: { order: { select: { number: true } } } },
         },
       },
@@ -186,9 +186,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
                 <td className="border border-gray-300 px-2 py-1.5 text-center">{i + 1}</td>
                 <td className="border border-gray-300 px-2 py-1.5">
                   <div className="flex items-start gap-2">
-                    {it.product.design?.imageData && (
+                    {it.product.design?.image && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.product.design.imageData} alt="" className="h-12 w-12 shrink-0 rounded object-cover ring-1 ring-gray-200" />
+                      <img src={`/designs/${it.product.design.id}/image`} alt="" className="h-12 w-12 shrink-0 rounded object-cover ring-1 ring-gray-200" />
                     )}
                     <div>
                       <p className="font-medium">{it.product.name}</p>

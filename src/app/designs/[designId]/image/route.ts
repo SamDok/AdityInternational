@@ -9,11 +9,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ designI
   if (!user) return new Response("Unauthorized", { status: 401 });
 
   const { designId } = await params;
-  const design = await prisma.design.findUnique({ where: { id: designId }, select: { imageData: true } });
-  if (!design?.imageData) return new Response("Not found", { status: 404 });
+  const img = await prisma.designImage.findUnique({ where: { designId }, select: { data: true } });
+  if (!img?.data) return new Response("Not found", { status: 404 });
 
   // Stored as a data URL, e.g. "data:image/jpeg;base64,…".
-  const m = /^data:(.+?);base64,(.*)$/s.exec(design.imageData);
+  const m = /^data:(.+?);base64,(.*)$/s.exec(img.data);
   if (!m) return new Response("Unsupported", { status: 415 });
 
   const bytes = Buffer.from(m[2], "base64");

@@ -25,7 +25,7 @@ export async function customerReadyLines(customerId: string): Promise<ReadyLine[
   const orders = await prisma.order.findMany({
     where: { customerId, status: { not: "CANCELLED" } },
     orderBy: { number: "asc" },
-    include: { items: { include: { product: { include: { design: { select: { imageData: true } } } } } } },
+    include: { items: { include: { product: { include: { design: { select: { id: true, image: { select: { designId: true } } } } } } } } },
   });
   const active = orders.filter((o) => !orderComplete({ manualComplete: o.manualComplete, items: o.items }));
 
@@ -42,7 +42,7 @@ export async function customerReadyLines(customerId: string): Promise<ReadyLine[
       pool.set(it.productId, avail - ready);
       lines.push({
         orderItemId: it.id, orderId: o.id, orderNumber: o.number,
-        productName: it.product.name, designImage: it.product.design?.imageData ?? null,
+        productName: it.product.name, designImage: it.product.design?.image ? `/designs/${it.product.design.id}/image` : null,
         unit: it.unit, perPieceQty: it.perPieceQty, ordered: roundQty(it.quantity), shipped: roundQty(it.shippedQty),
         remaining: roundQty(remaining), stock: roundQty(it.product.stockQty || 0), ready: roundQty(ready), rate: it.rate,
       });
