@@ -494,6 +494,56 @@ export async function getDesignGallery(q?: string) {
 
 export type GalleryDesign = Awaited<ReturnType<typeof getDesignGallery>>["designs"][number];
 
+// A product (width-variant) match for the order form's typeahead. Kept lean and
+// searched server-side so the form never ships the whole catalogue.
+export type ProductHit = { id: string; label: string; group: string; unit: string; costPrice: number | null };
+
+const HIT_SELECT = {
+  id: true, name: true, width: true, colour: true, unit: true, costPrice: true,
+  design: { select: { code: true, category: { select: { name: true } } } },
+} as const;
+
+function toHit(p: { id: string; name: string; width: string | null; colour: string | null; unit: string; costPrice: number | null; design: { code: string; category: { name: string } } | null }): ProductHit {
+  return {
+    id: p.id,
+    label: p.design ? `${p.design.code}${p.width ? ` · ${p.width}` : ""}${p.colour ? ` · ${p.colour}` : ""}` : p.name,
+    group: p.design?.category.name ?? "Other",
+    unit: p.unit,
+    costPrice: p.costPrice,
+  };
+}
+
+export async function searchProducts(q: string): Promise<ProductHit[]> {
+  await requireUser();
+  const query = (q ?? "").trim();
+  const rows = await prisma.product.findMany({
+    where: {
+      archived: false,
+      ...(query
+        ? { OR: [
+            { name: { contains: query, mode: "insensitive" } },
+            { colour: { contains: query, mode: "insensitive" } },
+            { width: { contains: query, mode: "insensitive" } },
+            { design: { code: { contains: query, mode: "insensitive" } } },
+            { design: { name: { contains: query, mode: "insensitive" } } },
+          ] }
+        : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 40,
+    select: HIT_SELECT,
+  });
+  return rows.map(toHit);
+}
+
+// Resolve specific products (for edit-prefill and gallery picks, which give an id).
+export async function resolveProducts(ids: string[]): Promise<ProductHit[]> {
+  await requireUser();
+  if (!ids.length) return [];
+  const rows = await prisma.product.findMany({ where: { id: { in: ids } }, select: HIT_SELECT });
+  return rows.map(toHit);
+}
+
 // Clone a past order into a fresh DRAFT — for "same as last time" repeat orders.
 // Copies the customer, currency, discount, the party/terms snapshot and every
 // line (product, spec, pieces, rate), then opens it for editing. Nothing is

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../OrderForm";
 import { createOrder } from "../actions";
-import { getProductOptions, getPricesByCustomer } from "../productOptions";
+import { getPricesByCustomer } from "../productOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function NewOrderPage({
   searchParams: Promise<{ customerId?: string }>;
 }) {
   const { customerId } = await searchParams;
-  const [customers, products, pricesByCustomer] = await Promise.all([
+  const [customers, productCount, pricesByCustomer] = await Promise.all([
     prisma.customer.findMany({
       where: { archived: false },
       orderBy: { name: "asc" },
@@ -22,7 +22,7 @@ export default async function NewOrderPage({
         incoterms: true, paymentTerms: true, defaultDiscount: true,
       },
     }),
-    getProductOptions(),
+    prisma.product.count({ where: { archived: false } }),
     getPricesByCustomer(),
   ]);
 
@@ -31,7 +31,7 @@ export default async function NewOrderPage({
       <PageHeader title="New order" backHref="/orders" />
       <OrderForm
         customers={customers}
-        products={products}
+        hasProducts={productCount > 0}
         pricesByCustomer={pricesByCustomer}
         defaultCustomerId={customerId}
         action={createOrder}

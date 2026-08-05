@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../../OrderForm";
 import { updateOrder, deleteOrder } from "../../actions";
-import { getProductOptions, getPricesByCustomer } from "../../productOptions";
+import { getPricesByCustomer } from "../../productOptions";
 import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,11 @@ export default async function EditOrderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [order, customers, products, pricesByCustomer] = await Promise.all([
-    prisma.order.findUnique({ where: { id }, include: { items: true } }),
+  const [order, customers, productCount, pricesByCustomer] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id },
+      include: { items: { include: { product: { select: { name: true, width: true, colour: true, design: { select: { code: true } } } } } } },
+    }),
     prisma.customer.findMany({
       orderBy: { name: "asc" },
       select: {
@@ -24,7 +27,7 @@ export default async function EditOrderPage({
         incoterms: true, paymentTerms: true, defaultDiscount: true,
       },
     }),
-    getProductOptions(),
+    prisma.product.count({ where: { archived: false } }),
     getPricesByCustomer(),
   ]);
 
@@ -52,6 +55,9 @@ export default async function EditOrderPage({
     items: order.items.map((it) => ({
       id: it.id,
       productId: it.productId,
+      productLabel: it.product.design
+        ? `${it.product.design.code}${it.product.width ? ` · ${it.product.width}` : ""}${it.product.colour ? ` · ${it.product.colour}` : ""}`
+        : it.product.name,
       description: it.description,
       quantity: it.quantity,
       pieces: it.pieces,
@@ -65,7 +71,7 @@ export default async function EditOrderPage({
   return (
     <div>
       <PageHeader title={`Edit order #${order.number}`} backHref={`/orders/${id}`} />
-      <OrderForm customers={customers} products={products} pricesByCustomer={pricesByCustomer} initial={initial} action={update} submitLabel="Save changes" />
+      <OrderForm customers={customers} hasProducts={productCount > 0} pricesByCustomer={pricesByCustomer} initial={initial} action={update} submitLabel="Save changes" />
       <div className="p-4 pt-0">
         <DeleteButton action={remove} label="Delete order" confirmMessage={`Delete order #${order.number}? This can't be undone.`} />
       </div>

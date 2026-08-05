@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CURRENCIES, UNITS, ORDER_STAGES, STAGE_LABELS, formatMoney, type OrderStage } from "@/lib/format";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
-import ProductPicker from "./ProductPicker";
+import ProductTypeahead from "./ProductTypeahead";
 import DesignGallery from "./DesignGallery";
-import type { OrderInput } from "./actions";
+import { resolveProducts, type OrderInput, type ProductHit } from "./actions";
 import { saveCustomerRegularPrice } from "../customers/actions";
 import { useToast } from "@/components/Toast";
 
@@ -25,12 +25,12 @@ type CustomerOpt = {
   paymentTerms?: string | null;
   defaultDiscount?: number | null;
 };
-type ProductOpt = { id: string; label: string; group: string; unit: string };
 
 type Line = {
   key: string;
   id?: string; // set for lines that already exist (so edits update in place)
   productId: string;
+  productLabel: string; // display text for the typeahead (design code · width · colour)
   description: string;
   pieces: string; // number of pieces (blank = loose metres)
   perPieceQty: string; // metres in each piece
@@ -66,12 +66,12 @@ type InitialOrder = {
   dueDate?: string | null;
   notes?: string | null;
   discountPct?: number | null;
-  items: { id?: string; productId: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; dueDate?: string | null; unit: string; rate: number }[];
+  items: { id?: string; productId: string; productLabel?: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; dueDate?: string | null; unit: string; rate: number }[];
 } & Partial<Record<keyof Snapshot, string | null>>;
 
 type Props = {
   customers: CustomerOpt[];
-  products: ProductOpt[];
+  hasProducts: boolean;
   pricesByCustomer: Record<string, Record<string, number>>;
   initial?: InitialOrder;
   defaultCustomerId?: string;
@@ -87,7 +87,7 @@ function todayStr() {
 }
 
 function emptyLine(): Line {
-  return { key: newKey(), productId: "", description: "", pieces: "", perPieceQty: "", dueDate: "", unit: "mtr", rate: "" };
+  return { key: newKey(), productId: "", productLabel: "", description: "", pieces: "", perPieceQty: "", dueDate: "", unit: "mtr", rate: "" };
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -111,7 +111,7 @@ function snapshotFromCustomer(c: CustomerOpt): Snapshot {
 
 const INCOTERMS = ["", "EXW", "FOB", "CFR", "CIF", "DAP", "DDP"];
 
-export default function OrderForm({ customers, products, pricesByCustomer, initial, defaultCustomerId, action, submitLabel }: Props) {
+export default function OrderForm({ customers, hasProducts, pricesByCustomer, initial, defaultCustomerId, action, submitLabel }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +167,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
             key: newKey(),
             id: it.id,
             productId: it.productId,
+            productLabel: it.productLabel ?? "",
             description: it.description ?? "",
             pieces: it.pieces != null ? String(it.pieces) : "",
             perPieceQty: String(per),
@@ -179,7 +180,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
   );
 
   const noCustomers = customers.length === 0;
-  const noProducts = products.length === 0;
+  const noProducts = !hasProducts;
 
   // Locally-saved regular prices this session (so the hint updates without a
   // full reload, and without mutating the pricesByCustomer prop).
@@ -220,13 +221,19 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
 
-  function onProductChange(key: string, productId: string) {
-    const p = products.find((x) => x.id === productId);
+  function onProductPick(key: string, hit: ProductHit) {
     updateLine(key, {
-      productId,
-      unit: p?.unit ?? "mtr",
-      rate: rateFor(productId, customerId),
+      productId: hit.id,
+      productLabel: hit.label,
+      unit: hit.unit ?? "mtr",
+      rate: rateFor(hit.id, customerId),
     });
+  }
+
+  // The visual gallery gives a product id only — resolve its details, then set it.
+  async function onGalleryPick(key: string, productId: string) {
+    const [hit] = await resolveProducts([productId]);
+    if (hit) onProductPick(key, hit);
   }
 
   function addLine() {
@@ -320,7 +327,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
     <div className="space-y-5 p-4">
       {galleryForLine && (
         <DesignGallery
-          onPick={(variantId) => { onProductChange(galleryForLine, variantId); setGalleryForLine(null); }}
+          onPick={(variantId) => { onGalleryPick(galleryForLine, variantId); setGalleryForLine(null); }}
           onClose={() => setGalleryForLine(null)}
         />
       )}
@@ -435,7 +442,7 @@ export default function OrderForm({ customers, products, pricesByCustomer, initi
                 <div>
                   <label className="field-label">Product</label>
                   <div className="flex gap-2">
-                    <div className="min-w-0 flex-1"><ProductPicker options={products} value={l.productId} onChange={(pid) => onProductChange(l.key, pid)} /></div>
+                    <div className="min-w-0 flex-1"><ProductTypeahead value={l.productId} label={l.productLabel} onPick={(hit) => onProductPick(l.key, hit)} /></div>
                     <button type="button" onClick={() => setGalleryForLine(l.key)} className="btn-secondary shrink-0 !px-3" aria-label="Browse designs by photo" title="Browse designs by photo">▦</button>
                   </div>
                 </div>
