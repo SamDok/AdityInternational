@@ -6,7 +6,7 @@ import StagePicker from "../StagePicker";
 import DropLineButton from "../DropLineButton";
 import GenerateProcurement from "../GenerateProcurement";
 import { planProcurement } from "../procurement";
-import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty } from "@/lib/format";
+import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty } from "@/lib/format";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
 import { setOrderComplete } from "../actions";
@@ -32,6 +32,18 @@ export default async function OrderDetailPage({
 
   const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
+
+  // Margin: sale (order currency) vs cost (product cost prices, which may be in a
+  // different currency for imported goods). A blended margin is only shown when
+  // the cost is entirely in the same currency as the sale.
+  const costByCurrency = new Map<string, number>();
+  for (const i of order.items) {
+    if (i.product.costPrice == null) continue;
+    costByCurrency.set(i.product.currency, (costByCurrency.get(i.product.currency) ?? 0) + i.quantity * i.product.costPrice);
+  }
+  const sameCurCost = costByCurrency.size === 1 && costByCurrency.has(order.currency) ? costByCurrency.get(order.currency)! : null;
+  const margin = sameCurCost != null ? total - sameCurCost : null;
+  const marginPct = margin != null && total > 0 ? roundQty((margin / total) * 100) : null;
   const badge = orderBadge(order);
   const autoFull = fulfillmentOf(order.items) === "FULL";
   // Offer a manual "mark complete" on a confirmed order that isn't fully shipped
@@ -261,6 +273,25 @@ export default async function OrderDetailPage({
           </span>
           <span className="text-xl font-bold text-gray-900">{formatMoney(total, order.currency)}</span>
         </div>
+
+        {costByCurrency.size > 0 && (
+          <div className="card space-y-1">
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Revenue</span><span className="font-medium text-gray-900">{formatMoney(total, order.currency)}</span></div>
+            {[...costByCurrency].map(([cur, c]) => (
+              <div key={cur} className="flex justify-between text-sm"><span className="text-gray-500">Cost (est.)</span><span className="font-medium text-gray-900">{formatMoney(c, cur)}</span></div>
+            ))}
+            {margin != null ? (
+              <div className="flex justify-between border-t border-gray-100 pt-1 text-sm font-semibold">
+                <span className="text-gray-700">Margin</span>
+                <span className={margin >= 0 ? "text-green-700" : "text-red-700"}>
+                  {formatMoney(margin, order.currency)}{marginPct != null ? ` · ${marginPct}%` : ""}
+                </span>
+              </div>
+            ) : (
+              <p className="pt-1 text-xs text-gray-400">Cost is in a different currency — a margin will show once an FX rate is set on the shipment.</p>
+            )}
+          </div>
+        )}
 
         {order.notes && (
           <section className="card">
