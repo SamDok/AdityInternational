@@ -6,12 +6,12 @@ import Link from "next/link";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import { CURRENCIES } from "@/lib/format";
 import { useToast } from "@/components/Toast";
-import ProductPicker from "../orders/ProductPicker";
+import ProductTypeahead from "../orders/ProductTypeahead";
+import type { ProductHit } from "../orders/actions";
 import type { JobInput } from "./actions";
 
 type Vendor = { id: string; name: string };
-type ProductOpt = { id: string; label: string; group: string; unit: string };
-type Line = { key: string; id?: string; productId: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string };
+type Line = { key: string; id?: string; productId: string; productLabel: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string };
 
 export type JobInitial = {
   vendorId: string;
@@ -20,13 +20,13 @@ export type JobInitial = {
   issueDate: string;
   dueDate: string;
   notes: string;
-  items: { id: string; productId: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string }[];
+  items: { id: string; productId: string; productLabel?: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string }[];
 };
 
 let counter = 0;
 const newKey = () => `j${counter++}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const emptyLine = (): Line => ({ key: newKey(), productId: "", pieces: "", perPieceQty: "", rate: "", unit: "mtr", dueDate: "", note: "" });
+const emptyLine = (): Line => ({ key: newKey(), productId: "", productLabel: "", pieces: "", perPieceQty: "", rate: "", unit: "mtr", dueDate: "", note: "" });
 
 // Total on a line: pieces × qty-per-piece (pieces blank/0 → just the qty).
 function lineTotal(l: Line): number {
@@ -37,14 +37,14 @@ function lineTotal(l: Line): number {
 
 export default function JobForm({
   vendors,
-  products,
+  hasProducts,
   defaultVendorId,
   initial,
   action,
   submitLabel,
 }: {
   vendors: Vendor[];
-  products: ProductOpt[];
+  hasProducts: boolean;
   defaultVendorId?: string;
   initial?: JobInitial;
   action: (input: JobInput) => Promise<{ error?: string } | void>;
@@ -62,18 +62,17 @@ export default function JobForm({
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [lines, setLines] = useState<Line[]>(
     initial?.items.length
-      ? initial.items.map((it) => ({ key: newKey(), id: it.id, productId: it.productId, pieces: it.pieces, perPieceQty: it.perPieceQty, rate: it.rate, unit: it.unit, dueDate: it.dueDate, note: it.note }))
+      ? initial.items.map((it) => ({ key: newKey(), id: it.id, productId: it.productId, productLabel: it.productLabel ?? "", pieces: it.pieces, perPieceQty: it.perPieceQty, rate: it.rate, unit: it.unit, dueDate: it.dueDate, note: it.note }))
       : [emptyLine()],
   );
 
-  const noProducts = products.length === 0;
+  const noProducts = !hasProducts;
 
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
-  function onProduct(key: string, productId: string) {
-    const p = products.find((x) => x.id === productId);
-    updateLine(key, { productId, unit: p?.unit ?? "mtr" });
+  function onProductPick(key: string, hit: ProductHit) {
+    updateLine(key, { productId: hit.id, productLabel: hit.label, unit: hit.unit ?? "mtr" });
   }
 
   function submit() {
@@ -147,7 +146,7 @@ export default function JobForm({
               </div>
               <div>
                 <label className="field-label">Product</label>
-                <ProductPicker options={products} value={l.productId} onChange={(pid) => onProduct(l.key, pid)} />
+                <ProductTypeahead value={l.productId} label={l.productLabel} onPick={(hit) => onProductPick(l.key, hit)} />
               </div>
               {/* Pieces × qty-per-piece = total (same as the order form) */}
               <div className="grid grid-cols-2 gap-3">

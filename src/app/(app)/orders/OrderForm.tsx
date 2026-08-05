@@ -7,7 +7,7 @@ import { CURRENCIES, UNITS, ORDER_STAGES, STAGE_LABELS, formatMoney, type OrderS
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import ProductTypeahead from "./ProductTypeahead";
 import DesignGallery from "./DesignGallery";
-import { resolveProducts, type OrderInput, type ProductHit } from "./actions";
+import { resolveProducts, getCustomerPrices, type OrderInput, type ProductHit } from "./actions";
 import { saveCustomerRegularPrice } from "../customers/actions";
 import { useToast } from "@/components/Toast";
 
@@ -72,7 +72,7 @@ type InitialOrder = {
 type Props = {
   customers: CustomerOpt[];
   hasProducts: boolean;
-  pricesByCustomer: Record<string, Record<string, number>>;
+  initialPrices: Record<string, number>; // the initial customer's agreed prices
   initial?: InitialOrder;
   defaultCustomerId?: string;
   action: (input: OrderInput) => Promise<{ error?: string } | void>;
@@ -111,7 +111,7 @@ function snapshotFromCustomer(c: CustomerOpt): Snapshot {
 
 const INCOTERMS = ["", "EXW", "FOB", "CFR", "CIF", "DAP", "DDP"];
 
-export default function OrderForm({ customers, hasProducts, pricesByCustomer, initial, defaultCustomerId, action, submitLabel }: Props) {
+export default function OrderForm({ customers, hasProducts, initialPrices, initial, defaultCustomerId, action, submitLabel }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -182,27 +182,29 @@ export default function OrderForm({ customers, hasProducts, pricesByCustomer, in
   const noCustomers = customers.length === 0;
   const noProducts = !hasProducts;
 
-  // Locally-saved regular prices this session (so the hint updates without a
-  // full reload, and without mutating the pricesByCustomer prop).
+  // The selected customer's agreed prices — fetched on demand when the customer
+  // changes, so the form never loads every customer's price list.
+  const [prices, setPrices] = useState<Record<string, number>>(initialPrices);
+  // Locally-saved regular prices this session (so the hint updates without a reload).
   const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>({});
 
-  // The customer's saved regular price for a product, if any (else null).
-  function savedPriceFor(productId: string, custId: string): number | null {
-    if (!productId || !custId) return null;
-    const override = savedOverrides[`${custId}:${productId}`];
+  // The current customer's saved regular price for a product, if any (else null).
+  function savedPriceFor(productId: string): number | null {
+    if (!productId) return null;
+    const override = savedOverrides[`${customerId}:${productId}`];
     if (override != null) return override;
-    const p = pricesByCustomer[custId]?.[productId];
+    const p = prices[productId];
     return p != null ? p : null;
   }
 
   // What to prefill a line's rate with: only the customer's regular price. There
   // is no product-level default price in this business.
-  function rateFor(productId: string, custId: string): string {
-    const saved = savedPriceFor(productId, custId);
+  function rateFor(productId: string): string {
+    const saved = savedPriceFor(productId);
     return saved != null ? String(saved) : "";
   }
 
-  function onCustomerChange(id: string) {
+  async function onCustomerChange(id: string) {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
     if (c) {
@@ -213,8 +215,10 @@ export default function OrderForm({ customers, hasProducts, pricesByCustomer, in
       setSnap({ ...EMPTY_SNAPSHOT });
       setDiscountPct("");
     }
-    // Re-price existing lines for the new customer.
-    setLines((prev) => prev.map((l) => (l.productId ? { ...l, rate: rateFor(l.productId, id) } : l)));
+    // Fetch this customer's agreed prices, then re-price existing lines from them.
+    const p = id ? await getCustomerPrices(id) : {};
+    setPrices(p);
+    setLines((prev) => prev.map((l) => (l.productId ? { ...l, rate: p[l.productId] != null ? String(p[l.productId]) : "" } : l)));
   }
 
   function updateLine(key: string, patch: Partial<Line>) {
@@ -226,7 +230,7 @@ export default function OrderForm({ customers, hasProducts, pricesByCustomer, in
       productId: hit.id,
       productLabel: hit.label,
       unit: hit.unit ?? "mtr",
-      rate: rateFor(hit.id, customerId),
+      rate: rateFor(hit.id),
     });
   }
 
@@ -425,7 +429,7 @@ export default function OrderForm({ customers, hasProducts, pricesByCustomer, in
             const rate = parseFloat(l.rate) || 0;
             const lineTotal = metres * rate;
             const pcs = parseInt(l.pieces, 10);
-            const saved = savedPriceFor(l.productId, customerId);
+            const saved = savedPriceFor(l.productId);
             const rateNum = l.rate === "" ? null : rate;
             const differsFromSaved = saved != null && rateNum != null && Math.abs(saved - rateNum) > 1e-9;
             const justSaved = savedKeys.has(l.key) && !differsFromSaved;

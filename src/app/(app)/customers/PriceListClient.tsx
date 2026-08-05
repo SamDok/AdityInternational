@@ -1,46 +1,38 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { setCustomerPrice, removeCustomerPrice } from "./actions";
 import { formatMoney } from "@/lib/format";
 import { TrashIcon } from "@/components/Icons";
+import ProductTypeahead from "../orders/ProductTypeahead";
 
-type Opt = { id: string; label: string; group: string; cost: number | null };
 type Price = { id: string; productId: string; label: string; price: number; currency: string };
 
 export default function PriceListClient({
   customerId,
   currency,
-  options,
+  hasProducts,
   prices,
 }: {
   customerId: string;
   currency: string;
-  options: Opt[];
+  hasProducts: boolean;
   prices: Price[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState("");
+  const [selectedCost, setSelectedCost] = useState<number | null>(null);
   const [priceText, setPriceText] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const setPrice = setCustomerPrice.bind(null, customerId);
 
-  const selectedCost = options.find((o) => o.id === selectedId)?.cost ?? null;
   const priceNum = parseFloat(priceText);
   const margin =
     selectedCost != null && !isNaN(priceNum) && priceNum > 0
       ? Math.round(((priceNum - selectedCost) / priceNum) * 100)
       : null;
-
-  const groups = useMemo(() => {
-    const map = new Map<string, Opt[]>();
-    for (const o of options) {
-      if (!map.has(o.group)) map.set(o.group, []);
-      map.get(o.group)!.push(o);
-    }
-    return [...map.entries()];
-  }, [options]);
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -49,7 +41,7 @@ export default function PriceListClient({
       if (res?.error) setError(res.error);
       else {
         formRef.current?.reset();
-        setSelectedId("");
+        setSelectedId(""); setSelectedLabel(""); setSelectedCost(null);
         setPriceText("");
       }
     });
@@ -60,21 +52,18 @@ export default function PriceListClient({
       <section className="card">
         <h2 className="mb-3 font-semibold text-gray-900">Set a price</h2>
         {error && <p className="mb-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-700">{error}</p>}
-        {options.length === 0 ? (
+        {!hasProducts ? (
           <p className="text-sm text-gray-500">Add some product designs and widths first.</p>
         ) : (
           <form ref={formRef} action={onSubmit} className="space-y-3">
             <div>
-              <label className="field-label" htmlFor="productId">Product (design · width · colour)</label>
-              <select id="productId" name="productId" required className="field-input"
-                value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-                <option value="" disabled>Choose a product…</option>
-                {groups.map(([group, opts]) => (
-                  <optgroup key={group} label={group}>
-                    {opts.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+              <label className="field-label">Product (design · width · colour)</label>
+              <input type="hidden" name="productId" value={selectedId} required />
+              <ProductTypeahead
+                value={selectedId}
+                label={selectedLabel}
+                onPick={(hit) => { setSelectedId(hit.id); setSelectedLabel(hit.label); setSelectedCost(hit.costPrice); }}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

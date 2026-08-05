@@ -130,11 +130,11 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
     object store (S3/Blob) and serving a CDN URL, so the DB holds only a
     reference. **Blocked on** choosing a provider. Lower priority now that rows
     are lean.
-  - Note: the **order form** now uses a debounced server typeahead
-    (`searchProducts` + `ProductTypeahead`), so it no longer ships the catalogue.
-    The **job form** and **customer price list** still load the full (now-lean,
-    image-free) product list via `getProductOptions` — swap them to the same
-    typeahead if those forms ever feel heavy.
+  - The **order form, job form and customer price list** all use the debounced
+    server typeahead (`searchProducts` + `ProductTypeahead`) — none ship the
+    catalogue. The catalogue page, and the customer/job/shipment lists, paginate
+    in the database. Customer prices are fetched per-customer (`getCustomerPrices`)
+    on the order form, not all at once.
   - The catalogue-wide **recent stock movements** feed is now built
     (`src/app/(app)/products/movements/page.tsx`, powered by the `StockMovement`
     log, including the new `CUSTOMER_RETURN` / `VENDOR_REJECT` reasons). A
@@ -220,6 +220,31 @@ same infra). **Blocked on** an object-storage provider (app FS is ephemeral).
 **Effort:** large (infra decision required).
 
 ---
+
+## Scale (2000+ designs, growing history)
+
+Most of the scale work is **done**: images moved off the design row + served via a
+route; the catalogue, customer/job/shipment lists paginate in the DB; the order,
+job and price-list forms use a server typeahead; per-customer price fetch. Two
+places are **deliberately left live-computed**, because optimising them trades
+correctness/robustness for speed on pages that aren't hot:
+
+- **🟡 Orders list + home "open" count** filter/count on *derived* completeness
+  (per-line `shippedQty` vs `quantity` + `manualComplete`), which the DB can't
+  express without column-to-column comparison. To paginate/aggregate these in the
+  DB they'd need a maintained `Order.complete` flag updated across ~7 write paths
+  (create/edit order, ship, return, reduce, cancel-shipment, mark-complete) — real
+  drift risk. They currently load the (bounded) set of non-cancelled orders and
+  compute in memory. Revisit with a flag if order volume gets large.
+- **🟡 Reports + Money** load transaction rows to compute totals live, because an
+  invoice's grand total depends on GST/discount/charges that vary per shipment —
+  a plain SQL `SUM` can't reproduce it. Denormalising a stored `Shipment.total`
+  would speed these up but risks silent money drift if a write path forgets to
+  recompute; kept live for correctness. These are occasional admin views, so the
+  full-table read is acceptable until transaction history is very large.
+- **🟢 Trigram/GIN index** on `Design.code`/`name` (and product/customer search
+  columns) once you pass tens of thousands of rows — ILIKE `contains` scans are
+  fine at 2000 but not at 50k+.
 
 ## Cross-cutting / platform (not customer-specific)
 

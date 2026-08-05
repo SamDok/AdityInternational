@@ -4,7 +4,6 @@ import PageHeader from "@/components/PageHeader";
 import JobForm from "../../JobForm";
 import { updateJob } from "../../actions";
 import { jobDocNo } from "@/lib/jobNumber";
-import { getProductOptions } from "../../../orders/productOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +11,13 @@ const dateInput = (d: Date | null | undefined) => (d ? new Date(d).toISOString()
 
 export default async function EditJobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [job, vendors, products] = await Promise.all([
-    prisma.job.findUnique({ where: { id }, include: { items: { orderBy: { id: "asc" } } } }),
+  const [job, vendors, productCount] = await Promise.all([
+    prisma.job.findUnique({
+      where: { id },
+      include: { items: { orderBy: { id: "asc" }, include: { product: { select: { name: true, width: true, colour: true, design: { select: { code: true } } } } } } },
+    }),
     prisma.vendor.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    getProductOptions(),
+    prisma.product.count({ where: { archived: false } }),
   ]);
   if (!job) notFound();
 
@@ -32,6 +34,9 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
       return {
         id: it.id,
         productId: it.productId,
+        productLabel: it.product.design
+          ? `${it.product.design.code}${it.product.width ? ` · ${it.product.width}` : ""}${it.product.colour ? ` · ${it.product.colour}` : ""}`
+          : it.product.name,
         pieces: it.pieces != null ? String(it.pieces) : "",
         perPieceQty: String(per),
         rate: it.rate != null ? String(it.rate) : "",
@@ -47,7 +52,7 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
       <PageHeader title={`Edit job ${jobDocNo(job)}`} backHref={`/jobs/${job.id}`} />
       <JobForm
         vendors={vendors}
-        products={products.map((p) => ({ id: p.id, label: p.label, group: p.group, unit: p.unit }))}
+        hasProducts={productCount > 0}
         initial={initial}
         action={updateJob.bind(null, job.id)}
         submitLabel="Save changes"

@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../../OrderForm";
-import { updateOrder, deleteOrder } from "../../actions";
-import { getPricesByCustomer } from "../../productOptions";
+import { updateOrder, deleteOrder, getCustomerPrices } from "../../actions";
 import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +13,7 @@ export default async function EditOrderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [order, customers, productCount, pricesByCustomer] = await Promise.all([
+  const [order, customers, productCount] = await Promise.all([
     prisma.order.findUnique({
       where: { id },
       include: { items: { include: { product: { select: { name: true, width: true, colour: true, design: { select: { code: true } } } } } } },
@@ -28,10 +27,10 @@ export default async function EditOrderPage({
       },
     }),
     prisma.product.count({ where: { archived: false } }),
-    getPricesByCustomer(),
   ]);
 
   if (!order) notFound();
+  const initialPrices = await getCustomerPrices(order.customerId);
 
   const update = updateOrder.bind(null, id);
   const remove = deleteOrder.bind(null, id);
@@ -71,7 +70,7 @@ export default async function EditOrderPage({
   return (
     <div>
       <PageHeader title={`Edit order #${order.number}`} backHref={`/orders/${id}`} />
-      <OrderForm customers={customers} hasProducts={productCount > 0} pricesByCustomer={pricesByCustomer} initial={initial} action={update} submitLabel="Save changes" />
+      <OrderForm customers={customers} hasProducts={productCount > 0} initialPrices={initialPrices} initial={initial} action={update} submitLabel="Save changes" />
       <div className="p-4 pt-0">
         <DeleteButton action={remove} label="Delete order" confirmMessage={`Delete order #${order.number}? This can't be undone.`} />
       </div>

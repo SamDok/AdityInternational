@@ -24,25 +24,31 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const PAGE_SIZE = 30;
 
-  const jobs = await prisma.job.findMany({
-    orderBy: { issueDate: "desc" },
-    include: { vendor: true, _count: { select: { items: true } } },
-  });
+  // The view maps straight onto the status column, so we filter + paginate in the DB.
+  const statusWhere =
+    view === "done" ? { status: "RECEIVED" }
+    : view === "all" ? {}
+    : { status: { in: ["OPEN", "PARTIAL"] } };
 
-  const openCount = jobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL").length;
-  const filtered = jobs.filter((j) =>
-    view === "all" ? true
-    : view === "done" ? j.status === "RECEIVED"
-    : j.status === "OPEN" || j.status === "PARTIAL",
-  );
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const [paged, filteredCount, openCount, total] = await Promise.all([
+    prisma.job.findMany({
+      where: statusWhere,
+      orderBy: { issueDate: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { vendor: true, _count: { select: { items: true } } },
+    }),
+    prisma.job.count({ where: statusWhere }),
+    prisma.job.count({ where: { status: { in: ["OPEN", "PARTIAL"] } } }),
+    prisma.job.count(),
+  ]);
   const tabs: [View, string][] = [["open", `To receive${openCount ? ` (${openCount})` : ""}`], ["done", "Received"], ["all", "All"]];
 
   return (
     <div>
       <PageHeader
         title="Production"
-        subtitle={jobs.length ? `${jobs.length} job${jobs.length === 1 ? "" : "s"}` : undefined}
+        subtitle={total ? `${total} job${total === 1 ? "" : "s"}` : undefined}
         action={<Link href="/jobs/new" aria-label="New job" className="btn-primary !px-3 !py-2"><PlusIcon className="h-5 w-5" /></Link>}
       />
 
@@ -58,7 +64,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </Link>
       </div>
 
-      {jobs.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           icon={<ClipboardIcon className="h-8 w-8" />}
           title="No jobs yet"
@@ -77,7 +83,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
             ))}
           </div>
 
-          {filtered.length === 0 ? (
+          {filteredCount === 0 ? (
             <p className="px-6 py-12 text-center text-sm text-gray-500">
               {view === "done" ? "Nothing fully received yet." : view === "open" ? "Nothing open — everything's received." : "No jobs here."}
             </p>
@@ -110,7 +116,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
               })}
             </ul>
           )}
-          <Pager basePath="/jobs" params={{ view: view === "open" ? undefined : view }} page={page} pageSize={PAGE_SIZE} total={filtered.length} />
+          <Pager basePath="/jobs" params={{ view: view === "open" ? undefined : view }} page={page} pageSize={PAGE_SIZE} total={filteredCount} />
         </>
       )}
     </div>

@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import OrderForm from "../OrderForm";
-import { createOrder } from "../actions";
-import { getPricesByCustomer } from "../productOptions";
+import { createOrder, getCustomerPrices } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +11,7 @@ export default async function NewOrderPage({
   searchParams: Promise<{ customerId?: string }>;
 }) {
   const { customerId } = await searchParams;
-  const [customers, productCount, pricesByCustomer] = await Promise.all([
+  const [customers, productCount, initialPrices] = await Promise.all([
     prisma.customer.findMany({
       where: { archived: false },
       orderBy: { name: "asc" },
@@ -23,7 +22,7 @@ export default async function NewOrderPage({
       },
     }),
     prisma.product.count({ where: { archived: false } }),
-    getPricesByCustomer(),
+    getCustomerPrices(customerId ?? ""),
   ]);
 
   return (
@@ -32,7 +31,7 @@ export default async function NewOrderPage({
       <OrderForm
         customers={customers}
         hasProducts={productCount > 0}
-        pricesByCustomer={pricesByCustomer}
+        initialPrices={initialPrices}
         defaultCustomerId={customerId}
         action={createOrder}
         submitLabel="Save order"

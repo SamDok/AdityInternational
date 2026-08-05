@@ -536,6 +536,17 @@ export async function searchProducts(q: string): Promise<ProductHit[]> {
   return rows.map(toHit);
 }
 
+// One customer's agreed prices (productId → price), fetched on demand so the
+// order form never loads every customer's price list.
+export async function getCustomerPrices(customerId: string): Promise<Record<string, number>> {
+  await requireUser();
+  if (!customerId) return {};
+  const rows = await prisma.customerPrice.findMany({ where: { customerId }, select: { productId: true, price: true } });
+  const map: Record<string, number> = {};
+  for (const r of rows) map[r.productId] = r.price;
+  return map;
+}
+
 // Resolve specific products (for edit-prefill and gallery picks, which give an id).
 export async function resolveProducts(ids: string[]): Promise<ProductHit[]> {
   await requireUser();

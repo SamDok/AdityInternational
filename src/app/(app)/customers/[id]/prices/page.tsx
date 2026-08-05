@@ -2,13 +2,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import PriceListClient from "../../PriceListClient";
-import { getProductOptions } from "../../../orders/productOptions";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomerPricesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [customer, options] = await Promise.all([
+  const [customer, productCount] = await Promise.all([
     prisma.customer.findUnique({
       where: { id },
       include: {
@@ -18,7 +17,7 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
         },
       },
     }),
-    getProductOptions(),
+    prisma.product.count({ where: { archived: false } }),
   ]);
   if (!customer) notFound();
 
@@ -36,7 +35,7 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
       <PriceListClient
         customerId={id}
         currency={customer.currency}
-        options={options.map((o) => ({ id: o.id, label: o.label, group: o.group, cost: o.costPrice ?? null }))}
+        hasProducts={productCount > 0}
         prices={prices}
       />
     </div>

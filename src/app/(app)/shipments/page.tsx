@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { formatDate, formatMoney } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
+import Pager from "@/components/Pager";
 import { CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -13,17 +14,27 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Cancelled", cls: "bg-red-100 text-red-700" },
 };
 
-export default async function ShipmentsPage() {
-  const shipments = await prisma.shipment.findMany({
-    orderBy: { date: "desc" },
-    include: { customer: { select: { name: true } }, items: { select: { quantity: true, rate: true, pieces: true } } },
-  });
+const PAGE_SIZE = 30;
+
+export default async function ShipmentsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  const [shipments, total] = await Promise.all([
+    prisma.shipment.findMany({
+      orderBy: { date: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { customer: { select: { name: true } }, items: { select: { quantity: true, rate: true, pieces: true } } },
+    }),
+    prisma.shipment.count(),
+  ]);
 
   return (
     <div>
       <PageHeader
         title="Shipments"
-        subtitle={shipments.length ? `${shipments.length} total` : undefined}
+        subtitle={total ? `${total} total` : undefined}
         backHref="/orders"
         action={<Link href="/shipments/new" aria-label="New shipment" className="btn-primary !px-3 !py-2"><PlusIcon className="h-5 w-5" /></Link>}
       />
@@ -59,6 +70,7 @@ export default async function ShipmentsPage() {
           })}
         </ul>
       )}
+      <Pager basePath="/shipments" params={{}} page={page} pageSize={PAGE_SIZE} total={total} />
     </div>
   );
 }

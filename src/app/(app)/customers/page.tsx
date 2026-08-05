@@ -41,44 +41,42 @@ export default async function CustomersPage({
       : {}),
   };
 
-  const orderBy: Prisma.CustomerOrderByWithRelationInput =
-    sort === "recent"
-      ? { createdAt: "desc" }
-      : sort === "orders"
-        ? { orders: { _count: "desc" } }
-        : { name: "asc" }; // "name" and "lastorder" fetch by name, then re-sort if needed
-
-  const [rawCustomers, allForOptions, users] = await Promise.all([
-    prisma.customer.findMany({
-      where,
-      orderBy,
-      include: {
-        _count: { select: { orders: true } },
-        orders: { orderBy: { orderDate: "desc" }, take: 1, select: { orderDate: true } },
-      },
-    }),
-    prisma.customer.findMany({ select: { country: true, category: true } }),
-    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
-  ]);
-
-  // "Last order" sorts by each customer's most recent order date (no-orders last).
-  const customers =
-    sort === "lastorder"
-      ? [...rawCustomers].sort((a, b) => {
-          const da = a.orders[0]?.orderDate?.getTime() ?? 0;
-          const db = b.orders[0]?.orderDate?.getTime() ?? 0;
-          return db - da;
-        })
-      : rawCustomers;
-
   const PAGE_SIZE = 30;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const matchCount = customers.length;
-  const pagedCustomers = customers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const listInclude = {
+    _count: { select: { orders: true } },
+    orders: { orderBy: { orderDate: "desc" as const }, take: 1, select: { orderDate: true } },
+  };
 
-  const totalCustomers = allForOptions.length;
-  const countries = [...new Set(allForOptions.map((c) => c.country).filter(Boolean))].sort() as string[];
-  const categories = [...new Set(allForOptions.map((c) => c.category).filter(Boolean))].sort() as string[];
+  // "Last order" needs each customer's latest order date, which the DB can't
+  // orderBy directly — only that sort loads the matched set. Every other sort
+  // (name / recent / most-orders) and all filters paginate in the database.
+  let pagedCustomers: Prisma.CustomerGetPayload<{ include: typeof listInclude }>[];
+  let matchCount: number;
+  if (sort === "lastorder") {
+    const rows = await prisma.customer.findMany({ where, include: listInclude });
+    rows.sort((a, b) => (b.orders[0]?.orderDate?.getTime() ?? 0) - (a.orders[0]?.orderDate?.getTime() ?? 0));
+    matchCount = rows.length;
+    pagedCustomers = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  } else {
+    const orderBy: Prisma.CustomerOrderByWithRelationInput =
+      sort === "recent" ? { createdAt: "desc" } : sort === "orders" ? { orders: { _count: "desc" } } : { name: "asc" };
+    [pagedCustomers, matchCount] = await Promise.all([
+      prisma.customer.findMany({ where, orderBy, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, include: listInclude }),
+      prisma.customer.count({ where }),
+    ]);
+  }
+
+  // Filter options + the "any customers at all?" count — small, distinct queries
+  // (not a full-table load).
+  const [totalCustomers, countryRows, categoryRows, users] = await Promise.all([
+    prisma.customer.count(),
+    prisma.customer.findMany({ where: { country: { not: null } }, select: { country: true }, distinct: ["country"], orderBy: { country: "asc" } }),
+    prisma.customer.findMany({ where: { category: { not: null } }, select: { category: true }, distinct: ["category"], orderBy: { category: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
+  ]);
+  const countries = countryRows.map((c) => c.country).filter(Boolean) as string[];
+  const categories = categoryRows.map((c) => c.category).filter(Boolean) as string[];
   const salespeople = users.map((u) => ({ id: u.id, label: u.name || u.email }));
   const filtersActive = !!(q || country || category || salesperson || showArchived);
 
@@ -86,7 +84,7 @@ export default async function CustomersPage({
     <div>
       <PageHeader
         title="Customers"
-        subtitle={totalCustomers ? `${customers.length} shown` : undefined}
+        subtitle={totalCustomers ? `${matchCount} shown` : undefined}
         action={
           <div className="flex items-center gap-2">
             {totalCustomers > 0 && <ExportButton />}
@@ -122,7 +120,7 @@ export default async function CustomersPage({
             salespeople={salespeople}
           />
 
-          {customers.length === 0 ? (
+          {matchCount === 0 ? (
             <p className="px-6 py-12 text-center text-sm text-gray-500">
               No customers match {filtersActive ? "these filters" : "your search"}.
             </p>
