@@ -21,9 +21,16 @@ export default async function CataloguePage({
   const stock = sp.stock ?? "all";
   const sort = sp.sort ?? "code";
 
+  // "In stock" ⇔ some variant has stock; "out" ⇔ none does — expressible in the
+  // DB, so the stock filter paginates too.
+  const stockWhere: Prisma.DesignWhereInput =
+    stock === "in" ? { variants: { some: { stockQty: { gt: 0 } } } }
+    : stock === "out" ? { variants: { none: { stockQty: { gt: 0 } } } }
+    : {};
   const where: Prisma.DesignWhereInput = {
     ...(type ? { categoryId: type } : {}),
     ...(composition ? { composition } : {}),
+    ...stockWhere,
     ...(q
       ? {
           OR: [
@@ -35,45 +42,55 @@ export default async function CataloguePage({
       : {}),
   };
 
-  const [rows, types, allComps] = await Promise.all([
-    prisma.design.findMany({
-      where,
-      include: {
-        category: true,
-        variants: { select: { stockQty: true } },
-        image: { select: { designId: true } },
-        _count: { select: { variants: true } },
-      },
-    }),
+  const PAGE_SIZE = 40;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const listInclude = {
+    category: true,
+    variants: { select: { stockQty: true } },
+    image: { select: { designId: true } },
+    _count: { select: { variants: true } },
+  } as const;
+
+  const [types, allComps] = await Promise.all([
     prisma.productCategory.findMany({ orderBy: [{ sortOrder: "asc" }], select: { id: true, name: true } }),
     prisma.design.findMany({ where: { composition: { not: null } }, select: { composition: true }, distinct: ["composition"] }),
   ]);
 
-  let designs = rows.map((d) => ({
-    ...d,
-    totalStock: d.variants.reduce((s, v) => s + v.stockQty, 0),
-  }));
-  if (stock === "in") designs = designs.filter((d) => d.totalStock > 0);
-  if (stock === "out") designs = designs.filter((d) => d.totalStock === 0);
-  designs.sort((a, b) =>
-    sort === "recent"
-      ? b.createdAt.getTime() - a.createdAt.getTime()
-      : sort === "stock"
-        ? b.totalStock - a.totalStock
-        : a.code.localeCompare(b.code),
-  );
+  // Sort by total stock needs a summed relation the DB can't order by, so that
+  // one (rare) case loads the matched set and sorts in memory. Every other
+  // sort/filter is paginated in the database — the catalogue never loads the
+  // whole table just to show a page.
+  let pagedDesigns: (Prisma.DesignGetPayload<{ include: typeof listInclude }> & { totalStock: number })[];
+  let total: number;
+  if (sort === "stock") {
+    const rows = await prisma.design.findMany({ where, include: listInclude });
+    const withStock = rows
+      .map((d) => ({ ...d, totalStock: d.variants.reduce((s, v) => s + v.stockQty, 0) }))
+      .sort((a, b) => b.totalStock - a.totalStock);
+    total = withStock.length;
+    pagedDesigns = withStock.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  } else {
+    const [rows, count] = await Promise.all([
+      prisma.design.findMany({
+        where,
+        orderBy: sort === "recent" ? { createdAt: "desc" } : { code: "asc" },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: listInclude,
+      }),
+      prisma.design.count({ where }),
+    ]);
+    total = count;
+    pagedDesigns = rows.map((d) => ({ ...d, totalStock: d.variants.reduce((s, v) => s + v.stockQty, 0) }));
+  }
 
   const compositions = allComps.map((c) => c.composition).filter(Boolean).sort() as string[];
-
-  const PAGE_SIZE = 40;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const pagedDesigns = designs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
       <PageHeader
         title="All designs"
-        subtitle={`${designs.length} shown`}
+        subtitle={`${total} design${total === 1 ? "" : "s"}`}
         backHref="/products"
         action={<ExportButton />}
       />
@@ -82,7 +99,7 @@ export default async function CataloguePage({
         types={types} compositions={compositions}
       />
 
-      {designs.length === 0 ? (
+      {total === 0 ? (
         <p className="px-6 py-12 text-center text-sm text-gray-500">No designs match.</p>
       ) : (
         <ul className="divide-y divide-gray-100 p-2">
@@ -107,7 +124,7 @@ export default async function CataloguePage({
           ))}
         </ul>
       )}
-      <Pager basePath="/products/all" params={{ q, type, composition, stock: stock === "all" ? undefined : stock, sort: sort === "code" ? undefined : sort }} page={page} pageSize={PAGE_SIZE} total={designs.length} />
+      <Pager basePath="/products/all" params={{ q, type, composition, stock: stock === "all" ? undefined : stock, sort: sort === "code" ? undefined : sort }} page={page} pageSize={PAGE_SIZE} total={total} />
     </div>
   );
 }
