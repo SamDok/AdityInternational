@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isOwner, destroySession, hashPassword, verifyPassword } from "@/lib/auth";
+import { runCatalogueImport, type ImportSummary } from "@/lib/catalogueImport";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -38,6 +39,23 @@ export async function exportAllData(): Promise<{ error?: string; data?: string }
     vendors, jobs, jobItems, stockMovements, bankAccounts, company, users,
   };
   return { data: JSON.stringify(dump, null, 2) };
+}
+
+// Owner-only one-time seed of the master design catalogue (idempotent).
+// Runs the shared importer against the app's database — safe to re-run.
+export async function importCatalogue(): Promise<{ error?: string; summary?: ImportSummary }> {
+  await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can import the catalogue." };
+  try {
+    const summary = await runCatalogueImport(prisma);
+    revalidatePath("/products");
+    revalidatePath("/products/all");
+    revalidatePath("/vendors");
+    return { summary };
+  } catch (e) {
+    console.error("importCatalogue failed", e);
+    return { error: e instanceof Error ? e.message : "Import failed. Please try again." };
+  }
 }
 
 export async function logout() {
