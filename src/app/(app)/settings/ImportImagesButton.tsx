@@ -17,6 +17,7 @@ export default function ImportImagesButton() {
   const [failed, setFailed] = useState(0);
   const [finished, setFinished] = useState(false);
   const [sampleErrors, setSampleErrors] = useState<string[]>([]);
+  const [overwrite, setOverwrite] = useState(false);
   const toast = useToast();
 
   function run() {
@@ -29,7 +30,7 @@ export default function ImportImagesButton() {
       for (let i = 0; i < TOTAL; i += CHUNK) {
         const batch = DESIGN_IMAGE_FILE_IDS.slice(i, i + CHUNK);
         try {
-          const res = await importDriveImages(batch);
+          const res = await importDriveImages(batch, overwrite);
           d += res.done; s += res.skipped; f += res.errors.length;
           for (const e of res.errors) if (samples.length < 5) samples.push(e);
         } catch (e) {
@@ -89,6 +90,10 @@ export default function ImportImagesButton() {
           This pulls up to <b>{TOTAL}</b> design photos from your Google Drive into the app&apos;s image store.
           It runs in this tab for a few minutes. Safe to run again — designs that already have a photo are skipped.
         </p>
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} className="mt-0.5" />
+          <span>Re-load every photo, even ones already loaded <span className="text-gray-400">(tick this once, after switching image host)</span></span>
+        </label>
         <div className="flex gap-2">
           <button type="button" onClick={run} className="btn-primary flex-1">Yes, load images</button>
           <button type="button" onClick={() => setConfirming(false)} className="btn-secondary flex-1">Cancel</button>

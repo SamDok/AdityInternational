@@ -1,31 +1,48 @@
-import { put } from "@vercel/blob";
+import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Design photo storage on the CDN (Vercel Blob), linked to a design by code.
+ * Design photo storage on Cloudinary (free tier, image-optimised CDN), linked
+ * to a design by code. The public_id is derived from the code and overwrites in
+ * place, so re-uploading a design replaces its photo rather than duplicating.
+ * The delivered URL (with q_auto,f_auto so browsers get an optimised, modern
+ * format) is kept in DesignImage.data; the /designs/[id]/image route redirects
+ * there, so every existing <img> in the app just works.
  *
- * The Blob path is derived from the code and overwrites in place, so
- * re-uploading a design replaces its photo rather than piling up duplicates.
- * The resulting CDN URL is kept in DesignImage.data; the /designs/[id]/image
- * route redirects there, so every existing <img> in the app just works.
+ * Needs three env vars: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY,
+ * CLOUDINARY_API_SECRET (set in Vercel).
  */
+
+function cloudinaryConfigured(): boolean {
+  return Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+}
 
 // Store already-decoded image bytes for a design (found by code).
 async function storeBytes(code: string, buffer: Buffer, contentType: string): Promise<{ ok?: true; error?: string }> {
   const design = await prisma.design.findUnique({ where: { code }, select: { id: true } });
   if (!design) return { error: `no design with code "${code}"` };
-  const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  if (!cloudinaryConfigured()) return { error: `${code}: image host not set up (add the Cloudinary keys in Vercel)` };
+
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true,
+  });
   const safe = code.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || design.id;
+  const dataUri = `data:${contentType};base64,${buffer.toString("base64")}`;
   let url: string;
   try {
-    ({ url } = await put(`designs/${safe}.${ext}`, buffer, {
-      access: "public",
-      contentType,
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    }));
+    const res = await cloudinary.uploader.upload(dataUri, {
+      public_id: safe,
+      folder: "aditya-designs",
+      overwrite: true,
+      resource_type: "image",
+    });
+    // Serve optimised (auto quality + modern format) via a delivery transform.
+    url = res.secure_url.replace("/upload/", "/upload/q_auto,f_auto/");
   } catch (e) {
-    return { error: `${code}: storage — ${e instanceof Error ? e.message : "Blob upload failed"}` };
+    return { error: `${code}: storage — ${e instanceof Error ? e.message : "Cloudinary upload failed"}` };
   }
   await prisma.designImage.upsert({
     where: { designId: design.id },
