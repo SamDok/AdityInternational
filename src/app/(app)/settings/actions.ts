@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isOwner, destroySession, hashPassword, verifyPassword } from "@/lib/auth";
 import { prepareCatalogue, importCatalogueSlice, finalizeCatalogue, type ImportSummary } from "@/lib/catalogueImport";
+import { refreshFxRates } from "@/lib/fx";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -101,6 +102,16 @@ export async function setFxRates(entries: { currency: string; perUnitInr: number
   }
   revalidatePath("/settings/exchange-rates");
   return { ok: true };
+}
+
+// Owner-only: pull today's live rates now (same routine the daily cron runs).
+export async function refreshFxRatesNow(): Promise<{ error?: string; updated?: Record<string, number> }> {
+  await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can refresh rates." };
+  const res = await refreshFxRates();
+  if (res.error) return { error: res.error };
+  revalidatePath("/settings/exchange-rates");
+  return { updated: res.updated };
 }
 
 export async function logout() {
