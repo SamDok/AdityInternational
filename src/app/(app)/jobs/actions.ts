@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyMovements, type StockMove } from "@/lib/stock";
+import { applyMaterialMovements } from "@/lib/materials";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { financialYearLabel } from "@/lib/jobNumber";
 
@@ -278,4 +279,54 @@ export async function deleteJob(id: string) {
   await prisma.job.delete({ where: { id } }); // items cascade; stock already added stays
   revalidatePath("/jobs");
   redirect("/jobs");
+}
+
+// ------------------------------------------------------------- Materials issue
+// Issue raw materials to the kaarigar for one design line of a job. Deducts
+// material stock (ISSUE_TO_JOB) and records each on JobMaterial. Lines with
+// nothing issued simply stay "materials pending".
+export async function issueJobMaterials(
+  jobItemId: string,
+  lines: { materialId: string; qty: number; note?: string | null }[],
+) {
+  await requireUser();
+  const jobItem = await prisma.jobItem.findUnique({ where: { id: jobItemId }, select: { id: true, jobId: true, job: { select: { status: true } } } });
+  if (!jobItem) return { error: "Line not found." };
+  if (jobItem.job.status === "CANCELLED") return { error: "This job is cancelled." };
+
+  const clean = lines.filter((l) => l.materialId && l.qty > 0);
+  if (clean.length === 0) return { error: "Enter what you're issuing." };
+
+  const materials = await prisma.rawMaterial.findMany({ where: { id: { in: clean.map((l) => l.materialId) } }, select: { id: true, unit: true } });
+  const unitOf = new Map(materials.map((m) => [m.id, m.unit]));
+  const userId = (await getCurrentUser())?.id ?? null;
+
+  await prisma.$transaction(
+    clean.map((l) =>
+      prisma.jobMaterial.create({
+        data: { jobId: jobItem.jobId, jobItemId, materialId: l.materialId, qtyIssued: l.qty, unit: unitOf.get(l.materialId) ?? "mtr", note: l.note || null },
+      }),
+    ),
+  );
+  await applyMaterialMovements(clean.map((l) => ({ materialId: l.materialId, delta: -l.qty, reason: "ISSUE_TO_JOB" as const, jobId: jobItem.jobId, userId })));
+
+  revalidatePath(`/jobs/${jobItem.jobId}`);
+  revalidatePath("/materials");
+  return { ok: true };
+}
+
+// Return unused material from a job line back into stock (RETURN_FROM_JOB).
+export async function returnJobMaterial(jobMaterialId: string, qty: number) {
+  await requireUser();
+  if (!(qty > 0)) return { error: "Enter a quantity to return." };
+  const jm = await prisma.jobMaterial.findUnique({ where: { id: jobMaterialId } });
+  if (!jm) return { error: "Not found." };
+  const remaining = jm.qtyIssued - jm.qtyReturned;
+  if (qty > remaining + 1e-9) return { error: `Only ${remaining} ${jm.unit} left to return.` };
+  const userId = (await getCurrentUser())?.id ?? null;
+  await prisma.jobMaterial.update({ where: { id: jobMaterialId }, data: { qtyReturned: { increment: qty } } });
+  await applyMaterialMovements([{ materialId: jm.materialId, delta: qty, reason: "RETURN_FROM_JOB", jobId: jm.jobId, userId }]);
+  revalidatePath(`/jobs/${jm.jobId}`);
+  revalidatePath("/materials");
+  return { ok: true };
 }

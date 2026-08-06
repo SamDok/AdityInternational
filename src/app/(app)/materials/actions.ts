@@ -81,6 +81,30 @@ export async function adjustMaterialStock(id: string, delta: number, note?: stri
   return { ok: true };
 }
 
+// Replace a fabric type's default materials (set once, pre-fills every issue).
+export async function setCategoryMaterials(categoryId: string, entries: { materialId: string; qtyPerPiece?: number | null }[]) {
+  await requireUser();
+  const clean = entries.filter((e) => e.materialId);
+  await prisma.$transaction([
+    prisma.categoryMaterial.deleteMany({ where: { categoryId } }),
+    ...(clean.length ? [prisma.categoryMaterial.createMany({ data: clean.map((e) => ({ categoryId, materialId: e.materialId, qtyPerPiece: e.qtyPerPiece ?? null })), skipDuplicates: true })] : []),
+  ]);
+  revalidatePath("/products/manage-types");
+  return { ok: true };
+}
+
+// Replace a single design's material overrides (blank = fall back to the type).
+export async function setDesignMaterials(designId: string, entries: { materialId: string; qtyPerPiece?: number | null }[]) {
+  await requireUser();
+  const clean = entries.filter((e) => e.materialId);
+  await prisma.$transaction([
+    prisma.designMaterial.deleteMany({ where: { designId } }),
+    ...(clean.length ? [prisma.designMaterial.createMany({ data: clean.map((e) => ({ designId, materialId: e.materialId, qtyPerPiece: e.qtyPerPiece ?? null })), skipDuplicates: true })] : []),
+  ]);
+  revalidatePath(`/products/design/${designId}`);
+  return { ok: true };
+}
+
 export async function setMaterialArchived(id: string, archived: boolean) {
   await requireUser();
   await prisma.rawMaterial.update({ where: { id }, data: { archived } });

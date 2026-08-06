@@ -16,10 +16,23 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
     include: {
       vendor: true,
       order: { include: { customer: true } },
-      items: { orderBy: { id: "asc" }, include: { product: { include: { design: { include: { image: { select: { designId: true } } } } } } } },
+      items: {
+        orderBy: { id: "asc" },
+        include: {
+          product: { include: { design: { include: { image: { select: { designId: true } } } } } },
+          materials: { include: { material: { select: { name: true, unit: true } } } },
+        },
+      },
     },
   });
   if (!job) notFound();
+
+  // Materials issued to the kaarigar, grouped by design line (job work only).
+  const materialLines = job.kind !== "PURCHASE"
+    ? job.items
+        .map((it) => ({ label: it.product.name, mats: it.materials.filter((m) => m.qtyIssued - m.qtyReturned > 0) }))
+        .filter((l) => l.mats.length > 0)
+    : [];
 
   const company = await getCompanyProfile();
 
@@ -148,6 +161,33 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             </tfoot>
           )}
         </table>
+
+        {/* Materials issued to the kaarigar */}
+        {materialLines.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">Materials issued with this job</p>
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="border border-gray-300 px-2 py-1.5">Design</th>
+                  <th className="border border-gray-300 px-2 py-1.5">Material</th>
+                  <th className="border border-gray-300 px-2 py-1.5 text-right">Quantity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {materialLines.map((l) =>
+                  l.mats.map((m, mi) => (
+                    <tr key={m.id} className="align-top">
+                      {mi === 0 && <td className="border border-gray-300 px-2 py-1.5 font-medium" rowSpan={l.mats.length}>{l.label}</td>}
+                      <td className="border border-gray-300 px-2 py-1.5">{m.material.name}</td>
+                      <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatQty(m.qtyIssued - m.qtyReturned)} {m.unit}</td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Signature */}
         <div className="mt-6 flex items-start justify-end gap-6">

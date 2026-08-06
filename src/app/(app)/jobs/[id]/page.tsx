@@ -8,6 +8,8 @@ import ReceiveForm from "../ReceiveForm";
 import ReturnForm from "../../shipments/ReturnForm";
 import ToggleButton from "../../products/ToggleButton";
 import DeleteButton from "@/components/DeleteButton";
+import JobMaterials from "../JobMaterials";
+import { defaultMaterialsForDesign } from "@/lib/materials";
 import { cancelJob, deleteJob, closeJobShort, recordRejection } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +26,35 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const { receive } = await searchParams;
   const job = await prisma.job.findUnique({
     where: { id },
-    include: { vendor: true, order: true, items: { include: { product: true } } },
+    include: {
+      vendor: true,
+      order: true,
+      items: {
+        include: {
+          product: { include: { design: { select: { id: true } } } },
+          materials: { include: { material: { select: { name: true, unit: true } } } },
+        },
+      },
+    },
   });
   if (!job) notFound();
+
+  // Materials issued to the kaarigar are only relevant for job work.
+  const showMaterials = job.kind === "JOB_WORK";
+  const allMaterials = showMaterials
+    ? await prisma.rawMaterial.findMany({ where: { archived: false }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, name: true, unit: true, stockQty: true } })
+    : [];
+  const materialLines = showMaterials
+    ? await Promise.all(
+        job.items.map(async (it) => ({
+          jobItemId: it.id,
+          label: it.product.name,
+          orderedQty: it.qtyOrdered,
+          issued: it.materials.map((m) => ({ id: m.id, name: m.material.name, unit: m.material.unit, qtyIssued: m.qtyIssued, qtyReturned: m.qtyReturned })),
+          defaults: it.product.design ? await defaultMaterialsForDesign(it.product.design.id) : [],
+        })),
+      )
+    : [];
 
   const docNo = jobDocNo(job);
   const s = STATUS[job.status] ?? { label: job.status, cls: "bg-gray-100 text-gray-700" };
@@ -75,6 +103,13 @@ export default async function JobPage({ params, searchParams }: { params: Promis
             defaultOpen={receive === "1"}
             items={job.items.map((it) => ({ id: it.id, label: it.product.name, qtyOrdered: it.qtyOrdered, qtyReceived: it.qtyReceived, unit: it.unit, pieces: it.pieces, perPieceQty: it.perPieceQty, piecesReceived: it.piecesReceived }))}
           />
+        )}
+
+        {showMaterials && (
+          <section>
+            <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Materials to issue</h2>
+            <JobMaterials lines={materialLines} materials={allMaterials} disabled={job.status === "CANCELLED"} />
+          </section>
         )}
 
         <section>
