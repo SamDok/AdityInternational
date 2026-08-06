@@ -1,9 +1,10 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { procurementBoard } from "../orders/procurement";
+import { baseFabricNeeds } from "../orders/materialNeeds";
 import GenerateProcurement from "../orders/GenerateProcurement";
 import ProcurementFilters from "./ProcurementFilters";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatQty } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export default async function ProcurementPage({
   const overdue = sp.overdue === "1";
 
   const board = await procurementBoard();
+  const fabricNeeds = await baseFabricNeeds();
+  const fabricShort = fabricNeeds.filter((f) => f.short > 0);
 
   // Apply filters (in memory — the board itself is already a few bulk queries).
   let needs = board.needs;
@@ -43,6 +46,28 @@ export default async function ProcurementPage({
       <div className="space-y-5 p-4">
         {(board.vendorOpts.length > 0 || board.customerOpts.length > 0) && (
           <ProcurementFilters vendor={vendor} customer={customer} overdue={overdue} vendors={board.vendorOpts} customers={board.customerOpts} />
+        )}
+
+        {/* Base fabric to buy / issue before job work can start */}
+        {fabricNeeds.length > 0 && (
+          <section>
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h2 className="text-sm font-semibold text-gray-500">Base fabric for open orders</h2>
+              <Link href="/material-orders/new" className="text-xs font-medium text-brand-600">Raise material PO →</Link>
+            </div>
+            <div className="card space-y-1.5">
+              {fabricNeeds.map((f) => (
+                <div key={f.materialId} className="flex items-center justify-between text-sm">
+                  <span className="min-w-0 truncate text-gray-800">{f.name}</span>
+                  <span className="shrink-0 text-gray-500">
+                    need ~{formatQty(f.needed)} · have {formatQty(f.inStock)} {f.unit}
+                    {f.short > 0 && <span className="ml-1.5 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">short {formatQty(f.short)}</span>}
+                  </span>
+                </div>
+              ))}
+              <p className="pt-1 text-[11px] text-gray-400">Estimated at 1 {fabricNeeds[0]?.unit ?? "mtr"} fabric per finished unit (or your per-piece figure). Issue fabric on each job to start it.</p>
+            </div>
+          </section>
         )}
 
         {/* Still to procure */}

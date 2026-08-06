@@ -16,7 +16,11 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Cancelled", cls: "bg-red-100 text-red-700" },
 };
 
-type View = "open" | "done" | "all";
+type View = "open" | "awaiting" | "done" | "all";
+
+// A job-work job is "awaiting materials" while any of its design lines has had
+// no materials issued yet — the kaarigar can't start that line until fabric goes out.
+const AWAITING_WHERE = { kind: "JOB_WORK", status: { in: ["OPEN", "PARTIAL"] }, items: { some: { materials: { none: {} } } } };
 
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ view?: string; page?: string }> }) {
   const sp = await searchParams;
@@ -28,21 +32,28 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const statusWhere =
     view === "done" ? { status: "RECEIVED" }
     : view === "all" ? {}
+    : view === "awaiting" ? AWAITING_WHERE
     : { status: { in: ["OPEN", "PARTIAL"] } };
 
-  const [paged, filteredCount, openCount, total] = await Promise.all([
+  const [paged, filteredCount, openCount, awaitingCount, total] = await Promise.all([
     prisma.job.findMany({
       where: statusWhere,
       orderBy: { issueDate: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { vendor: true, _count: { select: { items: true } } },
+      include: { vendor: true, items: { select: { materials: { select: { id: true }, take: 1 } } } },
     }),
     prisma.job.count({ where: statusWhere }),
     prisma.job.count({ where: { status: { in: ["OPEN", "PARTIAL"] } } }),
+    prisma.job.count({ where: AWAITING_WHERE }),
     prisma.job.count(),
   ]);
-  const tabs: [View, string][] = [["open", `To receive${openCount ? ` (${openCount})` : ""}`], ["done", "Received"], ["all", "All"]];
+  const tabs: [View, string][] = [
+    ["open", `To receive${openCount ? ` (${openCount})` : ""}`],
+    ["awaiting", `Awaiting materials${awaitingCount ? ` (${awaitingCount})` : ""}`],
+    ["done", "Received"],
+    ["all", "All"],
+  ];
 
   return (
     <div>
@@ -92,6 +103,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
               {paged.map((j) => {
                 const s = STATUS[j.status] ?? { label: j.status, cls: "bg-gray-100 text-gray-700" };
                 const canReceive = j.status === "OPEN" || j.status === "PARTIAL";
+                const lineCount = j.items.length;
+                const awaitingMaterials = j.kind === "JOB_WORK" && canReceive && j.items.some((it) => it.materials.length === 0);
                 return (
                   <li key={j.id}>
                     <div className="card flex items-center gap-2">
@@ -99,10 +112,13 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-gray-900">Job {jobDocNo(j)} · {j.vendor.name}</p>
                           <p className="truncate text-sm text-gray-500">
-                            {j.kind === "PURCHASE" ? "Purchase" : "Job work"} · {formatDate(j.issueDate)} · {j._count.items} line{j._count.items !== 1 ? "s" : ""}
+                            {j.kind === "PURCHASE" ? "Purchase" : "Job work"} · {formatDate(j.issueDate)} · {lineCount} line{lineCount !== 1 ? "s" : ""}
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>
+                          {awaitingMaterials && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Awaiting materials</span>}
+                        </div>
                         {!canReceive && <ChevronRightIcon className="h-5 w-5 text-gray-300" />}
                       </Link>
                       {canReceive && (
