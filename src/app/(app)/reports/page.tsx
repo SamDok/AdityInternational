@@ -23,6 +23,53 @@ function MetricCard({ label, value, hint, tone = "gray" }: { label: string; valu
   );
 }
 
+// currency → (key → amount). Ranking is kept WITHIN each currency, because a
+// total that mixes USD + INR would be meaningless without conversion.
+type Ranked = Map<string, Map<string, number>>;
+function bump(agg: Ranked, currency: string, key: string, amount: number) {
+  if (!(amount > 0)) return;
+  let m = agg.get(currency);
+  if (!m) { m = new Map(); agg.set(currency, m); }
+  m.set(key, (m.get(key) ?? 0) + amount);
+}
+
+// A ranked-list card: for each currency, the top rows by value.
+function RankCard({ title, hint, agg, unit, limit = 5 }: { title: string; hint?: string; agg: Ranked; unit?: string; limit?: number }) {
+  const currencies = [...agg.keys()].sort();
+  const hasAny = currencies.some((c) => (agg.get(c)?.size ?? 0) > 0);
+  return (
+    <section className="space-y-2">
+      <h2 className="px-1 text-sm font-semibold text-gray-500">{title}{hint && <span className="ml-2 font-normal text-gray-400">{hint}</span>}</h2>
+      {!hasAny ? (
+        <p className="card text-sm text-gray-500">Nothing to show yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {currencies.map((cur) => {
+            const rows = [...(agg.get(cur) ?? new Map())].sort((a, b) => b[1] - a[1]).slice(0, limit);
+            if (rows.length === 0) return null;
+            return (
+              <div key={cur} className="card">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{cur}</p>
+                <ol className="divide-y divide-gray-50">
+                  {rows.map(([label, value], i) => (
+                    <li key={label} className="flex items-center gap-3 py-2">
+                      <span className="w-5 shrink-0 text-sm font-semibold text-gray-400">{i + 1}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{label}</span>
+                      <span className="shrink-0 text-sm font-semibold text-gray-900">
+                        {unit ? `${Math.round(value).toLocaleString("en-IN")} ${unit}` : formatMoney(value, cur)}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default async function ReportsPage() {
   const company = await getCompanyProfile();
   const fyNow = financialYearLabel(new Date());
@@ -30,7 +77,11 @@ export default async function ReportsPage() {
   const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials, materialPOs] = await Promise.all([
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" } },
-      select: { date: true, currency: true, billToTaxId: true, status: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
+      select: {
+        date: true, currency: true, billToTaxId: true, status: true, discountPct: true, freight: true, insurance: true, otherCharges: true,
+        customer: { select: { name: true, salesperson: { select: { name: true, email: true } } } },
+        items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true, code: true, name: true } } } } } },
+      },
     }),
     prisma.payment.findMany({ select: { amount: true, currency: true } }),
     prisma.job.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } }),
@@ -70,6 +121,24 @@ export default async function ReportsPage() {
     rawMaterials.filter((m) => m.costPrice != null && m.stockQty > 0).map((m) => ({ amount: m.stockQty * (m.costPrice as number), currency: m.currency })),
   );
 
+  // Rankings for the current financial year, kept within each currency.
+  const fyShipments = shipments.filter((s) => financialYearLabel(s.date) === fyNow);
+  const topCustomers: Ranked = new Map();
+  const bySalesperson: Ranked = new Map();
+  const topDesignsValue: Ranked = new Map();
+  const topDesignsQty: Ranked = new Map();
+  for (const s of fyShipments) {
+    const total = shipmentGrandTotal(s, company);
+    bump(topCustomers, s.currency, s.customer?.name ?? "—", total);
+    const sp = s.customer?.salesperson;
+    bump(bySalesperson, s.currency, sp ? sp.name || sp.email : "Unassigned", total);
+    for (const it of s.items) {
+      const label = it.product.design ? `${it.product.design.code} · ${it.product.design.name}` : "—";
+      bump(topDesignsValue, s.currency, label, it.quantity * it.rate);
+      bump(topDesignsQty, s.currency, label, it.quantity);
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Reports" subtitle={`Financial year ${fyNow}`} backHref="/more" />
@@ -81,6 +150,13 @@ export default async function ReportsPage() {
         <MetricCard label="Stock at cost" value={moneyLine(stockValue)} hint="Finished goods on hand" />
         <MetricCard label="Materials at cost" value={moneyLine(rawStockValue)} hint="Base fabric & materials on hand" />
         <MetricCard label="Sales · all time" value={moneyLine(billedAll)} hint="Total invoiced" />
+      </div>
+
+      <div className="space-y-5 px-4 pb-6">
+        <RankCard title="Top customers" hint={`by sales · FY ${fyNow}`} agg={topCustomers} />
+        <RankCard title="Top designs" hint={`by sales · FY ${fyNow}`} agg={topDesignsValue} />
+        <RankCard title="Best-selling designs" hint={`by metres · FY ${fyNow}`} agg={topDesignsQty} unit="mtr" />
+        <RankCard title="Salesperson performance" hint={`by sales · FY ${fyNow}`} agg={bySalesperson} />
       </div>
     </div>
   );
