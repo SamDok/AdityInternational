@@ -31,7 +31,12 @@ export default async function MovementsPage() {
 
   return (
     <div>
-      <PageHeader title="Stock movements" subtitle="Recent stock changes across the catalogue" backHref="/more" />
+      <PageHeader
+        title="Stock movements"
+        subtitle="Recent stock changes across the catalogue"
+        backHref="/more"
+        action={<Link href="/products/stock-report" className="btn-secondary !px-3 !py-2 text-sm">Stock report</Link>}
+      />
 
       {movements.length === 0 ? (
         <EmptyState
