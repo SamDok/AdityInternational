@@ -16,24 +16,28 @@ export default function ImportImagesButton() {
   const [skipped, setSkipped] = useState(0);
   const [failed, setFailed] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [sampleErrors, setSampleErrors] = useState<string[]>([]);
   const toast = useToast();
 
   function run() {
     setConfirming(false);
     setFinished(false);
-    setProgress(0); setDone(0); setSkipped(0); setFailed(0);
+    setProgress(0); setDone(0); setSkipped(0); setFailed(0); setSampleErrors([]);
     startTransition(async () => {
       let d = 0, s = 0, f = 0;
+      const samples: string[] = [];
       for (let i = 0; i < TOTAL; i += CHUNK) {
         const batch = DESIGN_IMAGE_FILE_IDS.slice(i, i + CHUNK);
         try {
           const res = await importDriveImages(batch);
           d += res.done; s += res.skipped; f += res.errors.length;
-        } catch {
+          for (const e of res.errors) if (samples.length < 5) samples.push(e);
+        } catch (e) {
           f += batch.length;
+          if (samples.length < 5) samples.push(e instanceof Error ? e.message : "batch failed");
         }
         setProgress(Math.min(i + CHUNK, TOTAL));
-        setDone(d); setSkipped(s); setFailed(f);
+        setDone(d); setSkipped(s); setFailed(f); setSampleErrors([...samples]);
       }
       setFinished(true);
       toast(`Images loaded: ${d} new, ${s} already had one${f ? `, ${f} failed` : ""}`);
@@ -61,6 +65,14 @@ export default function ImportImagesButton() {
         <p className="text-sm text-gray-700">
           <b className="text-green-700">{done}</b> new · <b>{skipped}</b> already had one{failed > 0 && <> · <b className="text-amber-700">{failed}</b> couldn&apos;t be fetched</>}
         </p>
+        {failed > 0 && sampleErrors.length > 0 && (
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="mb-1 text-xs font-medium text-gray-600">Why they failed (sample):</p>
+            <ul className="space-y-0.5 text-xs text-gray-500">
+              {sampleErrors.map((e, i) => <li key={i} className="break-words">{e}</li>)}
+            </ul>
+          </div>
+        )}
         {failed > 0 && <p className="text-xs text-gray-500">Run it again to retry the ones that failed — designs that already have a photo are skipped.</p>}
         <div className="flex gap-2">
           <a href="/products/all" className="btn-primary flex-1 text-center">View catalogue</a>

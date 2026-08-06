@@ -16,12 +16,17 @@ async function storeBytes(code: string, buffer: Buffer, contentType: string): Pr
   if (!design) return { error: `no design with code "${code}"` };
   const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   const safe = code.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || design.id;
-  const { url } = await put(`designs/${safe}.${ext}`, buffer, {
-    access: "public",
-    contentType,
-    addRandomSuffix: false,
-    allowOverwrite: true,
-  });
+  let url: string;
+  try {
+    ({ url } = await put(`designs/${safe}.${ext}`, buffer, {
+      access: "public",
+      contentType,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    }));
+  } catch (e) {
+    return { error: `${code}: storage — ${e instanceof Error ? e.message : "Blob upload failed"}` };
+  }
   await prisma.designImage.upsert({
     where: { designId: design.id },
     update: { data: url },

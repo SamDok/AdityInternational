@@ -67,7 +67,13 @@ export async function importDriveImages(
   }
 
   const todo = batch.filter((b) => !existing.has(b.code));
-  const results = await mapLimit(todo, 6, (b) => putDesignImageFromDrive(b.code, b.fileId));
+  const results = await mapLimit(todo, 6, async (b) => {
+    try {
+      return await putDesignImageFromDrive(b.code, b.fileId);
+    } catch (e) {
+      return { error: `${b.code}: ${e instanceof Error ? e.message : "unexpected failure"}` };
+    }
+  });
 
   let done = 0;
   const errors: string[] = [];
