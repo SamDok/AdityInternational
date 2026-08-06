@@ -6,17 +6,19 @@ import { UsersIcon, ClipboardIcon, GearIcon, BoxIcon, ChevronRightIcon, Document
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
-  const [customers, products, vendors, lowStock] = await Promise.all([
+  const [customers, products, vendors, lowStock, materials] = await Promise.all([
     prisma.customer.count(),
     prisma.product.count({ where: { archived: false } }),
     prisma.vendor.count({ where: { archived: false } }),
     prisma.product.count({ where: { archived: false, reorderLevel: { not: null } } }),
+    prisma.rawMaterial.count({ where: { archived: false } }),
   ]);
 
   // Due soon & Procurement now live under the Production (Jobs) tab.
   const items = [
     { href: "/customers", label: "Customers", sub: `${customers} total`, icon: UsersIcon },
     { href: "/products", label: "Products & designs", sub: `${products} in the catalogue`, icon: BoxIcon },
+    { href: "/materials", label: "Materials", sub: materials ? `${materials} base fabrics & materials` : "base fabrics for kaarigars", icon: BoxIcon },
     { href: "/shipments", label: "Shipments", sub: "dispatches, invoices & packing lists", icon: DocumentIcon },
     { href: "/money", label: "Money", sub: "receivables & payables", icon: ClipboardIcon },
     { href: "/reports", label: "Reports", sub: "sales, order book & stock value", icon: DocumentIcon },

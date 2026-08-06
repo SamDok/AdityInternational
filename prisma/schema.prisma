@@ -140,6 +140,8 @@ model VendorPayment {
   vendorId      String
   job           Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
   jobId         String? // optional: payment booked against a specific job / PO
+  materialPo    MaterialPurchaseOrder? @relation(fields: [materialPoId], references: [id], onDelete: SetNull)
+  materialPoId  String? // optional: payment booked against a material purchase order
   amount        Float
   currency      String   @default("INR")
   date          DateTime @default(now())
@@ -174,6 +176,7 @@ model ProductCategory {
   sortOrder Int      @default(0)
   archived  Boolean  @default(false)
   designs   Design[]
+  materialDefaults CategoryMaterial[] // default materials for every design of this type
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -202,6 +205,7 @@ model Design {
 
   archived  Boolean   @default(false)
   variants  Product[] // its width-variants
+  materialOverrides DesignMaterial[] // per-design default materials (override the type)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -290,6 +294,8 @@ model Vendor {
   designs   Design[]
   jobs      Job[]
   payments  VendorPayment[]
+  materialsSupplied RawMaterial[]        // materials this supplier provides
+  materialPos       MaterialPurchaseOrder[] // material POs raised to this supplier
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -316,6 +322,7 @@ model Job {
   orderId   String?
   items     JobItem[]
   payments  VendorPayment[] // payments booked against this job / PO
+  materials JobMaterial[]   // raw materials issued to the kaarigar for this job
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -340,6 +347,7 @@ model JobItem {
   dueDate     DateTime? // this line's own due date
   note        String? // colour / spec for this line
   unit        String   @default("mtr")
+  materials   JobMaterial[] // raw materials issued for this specific design line
   createdAt   DateTime @default(now())
 }
 
@@ -468,4 +476,127 @@ model OrderItem {
   rate        Float    @default(0) // price per unit in the order currency
   shipmentItems ShipmentItem[]
   createdAt   DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Raw materials: base fabrics + embellishments issued to kaarigars for job work.
+// Bought from suppliers via material purchase orders; issued per design line.
+// ---------------------------------------------------------------------------
+
+// A stockable input item — base fabric (e.g. Silver Georgette), zari, beads,
+// sequins, thread. Not a finished Design; lives in its own inventory.
+model RawMaterial {
+  id           String   @id @default(cuid())
+  code         String?  @unique // "RM-001", auto-assigned
+  name         String
+  kind         String   @default("BASE_FABRIC") // BASE_FABRIC | EMBELLISHMENT | THREAD | OTHER
+  unit         String   @default("mtr") // mtr for fabric, kg / g / pcs / cone for others
+  stockQty     Float    @default(0)
+  costPrice    Float? // last known cost per unit
+  currency     String   @default("INR")
+  reorderLevel Float? // low-stock threshold
+  hsnCode      String?
+  supplier     Vendor?  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierId   String? // default supplier we buy this from
+  notes        String?
+  archived     Boolean  @default(false)
+  movements    RawMaterialMovement[]
+  poItems      MaterialPOItem[]
+  issues       JobMaterial[]
+  categoryDefaults CategoryMaterial[]
+  designDefaults   DesignMaterial[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// An audit log of every raw-material stock change. Reference ids are plain
+// strings where the source may later be deleted (mirrors StockMovement).
+model RawMaterialMovement {
+  id         String      @id @default(cuid())
+  material   RawMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  materialId String
+  delta      Float // + in / - out
+  reason     String // PURCHASE | ISSUE_TO_JOB | RETURN_FROM_JOB | MANUAL_ADJUST
+  note       String?
+  jobId      String?
+  materialPoId String?
+  userId     String?
+  createdAt  DateTime @default(now())
+}
+
+// A purchase order for raw materials, raised to a supplier. Receiving its items
+// brings materials into stock. Mirrors Job for finished goods.
+model MaterialPurchaseOrder {
+  id        String   @id @default(cuid())
+  number    Int      @unique // internal global no., assigned in app code
+  seq       Int? // per-financial-year document sequence -> MPO/25-26/001
+  fyLabel   String?
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId  String
+  status    String   @default("OPEN") // OPEN | PARTIAL | RECEIVED | CANCELLED
+  currency  String   @default("INR")
+  issueDate DateTime @default(now())
+  dueDate   DateTime?
+  notes     String?
+  items     MaterialPOItem[]
+  payments  VendorPayment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MaterialPOItem {
+  id          String   @id @default(cuid())
+  po          MaterialPurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  poId        String
+  material    RawMaterial @relation(fields: [materialId], references: [id])
+  materialId  String
+  qtyOrdered  Float    @default(0)
+  qtyReceived Float    @default(0)
+  rate        Float? // purchase price per unit
+  unit        String   @default("mtr")
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+// Materials handed to a kaarigar for one design line of a job. Reconciliation:
+// used = qtyIssued - qtyReturned.
+model JobMaterial {
+  id          String   @id @default(cuid())
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId       String
+  jobItem     JobItem  @relation(fields: [jobItemId], references: [id], onDelete: Cascade)
+  jobItemId   String // the design line these materials are for
+  material    RawMaterial @relation(fields: [materialId], references: [id])
+  materialId  String
+  qtyIssued   Float    @default(0)
+  qtyReturned Float    @default(0)
+  unit        String   @default("mtr")
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+// Default materials for every design of a fabric type (set once per type).
+model CategoryMaterial {
+  id          String   @id @default(cuid())
+  category    ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId  String
+  material    RawMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  materialId  String
+  qtyPerPiece Float? // optional suggested quantity per piece
+  note        String?
+
+  @@unique([categoryId, materialId])
+}
+
+// Optional per-design override / addition to the type's default materials.
+model DesignMaterial {
+  id          String   @id @default(cuid())
+  design      Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+  designId    String
+  material    RawMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  materialId  String
+  qtyPerPiece Float?
+  note        String?
+
+  @@unique([designId, materialId])
 }

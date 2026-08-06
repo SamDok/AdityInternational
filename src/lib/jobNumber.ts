@@ -23,6 +23,12 @@ export function jobDocNo(job: { kind: string; number: number; seq?: number | nul
   return `${prefix}/${job.fyLabel}/${String(job.seq).padStart(3, "0")}`;
 }
 
+// Material purchase order document number, e.g. MPO/25-26/001 (its own series).
+export function materialPoDocNo(po: { number: number; seq?: number | null; fyLabel?: string | null }): string {
+  if (po.seq == null || !po.fyLabel) return `#${po.number}`;
+  return `MPO/${po.fyLabel}/${String(po.seq).padStart(3, "0")}`;
+}
+
 // Shipment document numbers share one financial-year series; the same seq is
 // shown as INV/25-26/001 on the invoice and PL/25-26/001 on the packing list.
 export function shipmentDocNo(

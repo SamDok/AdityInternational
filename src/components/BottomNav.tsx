@@ -18,7 +18,8 @@ const tabs = [
     icon: MoreIcon,
     match: (p: string) =>
       p.startsWith("/more") || p.startsWith("/vendors") || p.startsWith("/settings") ||
-      p.startsWith("/customers") || p.startsWith("/products"),
+      p.startsWith("/customers") || p.startsWith("/products") ||
+      p.startsWith("/materials") || p.startsWith("/material-orders") || p.startsWith("/material-po"),
   },
 ];
 
