@@ -85,6 +85,24 @@ export async function finalizeCatalogueImport(): Promise<{ error?: string; summa
   }
 }
 
+// Reference exchange rates (INR per 1 unit) used to show estimated export
+// margins. Owner-only.
+export async function setFxRates(entries: { currency: string; perUnitInr: number }[]): Promise<{ error?: string; ok?: boolean }> {
+  await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can set exchange rates." };
+  for (const e of entries) {
+    const cur = e.currency.trim().toUpperCase();
+    if (!cur || cur === "INR") continue;
+    if (!(e.perUnitInr > 0)) {
+      await prisma.fxRate.deleteMany({ where: { currency: cur } });
+      continue;
+    }
+    await prisma.fxRate.upsert({ where: { currency: cur }, update: { perUnitInr: e.perUnitInr }, create: { currency: cur, perUnitInr: e.perUnitInr } });
+  }
+  revalidatePath("/settings/exchange-rates");
+  return { ok: true };
+}
+
 export async function logout() {
   await destroySession();
   redirect("/login");

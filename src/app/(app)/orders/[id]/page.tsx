@@ -7,6 +7,7 @@ import DropLineButton from "../DropLineButton";
 import GeneratePanel from "../GeneratePanel";
 import { planProcurement } from "../procurement";
 import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty } from "@/lib/format";
+import { getFxRates, convert } from "@/lib/fx";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
 import { setOrderComplete, reorderOrder } from "../actions";
@@ -58,8 +59,22 @@ export default async function OrderDetailPage({
   const costByCurrency = new Map(makingByCurrency);
   for (const [cur, c] of materialByCurrency) costByCurrency.set(cur, (costByCurrency.get(cur) ?? 0) + c);
 
-  const sameCurCost = costByCurrency.size === 1 && costByCurrency.has(order.currency) ? costByCurrency.get(order.currency)! : null;
-  const margin = sameCurCost != null ? total - sameCurCost : null;
+  // Cost in the sale currency: exact when all costs are already in it, else
+  // converted via the reference FX rates (Settings) so export margins still show.
+  const exactSameCur = costByCurrency.size === 1 && costByCurrency.has(order.currency) ? costByCurrency.get(order.currency)! : null;
+  let costInSale: number | null = exactSameCur;
+  let fxEstimated = false;
+  if (costInSale == null && costByCurrency.size > 0) {
+    const fxRates = await getFxRates();
+    let sum = 0, ok = true;
+    for (const [cur, amt] of costByCurrency) {
+      const c = convert(amt, cur, order.currency, fxRates);
+      if (c == null) { ok = false; break; }
+      sum += c;
+    }
+    if (ok) { costInSale = sum; fxEstimated = true; }
+  }
+  const margin = costInSale != null ? total - costInSale : null;
   const marginPct = margin != null && total > 0 ? roundQty((margin / total) * 100) : null;
   const badge = orderBadge(order);
   const autoFull = fulfillmentOf(order.items) === "FULL";
@@ -120,6 +135,13 @@ export default async function OrderDetailPage({
             </Link>
           </p>
         </div>
+
+        {order.currency === "INR" && !order.customer.gstin && (
+          <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            This is a domestic (INR) order but the customer has no GSTIN — the invoice will charge <b>IGST</b>, not CGST/SGST.{" "}
+            <Link href={`/customers/${order.customerId}/edit`} className="font-semibold underline">Add their GSTIN</Link> for correct intra-state tax.
+          </div>
+        )}
 
         <StagePicker
           orderId={order.id}
@@ -291,14 +313,17 @@ export default async function OrderDetailPage({
               <p className="text-xs text-gray-400">No materials issued yet — margin excludes fabric cost so far.</p>
             )}
             {margin != null ? (
-              <div className="flex justify-between border-t border-gray-100 pt-1 text-sm font-semibold">
-                <span className="text-gray-700">Margin</span>
-                <span className={margin >= 0 ? "text-green-700" : "text-red-700"}>
-                  {formatMoney(margin, order.currency)}{marginPct != null ? ` · ${marginPct}%` : ""}
-                </span>
-              </div>
+              <>
+                <div className="flex justify-between border-t border-gray-100 pt-1 text-sm font-semibold">
+                  <span className="text-gray-700">Margin{fxEstimated ? " (est. FX)" : ""}</span>
+                  <span className={margin >= 0 ? "text-green-700" : "text-red-700"}>
+                    {formatMoney(margin, order.currency)}{marginPct != null ? ` · ${marginPct}%` : ""}
+                  </span>
+                </div>
+                {fxEstimated && <p className="text-[11px] text-gray-400">Costs converted at your reference exchange rates (Settings → Exchange rates).</p>}
+              </>
             ) : (
-              <p className="pt-1 text-xs text-gray-400">Cost is in a different currency — a margin will show once an FX rate is set on the shipment.</p>
+              <p className="pt-1 text-xs text-gray-400">Costs are in a different currency — add reference exchange rates in Settings to show an export margin.</p>
             )}
           </div>
         )}

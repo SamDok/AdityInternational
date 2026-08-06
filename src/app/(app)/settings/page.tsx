@@ -42,6 +42,16 @@ export default async function SettingsPage() {
       {isOwner && (
         <>
           <div className="px-4 pt-4">
+            <Link href="/settings/exchange-rates" className="card flex items-center gap-3 hover:bg-gray-50">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-500">₹</div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-gray-900">Exchange rates</p>
+                <p className="text-sm text-gray-500">Reference FX for estimated export margins</p>
+              </div>
+              <ChevronRightIcon className="h-5 w-5 text-gray-300" />
+            </Link>
+          </div>
+          <div className="px-4 pt-4">
             <p className="mb-2 px-1 text-sm font-semibold text-gray-500">Catalogue</p>
             <ImportCatalogueButton />
             <p className="mt-1.5 px-1 text-xs text-gray-400">One-time load of your full design library. Safe to run again — designs are updated, not duplicated.</p>

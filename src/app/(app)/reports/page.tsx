@@ -27,7 +27,7 @@ export default async function ReportsPage() {
   const company = await getCompanyProfile();
   const fyNow = financialYearLabel(new Date());
 
-  const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials] = await Promise.all([
+  const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials, materialPOs] = await Promise.all([
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" } },
       select: { date: true, currency: true, billToTaxId: true, status: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
@@ -38,6 +38,7 @@ export default async function ReportsPage() {
     prisma.product.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
     prisma.order.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { quantity: true, shippedQty: true, rate: true } } } }),
     prisma.rawMaterial.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
+    prisma.materialPurchaseOrder.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } }),
   ]);
 
   // Sales: all-time billed and this financial year.
@@ -47,8 +48,11 @@ export default async function ReportsPage() {
   );
   const receivable = new Map(balances(billedAll, sumByCurrency(payments)).filter((b) => b.outstanding > 0.01).map((b) => [b.currency, b.outstanding]));
 
-  // Payables: value received minus paid.
-  const receivedValue = sumByCurrency(jobs.map((j) => ({ amount: jobReceivedValue(j), currency: j.currency })));
+  // Payables: value received (job work + materials received) minus paid.
+  const receivedValue = sumByCurrency([
+    ...jobs.map((j) => ({ amount: jobReceivedValue(j), currency: j.currency })),
+    ...materialPOs.map((po) => ({ amount: po.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyReceived, 0), currency: po.currency })),
+  ]);
   const payable = new Map(balances(receivedValue, sumByCurrency(vendorPayments)).filter((b) => b.outstanding > 0.01).map((b) => [b.currency, b.outstanding]));
 
   // Order book: value still to ship on live orders.

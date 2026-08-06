@@ -600,3 +600,12 @@ model DesignMaterial {
 
   @@unique([designId, materialId])
 }
+
+// Reference exchange rates so export orders (foreign sale, INR cost) can show an
+// estimated margin before a shipment's actual FX rate is set. One row per
+// foreign currency; value = INR per 1 unit (e.g. USD -> 83.5).
+model FxRate {
+  currency   String   @id // USD, EUR, GBP, AED
+  perUnitInr Float // INR per 1 unit of this currency
+  updatedAt  DateTime @updatedAt @default(now())
+}

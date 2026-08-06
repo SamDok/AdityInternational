@@ -41,6 +41,7 @@ export default async function MoneyPage() {
       select: {
         id: true, name: true, kind: true,
         jobs: { where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } },
+        materialPos: { where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } },
         payments: { select: { amount: true, currency: true } },
       },
     }),
@@ -57,7 +58,10 @@ export default async function MoneyPage() {
 
   const payables = vendors
     .map((v) => {
-      const billed = sumByCurrency(v.jobs.map((j) => ({ amount: jobReceivedValue(j), currency: j.currency })));
+      const billed = sumByCurrency([
+        ...v.jobs.map((j) => ({ amount: jobReceivedValue(j), currency: j.currency })),
+        ...v.materialPos.map((po) => ({ amount: po.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyReceived, 0), currency: po.currency })),
+      ]);
       const paid = sumByCurrency(v.payments);
       return { id: v.id, name: v.name, bs: balances(billed, paid) };
     })
