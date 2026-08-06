@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import ExportButton from "./ExportButton";
 import Pager from "@/components/Pager";
 import { CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 import {
@@ -70,6 +71,7 @@ export default async function OrdersPage({
         subtitle={all.length ? `${all.length} total` : undefined}
         action={
           <div className="flex items-center gap-2">
+            {all.length > 0 && <ExportButton />}
             <Link href="/shipments" className="btn-secondary !px-3 !py-2 text-sm">Shipments</Link>
             <Link href="/orders/new" aria-label="New order" className="btn-primary !px-3 !py-2">
               <PlusIcon className="h-5 w-5" />

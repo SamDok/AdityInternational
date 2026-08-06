@@ -655,3 +655,39 @@ export async function deleteOrder(id: string) {
   revalidatePath("/");
   redirect("/orders");
 }
+
+// Whole-orders CSV export: one row per order line, order-level fields repeated,
+// so it opens cleanly in Excel for reporting. Mirrors the products/customers CSV.
+export async function exportOrdersCsv(): Promise<string> {
+  await requireUser();
+  const orders = await prisma.order.findMany({
+    orderBy: { orderDate: "desc" },
+    include: {
+      customer: { select: { name: true, code: true } },
+      items: { include: { product: { select: { width: true, colour: true, design: { select: { code: true, name: true } } } } } },
+    },
+  });
+  const header = [
+    "orderNumber", "orderDate", "dueDate", "customer", "customerCode", "currency", "status",
+    "designCode", "designName", "width", "colour", "description",
+    "pieces", "perPieceQty", "quantity", "unit", "rate", "lineTotal", "shippedQty",
+  ];
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "");
+  const lines = [header.join(",")];
+  for (const o of orders) {
+    for (const it of o.items) {
+      lines.push([
+        o.number, iso(o.orderDate), iso(it.dueDate ?? o.dueDate), o.customer?.name, o.customer?.code,
+        o.currency, o.status,
+        it.product.design?.code, it.product.design?.name, it.product.width, it.product.colour, it.description,
+        it.pieces, it.perPieceQty, it.quantity, it.unit, it.rate,
+        Math.round(it.quantity * it.rate * 100) / 100, it.shippedQty,
+      ].map(esc).join(","));
+    }
+  }
+  return lines.join("\n");
+}
