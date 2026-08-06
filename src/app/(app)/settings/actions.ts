@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isOwner, destroySession, hashPassword, verifyPassword } from "@/lib/auth";
-import { runCatalogueImport, type ImportSummary } from "@/lib/catalogueImport";
+import { prepareCatalogue, importCatalogueSlice, finalizeCatalogue, type ImportSummary } from "@/lib/catalogueImport";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -41,20 +41,47 @@ export async function exportAllData(): Promise<{ error?: string; data?: string }
   return { data: JSON.stringify(dump, null, 2) };
 }
 
-// Owner-only one-time seed of the master design catalogue (idempotent).
-// Runs the shared importer against the app's database — safe to re-run.
-export async function importCatalogue(): Promise<{ error?: string; summary?: ImportSummary }> {
+// Owner-only seed of the master design catalogue, driven in small chunks by the
+// client so no single serverless call risks the function timeout. Idempotent —
+// safe to re-run. Each action catches and returns its error as data so the real
+// cause surfaces in the UI (Next hides thrown server errors in production).
+
+export async function prepareCatalogueImport(): Promise<{ error?: string; total?: number }> {
   await requireUser();
   if (!(await isOwner())) return { error: "Only the owner can import the catalogue." };
   try {
-    const summary = await runCatalogueImport(prisma);
+    const { total } = await prepareCatalogue(prisma);
+    return { total };
+  } catch (e) {
+    console.error("prepareCatalogueImport failed", e);
+    return { error: e instanceof Error ? e.message : "Could not start the import." };
+  }
+}
+
+export async function importCatalogueChunk(offset: number, size: number): Promise<{ error?: string; processed?: number }> {
+  await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can import the catalogue." };
+  try {
+    const { processed } = await importCatalogueSlice(prisma, offset, size);
+    return { processed };
+  } catch (e) {
+    console.error("importCatalogueChunk failed", e);
+    return { error: e instanceof Error ? e.message : "A batch failed to import." };
+  }
+}
+
+export async function finalizeCatalogueImport(): Promise<{ error?: string; summary?: ImportSummary }> {
+  await requireUser();
+  if (!(await isOwner())) return { error: "Only the owner can import the catalogue." };
+  try {
+    const summary = await finalizeCatalogue(prisma);
     revalidatePath("/products");
     revalidatePath("/products/all");
     revalidatePath("/vendors");
     return { summary };
   } catch (e) {
-    console.error("importCatalogue failed", e);
-    return { error: e instanceof Error ? e.message : "Import failed. Please try again." };
+    console.error("finalizeCatalogueImport failed", e);
+    return { error: e instanceof Error ? e.message : "Could not finish the import." };
   }
 }
 
