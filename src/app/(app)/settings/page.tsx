@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import SettingsClient from "./SettingsClient";
 import BackupButton from "./BackupButton";
 import ImportCatalogueButton from "./ImportCatalogueButton";
+import ImportImagesButton from "./ImportImagesButton";
 import { BuildingIcon, ChevronRightIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,10 @@ export default async function SettingsPage() {
             <p className="mb-2 px-1 text-sm font-semibold text-gray-500">Catalogue</p>
             <ImportCatalogueButton />
             <p className="mt-1.5 px-1 text-xs text-gray-400">One-time load of your full design library. Safe to run again — designs are updated, not duplicated.</p>
+            <div className="mt-3">
+              <ImportImagesButton />
+              <p className="mt-1.5 px-1 text-xs text-gray-400">Pulls each design&apos;s photo from Google Drive. Run after the catalogue import; safe to re-run to fill gaps.</p>
+            </div>
           </div>
           <div className="px-4 pb-8 pt-4">
             <p className="mb-2 px-1 text-sm font-semibold text-gray-500">Backup</p>
