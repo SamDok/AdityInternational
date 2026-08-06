@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { ORDER_STAGES } from "@/lib/format";
 import { applyMovements, type StockMove } from "@/lib/stock";
+import { getFxRates } from "@/lib/fx";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 import { allocateJobNumbers } from "../jobs/actions";
@@ -104,6 +105,10 @@ export async function createOrder(input: OrderInput) {
   }
   const d = parsed.data;
   const number = await nextOrderNumber();
+  // Freeze today's reference FX onto foreign-currency orders, so the estimated
+  // export margin stays locked to the order date and doesn't drift when the
+  // daily rate refresh runs. Domestic (INR) orders need no conversion.
+  const fxSnapshot = d.currency !== "INR" ? Object.fromEntries(await getFxRates()) : undefined;
 
   // Stock never moves at create time — it leaves only when a shipment is recorded.
   const order = await prisma.order.create({
@@ -116,6 +121,7 @@ export async function createOrder(input: OrderInput) {
       dueDate: toDate(d.dueDate) ?? null,
       notes: d.notes || null,
       createdByName: me.name || me.email,
+      fxRates: fxSnapshot,
       ...snapshotFields(d),
       items: { create: d.items.map(itemData) },
     },
@@ -564,6 +570,7 @@ export async function reorderOrder(sourceId: string) {
   const src = await prisma.order.findUnique({ where: { id: sourceId }, include: { items: true } });
   if (!src) redirect("/orders");
   const number = await nextOrderNumber();
+  const fxSnapshot = src.currency !== "INR" ? Object.fromEntries(await getFxRates()) : undefined;
   const created = await prisma.order.create({
     data: {
       number,
@@ -571,6 +578,7 @@ export async function reorderOrder(sourceId: string) {
       currency: src.currency,
       status: "DRAFT",
       orderDate: new Date(),
+      fxRates: fxSnapshot,
       discountPct: src.discountPct,
       billToName: src.billToName, billToAddress: src.billToAddress, billToTaxId: src.billToTaxId,
       shipToName: src.shipToName, shipToAddress: src.shipToAddress,

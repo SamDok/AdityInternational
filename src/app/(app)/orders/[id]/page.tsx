@@ -64,15 +64,20 @@ export default async function OrderDetailPage({
   const exactSameCur = costByCurrency.size === 1 && costByCurrency.has(order.currency) ? costByCurrency.get(order.currency)! : null;
   let costInSale: number | null = exactSameCur;
   let fxEstimated = false;
+  let fxLocked = false;
   if (costInSale == null && costByCurrency.size > 0) {
-    const fxRates = await getFxRates();
+    // Prefer the rates frozen on the order at creation (so the margin doesn't
+    // drift as the daily rate updates); fall back to today's live rates.
+    const snap = order.fxRates as Record<string, number> | null;
+    const fxRates = snap && Object.keys(snap).length ? new Map<string, number>(Object.entries(snap)) : await getFxRates();
+    if (!fxRates.has("INR")) fxRates.set("INR", 1);
     let sum = 0, ok = true;
     for (const [cur, amt] of costByCurrency) {
       const c = convert(amt, cur, order.currency, fxRates);
       if (c == null) { ok = false; break; }
       sum += c;
     }
-    if (ok) { costInSale = sum; fxEstimated = true; }
+    if (ok) { costInSale = sum; fxEstimated = true; fxLocked = Boolean(snap && Object.keys(snap).length); }
   }
   const margin = costInSale != null ? total - costInSale : null;
   const marginPct = margin != null && total > 0 ? roundQty((margin / total) * 100) : null;
@@ -320,7 +325,7 @@ export default async function OrderDetailPage({
                     {formatMoney(margin, order.currency)}{marginPct != null ? ` · ${marginPct}%` : ""}
                   </span>
                 </div>
-                {fxEstimated && <p className="text-[11px] text-gray-400">Costs converted at your reference exchange rates (Settings → Exchange rates).</p>}
+                {fxEstimated && <p className="text-[11px] text-gray-400">{fxLocked ? "Converted at the exchange rate saved when this order was created." : "Converted at today's reference rate (Settings → Exchange rates)."}</p>}
               </>
             ) : (
               <p className="pt-1 text-xs text-gray-400">Costs are in a different currency — add reference exchange rates in Settings to show an export margin.</p>
