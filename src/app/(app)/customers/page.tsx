@@ -21,6 +21,7 @@ export default async function CustomersPage({
   const country = sp.country ?? "";
   const category = sp.category ?? "";
   const salesperson = sp.salesperson ?? "";
+  const tag = sp.tag ?? "";
   const sort = sp.sort ?? "name";
   const showArchived = sp.archived === "1";
 
@@ -29,6 +30,7 @@ export default async function CustomersPage({
     ...(country ? { country } : {}),
     ...(category ? { category } : {}),
     ...(salesperson ? { salespersonId: salesperson } : {}),
+    ...(tag ? { tags: { has: tag } } : {}),
     ...(q
       ? {
           OR: [
@@ -69,16 +71,18 @@ export default async function CustomersPage({
 
   // Filter options + the "any customers at all?" count — small, distinct queries
   // (not a full-table load).
-  const [totalCustomers, countryRows, categoryRows, users] = await Promise.all([
+  const [totalCustomers, countryRows, categoryRows, tagRows, users] = await Promise.all([
     prisma.customer.count(),
     prisma.customer.findMany({ where: { country: { not: null } }, select: { country: true }, distinct: ["country"], orderBy: { country: "asc" } }),
     prisma.customer.findMany({ where: { category: { not: null } }, select: { category: true }, distinct: ["category"], orderBy: { category: "asc" } }),
+    prisma.customer.findMany({ where: { tags: { isEmpty: false } }, select: { tags: true } }),
     prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
   ]);
   const countries = countryRows.map((c) => c.country).filter(Boolean) as string[];
   const categories = categoryRows.map((c) => c.category).filter(Boolean) as string[];
+  const tags = Array.from(new Set(tagRows.flatMap((c) => c.tags))).sort((a, b) => a.localeCompare(b));
   const salespeople = users.map((u) => ({ id: u.id, label: u.name || u.email }));
-  const filtersActive = !!(q || country || category || salesperson || showArchived);
+  const filtersActive = !!(q || country || category || salesperson || tag || showArchived);
 
   return (
     <div>
@@ -113,10 +117,12 @@ export default async function CustomersPage({
             country={country}
             category={category}
             salesperson={salesperson}
+            tag={tag}
             sort={sort}
             showArchived={showArchived}
             countries={countries}
             categories={categories}
+            tags={tags}
             salespeople={salespeople}
           />
 
@@ -163,7 +169,7 @@ export default async function CustomersPage({
               ))}
             </ul>
           )}
-          <Pager basePath="/customers" params={{ q, country, category, salesperson, sort, archived: showArchived ? "1" : undefined }} page={page} pageSize={PAGE_SIZE} total={matchCount} />
+          <Pager basePath="/customers" params={{ q, country, category, salesperson, tag, sort, archived: showArchived ? "1" : undefined }} page={page} pageSize={PAGE_SIZE} total={matchCount} />
         </>
       )}
     </div>

@@ -26,6 +26,7 @@ type CustomerValues = {
   defaultDiscount?: number | null;
   category?: string | null;
   salespersonId?: string | null;
+  tags?: string[] | null;
   notes?: string | null;
 };
 
@@ -34,7 +35,7 @@ type Teammate = { id: string; name: string | null; email: string };
 type Props = {
   initial?: CustomerValues;
   teammates: Teammate[];
-  action: (formData: FormData) => Promise<{ error?: string } | void>;
+  action: (formData: FormData) => Promise<{ error?: string; warning?: string } | void>;
   submitLabel: string;
 };
 
@@ -49,6 +50,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function CustomerForm({ initial, teammates, action, submitLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [country, setCountry] = useState(initial?.country ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
@@ -69,9 +71,16 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
 
   function onSubmit(formData: FormData) {
     setError(null);
+    // If we've already shown a soft-duplicate warning, this submit confirms it.
+    if (warning) formData.set("confirmDup", "1");
     startTransition(async () => {
       const res = await action(formData);
-      if (res?.error) setError(res.error);
+      if (res?.error) {
+        setError(res.error);
+        setWarning(null);
+      } else if (res?.warning) {
+        setWarning(res.warning);
+      }
     });
   }
 
@@ -82,6 +91,11 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
       {error && (
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {error}
+        </div>
+      )}
+      {warning && (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          {warning} <span className="font-normal">Press “{submitLabel} anyway” to continue.</span>
         </div>
       )}
 
@@ -138,6 +152,12 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
               <option key={t.id} value={t.id}>{t.name || t.email}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="field-label" htmlFor="tags">Tags</label>
+          <input id="tags" name="tags" defaultValue={(initial?.tags ?? []).join(", ")}
+            className="field-input" placeholder="VIP, slow payer, sampling" />
+          <p className="mt-1 text-xs text-gray-400">Separate tags with commas.</p>
         </div>
       </Section>
 
@@ -254,7 +274,7 @@ export default function CustomerForm({ initial, teammates, action, submitLabel }
           Cancel
         </button>
         <button type="submit" disabled={isPending} className="btn-primary flex-1">
-          {isPending ? "Saving…" : submitLabel}
+          {isPending ? "Saving…" : warning ? `${submitLabel} anyway` : submitLabel}
         </button>
       </div>
     </form>

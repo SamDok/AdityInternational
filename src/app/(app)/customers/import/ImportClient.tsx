@@ -23,12 +23,13 @@ const FIELD_ALIASES: Record<string, string> = {
   "credit limit": "creditLimit", "creditlimit": "creditLimit",
   "default discount": "defaultDiscount", "defaultdiscount": "defaultDiscount", "discount": "defaultDiscount", "discount %": "defaultDiscount",
   "category": "category", "type": "category",
+  "tags": "tags", "labels": "tags",
 };
 
 const TEMPLATE_HEADERS = [
   "name", "contactPerson", "email", "phone", "altPhone", "country", "address",
   "currency", "paymentTerms", "category", "gstin", "taxId", "creditLimit",
-  "defaultDiscount", "destinationPort", "incoterms", "shippingAddress",
+  "defaultDiscount", "destinationPort", "incoterms", "shippingAddress", "tags",
 ];
 
 // Minimal RFC-4180-ish CSV parser (handles quotes, escaped quotes, commas, CRLF).

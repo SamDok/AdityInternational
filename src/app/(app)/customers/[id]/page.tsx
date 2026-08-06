@@ -101,6 +101,16 @@ export default async function CustomerDetailPage({
           </div>
         )}
 
+        {customer.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {customer.tags.map((t) => (
+              <span key={t} className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Quick actions */}
         <div className="flex flex-wrap gap-2">
           {customer.phone && (
@@ -140,6 +150,7 @@ export default async function CustomerDetailPage({
           <Row label="Tax ID / VAT" value={customer.taxId} />
           <Row label="Notes" value={customer.notes} />
           <Row label="Added by" value={customer.createdByName} />
+          <Row label="Last edited by" value={customer.updatedByName} />
         </section>
 
         <section className="space-y-3">

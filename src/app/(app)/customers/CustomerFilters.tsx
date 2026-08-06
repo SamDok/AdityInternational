@@ -9,10 +9,12 @@ type Props = {
   country: string;
   category: string;
   salesperson: string;
+  tag: string;
   sort: string;
   showArchived: boolean;
   countries: string[];
   categories: string[];
+  tags: string[];
   salespeople: { id: string; label: string }[];
 };
 
@@ -37,6 +39,7 @@ export default function CustomerFilters(props: Props) {
       country: props.country,
       category: props.category,
       salesperson: props.salesperson,
+      tag: props.tag,
       sort: props.sort === "name" ? "" : props.sort,
       archived: props.showArchived ? "1" : "",
       ...overrides,
@@ -87,6 +90,12 @@ export default function CustomerFilters(props: Props) {
           <option value="">All salespeople</option>
           {props.salespeople.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
+        {props.tags.length > 0 && (
+          <select value={props.tag} onChange={(e) => apply({ tag: e.target.value })} className={selectClass}>
+            <option value="">All tags</option>
+            {props.tags.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
         <select value={props.sort} onChange={(e) => apply({ sort: e.target.value === "name" ? "" : e.target.value })} className={selectClass}>
           {SORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>Sort: {s.label}</option>)}
         </select>

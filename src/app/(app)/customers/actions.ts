@@ -43,6 +43,12 @@ const CustomerSchema = z.object({
   defaultDiscount: optionalNumber(100),
   category: z.string().trim().optional(),
   salespersonId: z.string().trim().optional(),
+  tags: z.preprocess((v) => {
+    if (Array.isArray(v)) return v;
+    const s = String(v ?? "").trim();
+    if (!s) return [];
+    return Array.from(new Set(s.split(",").map((t) => t.trim()).filter(Boolean)));
+  }, z.array(z.string())).optional(),
   notes: z.string().trim().optional(),
 });
 
@@ -72,6 +78,38 @@ async function nameTaken(name: string, exceptId?: string): Promise<boolean> {
     select: { id: true },
   });
   return !!match;
+}
+
+// Loose key for near-duplicate names: lowercase, drop punctuation/spaces, and a
+// trailing plural "s" — so "Classic Textile" and "Classic Textiles" collide.
+function loosen(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/s$/, "");
+}
+
+// Soft, non-blocking checks: a near-duplicate name, or a tax number already on
+// file. Returns a human warning (or null). The caller lets the user override.
+async function softDuplicateWarning(
+  data: { name: string; gstin?: unknown; taxId?: unknown },
+  exceptId?: string,
+): Promise<string | null> {
+  const not = exceptId ? { id: { not: exceptId } } : {};
+  const gstin = String(data.gstin ?? "").trim();
+  const taxId = String(data.taxId ?? "").trim();
+  if (gstin) {
+    const m = await prisma.customer.findFirst({ where: { gstin: { equals: gstin, mode: "insensitive" }, ...not }, select: { name: true } });
+    if (m) return `GST number ${gstin} is already used by "${m.name}".`;
+  }
+  if (taxId) {
+    const m = await prisma.customer.findFirst({ where: { taxId: { equals: taxId, mode: "insensitive" }, ...not }, select: { name: true } });
+    if (m) return `Tax ID ${taxId} is already used by "${m.name}".`;
+  }
+  const key = loosen(data.name);
+  if (key) {
+    const candidates = await prisma.customer.findMany({ where: not, select: { id: true, name: true } });
+    const near = candidates.find((c) => loosen(c.name) === key && c.name.toLowerCase() !== data.name.toLowerCase());
+    if (near) return `This looks a lot like "${near.name}". Add anyway?`;
+  }
+  return null;
 }
 
 // Highest existing customer-code number (0 if none). Codes look like "CUST-007".
@@ -142,6 +180,8 @@ export async function importCustomers(rows: Record<string, string>[]) {
     if (!isNaN(cl)) data.creditLimit = cl;
     const dd = parseFloat((r.defaultDiscount ?? "").trim());
     if (!isNaN(dd)) data.defaultDiscount = Math.min(Math.max(dd, 0), 100);
+    const tags = (r.tags ?? "").split(/[;|]/).map((t) => t.trim()).filter(Boolean);
+    if (tags.length) data.tags = Array.from(new Set(tags));
 
     if (data.email && !EMAIL_RE.test(String(data.email))) {
       warnings.push(`Row ${line}: invalid email dropped.`);
@@ -168,6 +208,11 @@ export async function createCustomer(formData: FormData) {
   if (await nameTaken(result.data.name)) {
     return { error: `A customer named "${result.data.name}" already exists.` };
   }
+  // Soft warning the user can override by re-submitting with confirmDup=1.
+  if (formData.get("confirmDup") !== "1") {
+    const warning = await softDuplicateWarning(result.data);
+    if (warning) return { warning };
+  }
   const code = await nextCustomerCode();
   await prisma.customer.create({
     data: { ...clean(result.data), name: result.data.name, currency: result.data.currency, code, createdByName: me.name || me.email } as never,
@@ -177,7 +222,7 @@ export async function createCustomer(formData: FormData) {
 }
 
 export async function updateCustomer(id: string, formData: FormData) {
-  await requireUser();
+  const me = await requireUser();
   const result = parse(formData);
   if (!result.success) {
     return { error: result.error.issues[0]?.message ?? "Invalid input" };
@@ -185,9 +230,13 @@ export async function updateCustomer(id: string, formData: FormData) {
   if (await nameTaken(result.data.name, id)) {
     return { error: `Another customer named "${result.data.name}" already exists.` };
   }
+  if (formData.get("confirmDup") !== "1") {
+    const warning = await softDuplicateWarning(result.data, id);
+    if (warning) return { warning };
+  }
   await prisma.customer.update({
     where: { id },
-    data: { ...clean(result.data), name: result.data.name, currency: result.data.currency } as never,
+    data: { ...clean(result.data), name: result.data.name, currency: result.data.currency, updatedByName: me.name || me.email } as never,
   });
   revalidatePath("/customers");
   revalidatePath(`/customers/${id}`);
@@ -253,7 +302,7 @@ export async function exportCustomersCsv(): Promise<string> {
   const header = [
     "code", "name", "company", "contactPerson", "email", "phone", "altPhone", "address",
     "country", "shippingAddress", "destinationPort", "incoterms", "gstin", "taxId",
-    "currency", "paymentTerms", "creditLimit", "defaultDiscount", "category", "notes",
+    "currency", "paymentTerms", "creditLimit", "defaultDiscount", "category", "tags", "notes",
   ];
   const esc = (v: unknown) => {
     const s = v == null ? "" : String(v);
@@ -264,7 +313,7 @@ export async function exportCustomersCsv(): Promise<string> {
     lines.push([
       c.code, c.name, c.company, c.contactPerson, c.email, c.phone, c.altPhone, c.address,
       c.country, c.shippingAddress, c.destinationPort, c.incoterms, c.gstin, c.taxId,
-      c.currency, c.paymentTerms, c.creditLimit, c.defaultDiscount, c.category, c.notes,
+      c.currency, c.paymentTerms, c.creditLimit, c.defaultDiscount, c.category, (c.tags ?? []).join("; "), c.notes,
     ].map(esc).join(","));
   }
   return lines.join("\n");

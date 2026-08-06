@@ -105,7 +105,9 @@ model Customer {
   salesperson   User?   @relation(fields: [salespersonId], references: [id], onDelete: SetNull)
   salespersonId String?
 
+  tags          String[] @default([]) // free-form labels: "VIP", "slow payer", "sampling"
   createdByName String? // teammate who added this customer (snapshot of their name)
+  updatedByName String? // teammate who last edited this customer (snapshot of their name)
   notes     String?
   orders    Order[]
   shipments Shipment[]
