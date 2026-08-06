@@ -30,17 +30,34 @@ export default async function OrderDetailPage({
   });
   if (!order) notFound();
 
+  // Actual raw materials issued to this order's job-work (used = issued − returned).
+  const jobMaterials = await prisma.jobMaterial.findMany({
+    where: { job: { orderId: id } },
+    select: { qtyIssued: true, qtyReturned: true, material: { select: { costPrice: true, currency: true } } },
+  });
+
   const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
 
-  // Margin: sale (order currency) vs cost (product cost prices, which may be in a
-  // different currency for imported goods). A blended margin is only shown when
-  // the cost is entirely in the same currency as the sale.
-  const costByCurrency = new Map<string, number>();
+  // Margin: sale (order currency) vs cost. Cost = the kaarigar's making charge
+  // (design cost price) plus the actual base fabric / materials issued. Costs may
+  // be in a different currency for imported goods, so a blended margin is only
+  // shown when every cost is in the same currency as the sale.
+  const makingByCurrency = new Map<string, number>();
   for (const i of order.items) {
     if (i.product.costPrice == null) continue;
-    costByCurrency.set(i.product.currency, (costByCurrency.get(i.product.currency) ?? 0) + i.quantity * i.product.costPrice);
+    makingByCurrency.set(i.product.currency, (makingByCurrency.get(i.product.currency) ?? 0) + i.quantity * i.product.costPrice);
   }
+  const materialByCurrency = new Map<string, number>();
+  for (const jm of jobMaterials) {
+    if (jm.material.costPrice == null) continue;
+    const used = jm.qtyIssued - jm.qtyReturned;
+    if (used <= 0) continue;
+    materialByCurrency.set(jm.material.currency, (materialByCurrency.get(jm.material.currency) ?? 0) + used * jm.material.costPrice);
+  }
+  const costByCurrency = new Map(makingByCurrency);
+  for (const [cur, c] of materialByCurrency) costByCurrency.set(cur, (costByCurrency.get(cur) ?? 0) + c);
+
   const sameCurCost = costByCurrency.size === 1 && costByCurrency.has(order.currency) ? costByCurrency.get(order.currency)! : null;
   const margin = sameCurCost != null ? total - sameCurCost : null;
   const marginPct = margin != null && total > 0 ? roundQty((margin / total) * 100) : null;
@@ -264,9 +281,15 @@ export default async function OrderDetailPage({
         {costByCurrency.size > 0 && (
           <div className="card space-y-1">
             <div className="flex justify-between text-sm"><span className="text-gray-500">Revenue</span><span className="font-medium text-gray-900">{formatMoney(total, order.currency)}</span></div>
-            {[...costByCurrency].map(([cur, c]) => (
-              <div key={cur} className="flex justify-between text-sm"><span className="text-gray-500">Cost (est.)</span><span className="font-medium text-gray-900">{formatMoney(c, cur)}</span></div>
+            {[...makingByCurrency].map(([cur, c]) => (
+              <div key={cur} className="flex justify-between text-sm"><span className="text-gray-500">Making (est.)</span><span className="font-medium text-gray-900">{formatMoney(c, cur)}</span></div>
             ))}
+            {[...materialByCurrency].map(([cur, c]) => (
+              <div key={cur} className="flex justify-between text-sm"><span className="text-gray-500">Materials issued</span><span className="font-medium text-gray-900">{formatMoney(c, cur)}</span></div>
+            ))}
+            {materialByCurrency.size === 0 && (
+              <p className="text-xs text-gray-400">No materials issued yet — margin excludes fabric cost so far.</p>
+            )}
             {margin != null ? (
               <div className="flex justify-between border-t border-gray-100 pt-1 text-sm font-semibold">
                 <span className="text-gray-700">Margin</span>

@@ -27,7 +27,7 @@ export default async function ReportsPage() {
   const company = await getCompanyProfile();
   const fyNow = financialYearLabel(new Date());
 
-  const [shipments, payments, jobs, vendorPayments, products, orders] = await Promise.all([
+  const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials] = await Promise.all([
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" } },
       select: { date: true, currency: true, billToTaxId: true, status: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
@@ -37,6 +37,7 @@ export default async function ReportsPage() {
     prisma.vendorPayment.findMany({ select: { amount: true, currency: true } }),
     prisma.product.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
     prisma.order.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { quantity: true, shippedQty: true, rate: true } } } }),
+    prisma.rawMaterial.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
   ]);
 
   // Sales: all-time billed and this financial year.
@@ -60,6 +61,11 @@ export default async function ReportsPage() {
     products.filter((p) => p.costPrice != null && p.stockQty > 0).map((p) => ({ amount: p.stockQty * (p.costPrice as number), currency: p.currency })),
   );
 
+  // Raw materials (base fabric + embellishments) on hand, valued at cost.
+  const rawStockValue = sumByCurrency(
+    rawMaterials.filter((m) => m.costPrice != null && m.stockQty > 0).map((m) => ({ amount: m.stockQty * (m.costPrice as number), currency: m.currency })),
+  );
+
   return (
     <div>
       <PageHeader title="Reports" subtitle={`Financial year ${fyNow}`} backHref="/more" />
@@ -68,7 +74,8 @@ export default async function ReportsPage() {
         <MetricCard label="Order book" value={moneyLine(backlog)} hint="Still to ship on live orders" />
         <MetricCard label="To receive" value={moneyLine(receivable)} tone="green" hint="Outstanding from customers" />
         <MetricCard label="To pay" value={moneyLine(payable)} tone="red" hint="Outstanding to vendors" />
-        <MetricCard label="Stock at cost" value={moneyLine(stockValue)} hint="On-hand valued at cost" />
+        <MetricCard label="Stock at cost" value={moneyLine(stockValue)} hint="Finished goods on hand" />
+        <MetricCard label="Materials at cost" value={moneyLine(rawStockValue)} hint="Base fabric & materials on hand" />
         <MetricCard label="Sales · all time" value={moneyLine(billedAll)} hint="Total invoiced" />
       </div>
     </div>
