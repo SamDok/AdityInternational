@@ -45,7 +45,7 @@ export async function putDesignImage(code: string, dataUrl: string): Promise<{ o
 // Pull a photo straight from Google Drive (public "anyone with link" file) using
 // its thumbnail endpoint, which returns a web-sized JPEG — resized, no crop.
 // Runs on Vercel (which can reach Drive), not in the sandbox.
-export async function putDesignImageFromDrive(code: string, fileId: string, maxWidth = 1400): Promise<{ ok?: true; error?: string }> {
+export async function putDesignImageFromDrive(code: string, fileId: string, maxWidth = 1000): Promise<{ ok?: true; error?: string }> {
   const url = `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${maxWidth}`;
   let res: Response;
   try {
