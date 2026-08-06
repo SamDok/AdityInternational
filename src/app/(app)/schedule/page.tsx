@@ -78,11 +78,14 @@ function Readiness({ it }: { it: ScheduleItem }) {
   if (it.readiness === "MAKING") {
     const flag = it.jobOverdue ? " — job overdue, chase the vendor" : it.jobLate ? " — arrives after the deadline" : "";
     return (
-      <p className={`mt-1 text-xs font-medium ${it.jobLate || it.jobOverdue ? "text-red-600" : "text-amber-600"}`}>
-        Being made{it.jobDocNo ? <> · <Link href={`/jobs/${it.jobId}`} className="underline">Job {it.jobDocNo}</Link></> : ""}
-        {it.jobDueDate ? ` due ${formatDate(it.jobDueDate)}` : ""}
-        {flag}
-      </p>
+      <>
+        <p className={`mt-1 text-xs font-medium ${it.jobLate || it.jobOverdue ? "text-red-600" : "text-amber-600"}`}>
+          Being made{it.jobDocNo ? <> · <Link href={`/jobs/${it.jobId}`} className="underline">Job {it.jobDocNo}</Link></> : ""}
+          {it.jobDueDate ? ` due ${formatDate(it.jobDueDate)}` : ""}
+          {flag}
+        </p>
+        {it.materialsPending && <p className="mt-0.5 text-xs font-medium text-amber-700">⚠ Materials not issued yet — the kaarigar can&apos;t start</p>}
+      </>
     );
   }
   // NOT_PROCURED
