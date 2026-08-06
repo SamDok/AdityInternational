@@ -169,10 +169,13 @@ commercial invoice, and the catalogue-wide stock-movements feed
 - **🟡 Finer shipment correction** — a full "reduce a shipment line by N" as a
   gentler alternative to `cancelShipment`; `recordReturn` covers the goods-back
   case, but a plain quantity correction (no stock return) is still manual.
-- **🟢 Push job cost into `Product.costPrice`** (making charge + base material),
-  so margins use real landed cost instead of the standing cost price.
-- **🟢 Base material issued to a kaarigar** (material out) if you want to track
-  the fabric you hand over.
+- **🟢 Push job cost into `Product.costPrice`** (making charge + base material) —
+  *partly addressed:* actual **material cost is now folded into the order margin**
+  (issued fabric, `src/app/(app)/orders/[id]/page.tsx`); pushing landed cost into
+  `costPrice` itself is still optional.
+- **✅ BUILT — Base material issued to a kaarigar.** The whole **Materials module**
+  now covers this (catalogue, POs, per-design-line issue + reconcile). See the
+  "Built in the walkthrough fixes" recap at the end of this file.
 
 ### 🟡 Ranked reports (top customers / top designs)
 **Why:** The Reports dashboard shows per-currency totals but no rankings.
@@ -189,13 +192,14 @@ Reports page. **Effort:** small–medium.
 
 ## Money & trade documents (deferred from the invoicing/returns work)
 
-### 🟡 FX-based cross-currency margin & a base currency
-**Why:** Order margin (`src/app/(app)/orders/[id]/page.tsx`) only shows a blended
-%/amount when cost and sale are the **same currency**; export orders (INR cost,
-USD/EUR sale) show cost and revenue side by side but no margin. The shipment now
-carries an `fxRate` — wire it (and/or a company base currency) so export margins,
-and cross-currency report/ranking totals, can be expressed in one unit.
-**Where:** margin block in the order page; `src/lib/money.ts`; Reports page.
+### 🟡 Cross-currency report totals & a base currency  *(order margin ✅ BUILT)*
+**Why:** The **order margin** now converts INR cost into the sale currency using
+reference FX rates (Settings → Exchange rates), so export margins show
+(`src/app/(app)/orders/[id]/page.tsx`, `src/lib/fx.ts`). **Still pending:**
+expressing **Reports totals / rankings across currencies** in one base currency —
+they're per-currency today.
+**Where:** Reports page (`src/app/(app)/reports/page.tsx`); `src/lib/money.ts`.
+Reuse `getFxRates()` / `convert()` in `src/lib/fx.ts`.
 **Effort:** medium.
 
 ### 🟡 Formal credit note for returns
@@ -256,3 +260,94 @@ correctness/robustness for speed on pages that aren't hot:
   owner's peace of mind (beyond per-module CSV).
 - **🟢 Product & Order modules deserve the same treatment** as Customers got:
   search, filters, CSV import/export, codes/SKUs, and pagination.
+
+---
+
+## Missing use cases — net-new modules (from the end-to-end walkthrough)
+
+These are **whole features**, not tweaks. None are built yet. Listed so we can
+decide order before starting. Priority reflects business value for an Indian
+textile **export** house.
+
+### 🔴 Export incentives — Duty Drawback / RoDTEP / GST input refund
+**Why:** Zero-rated exports let you reclaim GST paid on inputs (fabric, zari) and
+claim drawback/RoDTEP — often 1–5%+ of FOB. Real money, tracked nowhere.
+**Where:** capture input GST (add `gstRate` to `MaterialPOItem`); a claims/refund
+model tied to `Shipment`/HSN; a refund-due report on `src/app/(app)/reports`.
+**Effort:** large.
+
+### 🔴 Receivables / Payables aging + customer / vendor statements
+**Why:** Money shows *totals*, not 30/60/90 buckets or a printable statement to
+chase money.
+**Where:** `src/app/(app)/money/` — bucket `balances()` (`src/lib/money.ts`) by
+invoice/PO date; a printable statement page per customer/vendor.
+**Effort:** medium.
+
+### 🟡 Multi-process job work (sequential operations)
+**Why:** One design may go embroidery → wash → finishing across **different**
+kaarigars; today a job = one vendor, with no chaining.
+**Where:** a `JobStage`/route concept where one stage's receipt feeds the next;
+touches `Job`, `receiveJob`, procurement.
+**Effort:** large.
+
+### 🟡 FX gain / loss on realization
+**Why:** Invoice USD, get paid weeks later at a different rate — the INR
+difference is real P&L, currently lost.
+**Where:** capture a realization rate on `Payment`; compare to the invoice rate;
+surface on Money/Reports. Builds on the new `FxRate` table.
+**Effort:** medium.
+
+### 🟡 Sampling workflow
+**Why:** Buyers request samples before bulk — a distinct, usually-unbilled flow.
+**Where:** an order flag/type `SAMPLE` (or a light `Sample` model) excluded from
+revenue/margin; a sample-dispatch note.
+**Effort:** medium.
+
+### 🟡 TDS on job-work payments + input GST credit on purchases
+**Why:** Statutory — TDS (194C) when paying kaarigars; input GST credit on
+material buys.
+**Where:** TDS fields on `VendorPayment`; `gstRate` on `MaterialPOItem` + an
+input-credit report.
+**Effort:** medium.
+
+### 🟢 LC / advance lifecycle
+**Why:** Export is often on LC or advance; only flat `Payment`s exist today.
+**Where:** an LC/advance model with milestones tied to order/shipment.
+**Effort:** large.
+
+### 🟢 Full export document set
+**Why:** Certificate of Origin isn't generated; Shipping Bill / BL-AWB /
+e-invoice IRN / e-way (fields exist on `Shipment`) aren't captured in the builder
+or printed.
+**Where:** shipment-builder inputs + a Certificate-of-Origin print page mirroring
+`src/app/invoice/[shipmentId]`. (Real e-invoice/e-way generation already parked
+above as a large GSP integration.)
+**Effort:** medium (COO doc).
+
+### 🟢 Roll / than & shade-lot tracking
+**Why:** Fabric ships as numbered rolls with individual lengths; dye lots must
+match across a shipment.
+**Where:** a roll/piece model under `ShipmentItem` with per-roll length + lot;
+packing list prints per-roll.
+**Effort:** large.
+
+### Small leftovers (from the walkthrough)
+- **🟡 Hard credit-limit block/override** at order or shipment creation (a soft
+  warning already exists) — guard in `createOrder` / `createShipment`.
+- **🟢 Light per-design BOM** — a standard base-fabric consumption per finished
+  unit, to give an **upfront material estimate on new orders** and **embellishment
+  quantity planning** in procurement (owner deferred a full BOM for now).
+- **🟢 Legacy jobs show `#1`** (records predating FY numbering) — cosmetic backfill.
+
+### ✅ Built in the walkthrough fixes — listed here for verification
+- **Export margin via reference FX rates** — Settings → Exchange rates; the order
+  margin converts INR making+material cost into the sale currency (`src/lib/fx.ts`,
+  `src/app/(app)/orders/[id]/page.tsx`).
+- **Material-PO liabilities** now included in Reports "To pay" + the Money page.
+- **Domestic-GSTIN nudge** on INR orders whose customer has no GSTIN.
+- **Materials module** (whole): raw-material catalogue + stock ledger, material
+  purchase orders + receive + print, per-design-line **issue + reconcile**
+  (issued/returned/used), default materials per fabric-type and per design,
+  **Materials at cost** in Reports, base-fabric **procurement planner**, and the
+  **"awaiting materials" gate** across the Production list, Due-soon board and job
+  page.
