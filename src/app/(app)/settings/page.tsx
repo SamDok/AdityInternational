@@ -50,6 +50,14 @@ export default async function SettingsPage() {
               </div>
               <ChevronRightIcon className="h-5 w-5 text-gray-300" />
             </Link>
+            <Link href="/settings/incentive-rates" className="card flex items-center gap-3 hover:bg-gray-50">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-500">%</div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-gray-900">Export incentive rates</p>
+                <p className="text-sm text-gray-500">Duty Drawback &amp; RoDTEP % by HSN</p>
+              </div>
+              <ChevronRightIcon className="h-5 w-5 text-gray-300" />
+            </Link>
           </div>
           <div className="px-4 pt-4">
             <p className="mb-2 px-1 text-sm font-semibold text-gray-500">Catalogue</p>

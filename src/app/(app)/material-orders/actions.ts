@@ -13,6 +13,7 @@ const ItemSchema = z.object({
   materialId: z.string().min(1),
   qtyOrdered: z.coerce.number().min(0),
   rate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  gstRate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
   unit: z.string().min(1).default("mtr"),
   note: z.string().optional().nullable(),
 });
@@ -35,7 +36,7 @@ function toDate(v?: string | null) {
 }
 
 function itemData(it: z.infer<typeof ItemSchema>) {
-  return { materialId: it.materialId, qtyOrdered: it.qtyOrdered, rate: it.rate ?? null, unit: it.unit, note: it.note || null };
+  return { materialId: it.materialId, qtyOrdered: it.qtyOrdered, rate: it.rate ?? null, gstRate: it.gstRate ?? null, unit: it.unit, note: it.note || null };
 }
 
 async function allocateMaterialPoNumbers(issueDate: Date) {

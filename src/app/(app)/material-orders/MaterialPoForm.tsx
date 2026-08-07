@@ -6,7 +6,7 @@ import { CURRENCIES } from "@/lib/format";
 import type { MaterialPoInput } from "./actions";
 
 type Material = { id: string; name: string; unit: string };
-type Line = { materialId: string; qtyOrdered: string; rate: string; unit: string };
+type Line = { materialId: string; qtyOrdered: string; rate: string; gstRate: string; unit: string };
 
 export default function MaterialPoForm({
   materials,
@@ -23,7 +23,7 @@ export default function MaterialPoForm({
   const [currency, setCurrency] = useState("INR");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<Line[]>([{ materialId: materials[0]?.id ?? "", qtyOrdered: "", rate: "", unit: materials[0]?.unit ?? "mtr" }]);
+  const [lines, setLines] = useState<Line[]>([{ materialId: materials[0]?.id ?? "", qtyOrdered: "", rate: "", gstRate: "", unit: materials[0]?.unit ?? "mtr" }]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -36,7 +36,7 @@ export default function MaterialPoForm({
     setLine(i, { materialId, unit: m?.unit ?? "mtr" });
   }
   function addLine() {
-    setLines((ls) => [...ls, { materialId: materials[0]?.id ?? "", qtyOrdered: "", rate: "", unit: materials[0]?.unit ?? "mtr" }]);
+    setLines((ls) => [...ls, { materialId: materials[0]?.id ?? "", qtyOrdered: "", rate: "", gstRate: "", unit: materials[0]?.unit ?? "mtr" }]);
   }
   function removeLine(i: number) {
     setLines((ls) => (ls.length > 1 ? ls.filter((_, idx) => idx !== i) : ls));
@@ -46,7 +46,7 @@ export default function MaterialPoForm({
     setError(null);
     const items = lines
       .filter((l) => l.materialId && parseFloat(l.qtyOrdered) > 0)
-      .map((l) => ({ materialId: l.materialId, qtyOrdered: Number(l.qtyOrdered), rate: l.rate === "" ? null : Number(l.rate), unit: l.unit }));
+      .map((l) => ({ materialId: l.materialId, qtyOrdered: Number(l.qtyOrdered), rate: l.rate === "" ? null : Number(l.rate), gstRate: l.gstRate === "" ? null : Number(l.gstRate), unit: l.unit }));
     if (!vendorId) { setError("Choose a supplier."); return; }
     if (items.length === 0) { setError("Add at least one material line with a quantity."); return; }
     startTransition(async () => {
@@ -99,6 +99,7 @@ export default function MaterialPoForm({
             <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
               <input type="number" step="any" min="0" inputMode="decimal" value={l.qtyOrdered} onChange={(e) => setLine(i, { qtyOrdered: e.target.value })} className="field-input" placeholder={`Qty (${l.unit})`} />
               <input type="number" step="any" min="0" inputMode="decimal" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} className="field-input" placeholder="Rate/unit" />
+              <input type="number" step="any" min="0" inputMode="decimal" value={l.gstRate} onChange={(e) => setLine(i, { gstRate: e.target.value })} className="field-input" placeholder="GST %" title="GST % paid on this input (for ITC refund)" />
               <button type="button" onClick={() => removeLine(i)} className="px-2 text-gray-400 hover:text-red-600" aria-label="Remove line">✕</button>
             </div>
           </div>

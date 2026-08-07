@@ -22,6 +22,7 @@ export default async function MorePage() {
     { href: "/shipments", label: "Shipments", sub: "dispatches, invoices & packing lists", icon: DocumentIcon },
     { href: "/money", label: "Money", sub: "receivables & payables", icon: ClipboardIcon },
     { href: "/reports", label: "Reports", sub: "sales, order book & stock value", icon: DocumentIcon },
+    { href: "/incentives", label: "Export incentives", sub: "drawback, RoDTEP & GST refund", icon: ClipboardIcon },
     { href: "/vendors", label: "Vendors", sub: `${vendors} kaarigars & suppliers`, icon: UsersIcon },
     { href: "/products/low-stock", label: "Low stock", sub: lowStock ? "items to watch" : "nothing tracked", icon: BoxIcon },
     { href: "/products/movements", label: "Stock movements", sub: "recent stock changes", icon: ClipboardIcon },

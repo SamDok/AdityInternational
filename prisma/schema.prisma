@@ -590,9 +590,26 @@ model MaterialPOItem {
   qtyOrdered  Float    @default(0)
   qtyReceived Float    @default(0)
   rate        Float? // purchase price per unit
+  gstRate     Float? // GST % paid on this input (for input-tax-credit / refund on LUT exports)
   unit        String   @default("mtr")
   note        String?
   createdAt   DateTime @default(now())
+}
+
+// Export-incentive rates per HSN code (Duty Drawback %, RoDTEP %), maintained by
+// the owner from the official CBIC/DGFT schedule. Seeded from the catalogue's
+// HSNs with placeholder rates to verify — never treated as authoritative until
+// `verified`. Applied to the FOB value of exports of that HSN.
+model HsnIncentiveRate {
+  id          String   @id @default(cuid())
+  hsnCode     String   @unique
+  drawbackPct Float? // % of FOB refunded as duty drawback
+  drawbackCap Float? // optional cap (INR per unit) on the drawback
+  rodtepPct   Float? // % of FOB credited as a RoDTEP scrip
+  verified    Boolean  @default(false) // owner confirmed against the current schedule
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // Materials handed to a kaarigar for one design line of a job. Reconciliation:
