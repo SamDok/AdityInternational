@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty } from "@/lib/format";
+import { formatMoney, formatDate, formatQty, orderNo } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import { computeTax } from "@/lib/tax";
 import { amountInWords } from "@/lib/words";
@@ -22,7 +22,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
         orderBy: { createdAt: "asc" },
         include: {
           product: { include: { design: { include: { image: { select: { designId: true } } } } } },
-          orderItem: { select: { order: { select: { number: true, isSample: true, sampleNo: true } } } },
+          orderItem: { select: { order: { select: { number: true, isSample: true, sampleNo: true, seq: true, fyLabel: true } } } },
         },
       },
     },
@@ -71,7 +71,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
     shipment.items
       .map((i) => i.orderItem?.order)
       .filter((o): o is NonNullable<typeof o> => !!o)
-      .map((o) => [o.number, o.isSample ? `Sample #${o.sampleNo ?? o.number}` : `#${o.number}`] as const),
+      .map((o) => [o.number, orderNo(o)] as const),
   )].sort((a, b) => a[0] - b[0]).map(([, label]) => label);
 
   const originCountry = company.country || "India";
@@ -134,7 +134,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
         <div className="mt-5 flex items-end justify-between">
           <h1 className="text-lg font-bold uppercase tracking-wide">Commercial Invoice</h1>
           <div className="text-right text-xs">
-            <p><span className="text-gray-500">No.:</span> <span className="font-semibold">{shipmentDocNo(shipment, "INV")}</span></p>
+            <p><span className="text-gray-500">No.:</span> <span className="font-semibold">{shipmentDocNo(shipment, "BG")}</span></p>
             <p><span className="text-gray-500">Date:</span> {formatDate(shipment.date)}</p>
           </div>
         </div>

@@ -28,7 +28,7 @@ export default async function CustomerStatementPage({ params }: { params: Promis
 
   const events: (LedgerRow & { currency: string })[] = [
     ...customer.shipments.map((s) => ({
-      date: s.date, currency: s.currency, label: "Invoice", ref: shipmentDocNo(s, "INV"),
+      date: s.date, currency: s.currency, label: "Invoice", ref: shipmentDocNo(s, "BG"),
       debit: shipmentGrandTotal(s, company), credit: 0,
     })),
     ...customer.payments.map((p) => ({

@@ -406,8 +406,13 @@ model Order {
   // margin / order-book figures. It can still carry a price (charged samples
   // show in receivables). sampleStatus tracks approval; sampleSource links a
   // bulk order back to the sample it was converted from.
+  // Document numbering: AI/25-26/001 (production) or AI/S/25-26/001 (sample),
+  // each a per-financial-year series. `number` stays a global counter for
+  // internal uniqueness; seq + fyLabel drive the human-facing code.
+  seq          Int? // per-(isSample, financial year) document sequence
+  fyLabel      String? // Indian financial year tag, e.g. "25-26"
   isSample     Boolean @default(false)
-  sampleNo     Int? // sample's own running number (samples only); production uses `number`
+  sampleNo     Int? // legacy sample running number; superseded by seq + fyLabel
   sampleStatus String? // PENDING | APPROVED | REJECTED (samples only)
   sampleSource   Order?  @relation("SampleToBulk", fields: [sampleSourceId], references: [id], onDelete: SetNull)
   sampleSourceId String?

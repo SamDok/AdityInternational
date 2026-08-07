@@ -10,7 +10,7 @@ import { getFxRates } from "@/lib/fx";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 import { allocateJobNumbers } from "../jobs/actions";
-import { shipmentDocNo } from "@/lib/jobNumber";
+import { shipmentDocNo, financialYearLabel } from "@/lib/jobNumber";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -104,10 +104,27 @@ async function nextOrderNumber(): Promise<number> {
   return last ? last.number + 1 : 1001;
 }
 
-// Next sample number (Sample #1, #2, …), independent of production numbering.
+// Next sample number (legacy internal counter), independent of production.
 async function nextSampleNo(): Promise<number> {
   const last = await prisma.order.findFirst({ where: { isSample: true }, orderBy: { sampleNo: "desc" }, select: { sampleNo: true } });
   return (last?.sampleNo ?? 0) + 1;
+}
+
+// Next per-financial-year document sequence for the AI/ (production) or AI/S/
+// (sample) series — the two are numbered independently within each FY.
+async function nextOrderSeq(isSample: boolean, fyLabel: string): Promise<number> {
+  const last = await prisma.order.findFirst({ where: { isSample, fyLabel }, orderBy: { seq: "desc" }, select: { seq: true } });
+  return (last?.seq ?? 0) + 1;
+}
+
+// Everything a new order needs to be numbered: the internal unique `number`, the
+// per-FY document `seq` and its `fyLabel`, plus a sample counter for samples.
+async function allocateOrderNumbers(isSample: boolean, date: Date) {
+  const fyLabel = financialYearLabel(date);
+  const seq = await nextOrderSeq(isSample, fyLabel);
+  const sampleNo = isSample ? await nextSampleNo() : null;
+  const number = isSample ? SAMPLE_OFFSET + sampleNo! : await nextOrderNumber();
+  return { number, seq, fyLabel, sampleNo };
 }
 
 export async function createOrder(input: OrderInput) {
@@ -117,9 +134,9 @@ export async function createOrder(input: OrderInput) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid order" };
   }
   const d = parsed.data;
-  // Samples number in their own series; production keeps the gapless order series.
-  const sampleNo = d.isSample ? await nextSampleNo() : null;
-  const number = d.isSample ? SAMPLE_OFFSET + sampleNo! : await nextOrderNumber();
+  const orderDate = toDate(d.orderDate) ?? new Date();
+  // Samples number in their own AI/S/ series; production keeps the AI/ series.
+  const { number, seq, fyLabel, sampleNo } = await allocateOrderNumbers(d.isSample, orderDate);
   // Freeze today's reference FX onto foreign-currency orders, so the estimated
   // export margin stays locked to the order date and doesn't drift when the
   // daily rate refresh runs. Domestic (INR) orders need no conversion.
@@ -129,10 +146,12 @@ export async function createOrder(input: OrderInput) {
   const order = await prisma.order.create({
     data: {
       number,
+      seq,
+      fyLabel,
       customerId: d.customerId,
       currency: d.currency,
       status: d.status,
-      orderDate: toDate(d.orderDate) ?? new Date(),
+      orderDate,
       dueDate: toDate(d.dueDate) ?? null,
       notes: d.notes || null,
       createdByName: me.name || me.email,
@@ -160,18 +179,23 @@ export async function updateOrder(id: string, input: OrderInput) {
 
   const current = await prisma.order.findUnique({
     where: { id },
-    select: { isSample: true, sampleNo: true, sampleStatus: true, items: { select: { id: true, productId: true, shippedQty: true } } },
+    select: { isSample: true, sampleNo: true, sampleStatus: true, fyLabel: true, items: { select: { id: true, productId: true, shippedQty: true } } },
   });
   if (!current) return { error: "Order not found." };
 
   // Toggling sample ⇄ production on an existing order re-numbers it into the
-  // right series so the two never share a number.
-  let numbering: { number?: number; sampleNo?: number | null } = {};
-  if (d.isSample && !current.isSample) {
-    const sampleNo = await nextSampleNo();
-    numbering = { number: SAMPLE_OFFSET + sampleNo, sampleNo };
-  } else if (!d.isSample && current.isSample) {
-    numbering = { number: await nextOrderNumber(), sampleNo: null };
+  // right series (AI/ ⇄ AI/S/) so the two never share a number.
+  let numbering: { number?: number; sampleNo?: number | null; seq?: number; fyLabel?: string } = {};
+  const toggledSample = d.isSample !== current.isSample;
+  if (toggledSample) {
+    const fy = current.fyLabel ?? financialYearLabel(toDate(d.orderDate) ?? new Date());
+    const seq = await nextOrderSeq(d.isSample, fy);
+    if (d.isSample) {
+      const sampleNo = await nextSampleNo();
+      numbering = { number: SAMPLE_OFFSET + sampleNo, sampleNo, seq, fyLabel: fy };
+    } else {
+      numbering = { number: await nextOrderNumber(), sampleNo: null, seq, fyLabel: fy };
+    }
   }
 
   const existingById = new Map(current.items.map((i) => [i.id, i]));
@@ -615,15 +639,16 @@ export async function reorderOrder(sourceId: string) {
   await requireUser();
   const src = await prisma.order.findUnique({ where: { id: sourceId }, include: { items: true } });
   if (!src) redirect("/orders");
-  const number = await nextOrderNumber();
+  const orderDate = new Date();
+  const { number, seq, fyLabel } = await allocateOrderNumbers(false, orderDate);
   const fxSnapshot = src.currency !== "INR" ? Object.fromEntries(await getFxRates()) : undefined;
   const created = await prisma.order.create({
     data: {
-      number,
+      number, seq, fyLabel,
       customerId: src.customerId,
       currency: src.currency,
       status: "DRAFT",
-      orderDate: new Date(),
+      orderDate,
       fxRates: fxSnapshot,
       discountPct: src.discountPct,
       billToName: src.billToName, billToAddress: src.billToAddress, billToTaxId: src.billToTaxId,
@@ -655,15 +680,16 @@ export async function convertSampleToBulk(sampleId: string) {
   const src = await prisma.order.findUnique({ where: { id: sampleId }, include: { items: true } });
   if (!src) redirect("/orders");
   if (!src.isSample) redirect(`/orders/${sampleId}`);
-  const number = await nextOrderNumber();
+  const orderDate = new Date();
+  const { number, seq, fyLabel } = await allocateOrderNumbers(false, orderDate);
   const fxSnapshot = src.currency !== "INR" ? Object.fromEntries(await getFxRates()) : undefined;
   const created = await prisma.order.create({
     data: {
-      number,
+      number, seq, fyLabel,
       customerId: src.customerId,
       currency: src.currency,
       status: "DRAFT",
-      orderDate: new Date(),
+      orderDate,
       fxRates: fxSnapshot,
       discountPct: src.discountPct,
       sampleSourceId: src.id,

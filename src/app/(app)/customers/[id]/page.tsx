@@ -73,7 +73,7 @@ export default async function CustomerDetailPage({
   // Money: invoice totals (incl. GST), balances per currency, per-invoice paid state.
   const invoices = customer.shipments.map((s) => ({
     id: s.id,
-    docNo: shipmentDocNo(s, "INV"),
+    docNo: shipmentDocNo(s, "BG"),
     date: s.date,
     currency: s.currency,
     total: shipmentGrandTotal(s, company),

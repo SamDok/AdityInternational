@@ -28,7 +28,7 @@ export default async function OrderDetailPage({
     where: { id },
     include: {
       customer: true,
-      sampleSource: { select: { id: true, number: true, sampleNo: true, isSample: true } },
+      sampleSource: { select: { id: true, number: true, sampleNo: true, isSample: true, seq: true, fyLabel: true } },
       bulkOrders: { select: { id: true, number: true } },
       items: { include: { product: { include: { design: { include: { image: { select: { designId: true } } } } } } } },
     },
