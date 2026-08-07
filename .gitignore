@@ -32,3 +32,6 @@ yarn-error.log*
 # python legacy
 __pycache__/
 *.pyc
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
