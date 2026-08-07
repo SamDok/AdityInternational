@@ -16,6 +16,7 @@ const PaymentSchema = z.object({
   note: nullableStr(),
   shipmentId: nullableStr(),
   jobId: nullableStr(),
+  materialPoId: nullableStr(),
 });
 
 function toDate(v?: string) {
@@ -66,6 +67,7 @@ export async function recordVendorPayment(vendorId: string, input: unknown) {
     data: {
       vendorId,
       jobId: d.jobId || null,
+      materialPoId: d.materialPoId || null,
       amount: d.amount,
       currency: d.currency,
       date: toDate(d.date),

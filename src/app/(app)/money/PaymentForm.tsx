@@ -8,7 +8,10 @@ import { PAYMENT_METHODS } from "@/lib/money";
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-type Alloc = { id: string; label: string };
+type AllocKey = "shipmentId" | "jobId" | "materialPoId";
+// An option may carry its own key, so one dropdown can mix bill types (e.g. a
+// supplier's job bills and material-PO bills).
+type Alloc = { id: string; label: string; key?: AllocKey };
 
 export default function PaymentForm({
   action,
@@ -21,7 +24,7 @@ export default function PaymentForm({
   action: (input: unknown) => Promise<{ error?: string; ok?: boolean } | void>;
   defaultCurrency: string;
   allocations?: Alloc[];
-  allocationKey?: "shipmentId" | "jobId";
+  allocationKey?: AllocKey;
   allocationLabel?: string;
   buttonLabel?: string;
 }) {
@@ -41,7 +44,10 @@ export default function PaymentForm({
     const n = parseFloat(amount);
     if (isNaN(n) || n <= 0) return toast("Enter an amount greater than zero", { kind: "error" });
     const input: Record<string, unknown> = { amount: n, currency, date, method, reference: reference || null, note: note || null };
-    if (allocationKey && allocId) input[allocationKey] = allocId;
+    if (allocId) {
+      const key = allocations?.find((a) => a.id === allocId)?.key ?? allocationKey;
+      if (key) input[key] = allocId;
+    }
     startTransition(async () => {
       const res = await action(input);
       if (res?.error) return toast(res.error, { kind: "error" });

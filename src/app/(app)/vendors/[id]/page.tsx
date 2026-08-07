@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, formatMoney } from "@/lib/format";
-import { jobDocNo } from "@/lib/jobNumber";
+import { jobDocNo, materialPoDocNo } from "@/lib/jobNumber";
 import { jobReceivedValue, sumByCurrency, balances, allocateFIFO, paidState, PAID_LABEL, PAID_COLOR } from "@/lib/money";
 import PaymentForm from "../../money/PaymentForm";
 import PaymentList from "../../money/PaymentList";
@@ -31,8 +31,9 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
     where: { id },
     include: {
       jobs: { orderBy: { issueDate: "desc" }, take: 20, include: { items: { select: { rate: true, qtyOrdered: true, qtyReceived: true } } } },
+      materialPos: { orderBy: { issueDate: "desc" }, take: 20, select: { id: true, number: true, seq: true, fyLabel: true, issueDate: true, currency: true, status: true, items: { select: { rate: true, qtyReceived: true } } } },
       designs: { orderBy: { code: "asc" }, take: 20, include: { category: true } },
-      payments: { orderBy: { date: "desc" }, select: { id: true, amount: true, currency: true, date: true, method: true, reference: true, note: true, jobId: true } },
+      payments: { orderBy: { date: "desc" }, select: { id: true, amount: true, currency: true, date: true, method: true, reference: true, note: true, jobId: true, materialPoId: true } },
     },
   });
   if (!vendor) notFound();
@@ -41,21 +42,38 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
   const openJobs = vendor.jobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL");
   const openValue = openJobs.reduce((s, j) => s + j.items.reduce((a, i) => a + (i.rate ?? 0) * i.qtyOrdered, 0), 0);
 
-  // Payables: value of goods received per job (what we owe), balances, paid state.
-  const jobBills = vendor.jobs
+  // Payables: value of goods received — both job work AND material purchases —
+  // is what we owe this vendor. Both feed the balances, FIFO and payment lists.
+  type Bill = { id: string; docNo: string; date: Date; currency: string; total: number; kind: "jobId" | "materialPoId"; href: string };
+  const jobBills: Bill[] = vendor.jobs
     .filter((j) => j.status !== "CANCELLED")
-    .map((j) => ({ id: j.id, docNo: jobDocNo(j), date: j.issueDate, currency: j.currency, total: jobReceivedValue(j) }))
+    .map((j) => ({ id: j.id, docNo: jobDocNo(j), date: j.issueDate, currency: j.currency, total: jobReceivedValue(j), kind: "jobId" as const, href: `/jobs/${j.id}` }))
     .filter((j) => j.total > 0.01);
-  const billedV = sumByCurrency(jobBills.map((j) => ({ amount: j.total, currency: j.currency })));
+  const materialBills: Bill[] = vendor.materialPos
+    .filter((po) => po.status !== "CANCELLED")
+    .map((po) => ({
+      id: po.id, docNo: materialPoDocNo(po), date: po.issueDate, currency: po.currency,
+      total: Math.round(po.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyReceived, 0) * 100) / 100,
+      kind: "materialPoId" as const, href: `/material-po/${po.id}`,
+    }))
+    .filter((po) => po.total > 0.01);
+  const bills = [...jobBills, ...materialBills];
+  const billedV = sumByCurrency(bills.map((b) => ({ amount: b.total, currency: b.currency })));
   const paidV = sumByCurrency(vendor.payments);
   const bsV = balances(billedV, paidV);
-  const paidPerJob = new Map<string, number>();
+  // FIFO oldest-first across all bill types, per currency.
+  const paidPerBill = new Map<string, number>();
   for (const [cur, total] of paidV) {
-    const js = jobBills.filter((j) => j.currency === cur).sort((a, b) => +a.date - +b.date);
-    const alloc = allocateFIFO(js.map((j) => ({ id: j.id, total: j.total })), total);
-    for (const [jid, amt] of alloc) paidPerJob.set(jid, amt);
+    const bs = bills.filter((b) => b.currency === cur).sort((a, b) => +a.date - +b.date);
+    const alloc = allocateFIFO(bs.map((b) => ({ id: b.id, total: b.total })), total);
+    for (const [bid, amt] of alloc) paidPerBill.set(bid, amt);
   }
-  const vpaymentRows = vendor.payments.map((p) => ({ ...p, against: p.jobId ? jobBills.find((j) => j.id === p.jobId)?.docNo ?? null : null }));
+  const billsByDate = [...bills].sort((a, b) => +b.date - +a.date);
+  const vpaymentRows = vendor.payments.map((p) => ({
+    ...p,
+    against: p.jobId ? bills.find((b) => b.id === p.jobId)?.docNo ?? null
+      : p.materialPoId ? bills.find((b) => b.id === p.materialPoId)?.docNo ?? null : null,
+  }));
   const bank = [
     ["Bank", vendor.bankName],
     ["Account name", vendor.bankAccountName],
@@ -132,13 +150,13 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
             </div>
           )}
 
-          {jobBills.length > 0 && (
+          {billsByDate.length > 0 && (
             <ul className="divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-gray-100">
-              {jobBills.map((jb) => {
-                const st = paidState(jb.total, paidPerJob.get(jb.id) ?? 0);
+              {billsByDate.map((jb) => {
+                const st = paidState(jb.total, paidPerBill.get(jb.id) ?? 0);
                 return (
                   <li key={jb.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <Link href={`/jobs/${jb.id}`} className="min-w-0 flex-1 hover:underline">
+                    <Link href={jb.href} className="min-w-0 flex-1 hover:underline">
                       <span className="text-sm font-medium text-gray-900">{jb.docNo}</span>
                       <span className="ml-2 text-xs text-gray-500">{formatDate(jb.date)}</span>
                     </Link>
@@ -153,9 +171,8 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
           <PaymentForm
             action={recordVendorPayment.bind(null, vendor.id)}
             defaultCurrency={vendor.currency}
-            allocations={jobBills.map((j) => ({ id: j.id, label: `${j.docNo} · ${formatMoney(j.total, j.currency)}` }))}
-            allocationKey="jobId"
-            allocationLabel="Against job"
+            allocations={billsByDate.map((b) => ({ id: b.id, label: `${b.docNo} · ${formatMoney(b.total, b.currency)}`, key: b.kind }))}
+            allocationLabel="Against bill"
             buttonLabel="Record vendor payment"
           />
           {vpaymentRows.length > 0 && <PaymentList payments={vpaymentRows} onDelete={deleteVendorPayment} />}
