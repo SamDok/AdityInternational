@@ -631,12 +631,14 @@ export async function convertSampleToBulk(sampleId: string) {
       shipToName: src.shipToName, shipToAddress: src.shipToAddress,
       destinationPort: src.destinationPort, incoterms: src.incoterms, paymentTerms: src.paymentTerms,
       items: {
+        // Carry the design + agreed rate, but blank the quantity — the sample was
+        // a swatch; the owner types the real bulk quantity on the fresh draft.
         create: src.items.map((it) => ({
           productId: it.productId,
           description: it.description,
-          quantity: it.quantity,
-          pieces: it.pieces,
-          perPieceQty: it.perPieceQty,
+          quantity: 0,
+          pieces: null,
+          perPieceQty: null,
           unit: it.unit,
           rate: it.rate,
         })),
@@ -647,6 +649,21 @@ export async function convertSampleToBulk(sampleId: string) {
   revalidatePath("/orders");
   revalidatePath(`/orders/${src.id}`);
   redirect(`/orders/${created.id}/edit`);
+}
+
+// Buyer didn't approve the sample: mark it rejected and void the order, stopping
+// any sample job the kaarigar was given.
+export async function rejectSample(id: string) {
+  await requireUser();
+  const order = await prisma.order.findUnique({ where: { id }, select: { isSample: true } });
+  if (order?.isSample) {
+    await prisma.order.update({ where: { id }, data: { sampleStatus: "REJECTED", status: "CANCELLED" } });
+    await prisma.job.updateMany({ where: { orderId: id, status: { in: ["OPEN", "PARTIAL"] } }, data: { status: "CANCELLED" } });
+    revalidatePath("/jobs");
+    revalidatePath("/");
+  }
+  revalidatePath("/orders");
+  redirect(`/orders/${id}`);
 }
 
 // Reduce a line's shipped quantity by `amount` (a correction), adding that much

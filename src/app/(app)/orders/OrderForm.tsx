@@ -184,6 +184,14 @@ export default function OrderForm({ customers, hasProducts, initialPrices, initi
   const noCustomers = customers.length === 0;
   const noProducts = !hasProducts;
 
+  // A sample should be a small swatch: warn if any line exceeds ~1 metre/piece.
+  const sampleTooBig = lines.some((l) => {
+    const per = parseFloat(l.perPieceQty);
+    const pcs = parseInt(l.pieces, 10);
+    const total = (pcs > 0 ? pcs : 1) * (per > 0 ? per : 0);
+    return total > 1;
+  });
+
   // The selected customer's agreed prices — fetched on demand when the customer
   // changes, so the form never loads every customer's price list.
   const [prices, setPrices] = useState<Record<string, number>>(initialPrices);
@@ -371,9 +379,14 @@ export default function OrderForm({ customers, hasProducts, initialPrices, initi
           <input type="checkbox" checked={isSample} onChange={(e) => setIsSample(e.target.checked)} className="mt-0.5 h-5 w-5 rounded" />
           <span className="text-sm">
             <span className="font-medium text-gray-900">This is a sample order</span>
-            <span className="block text-xs text-gray-500">Kept out of your sales &amp; order-book figures. It still goes through jobs and can be shipped on a sample dispatch note; if you enter a rate, it shows in receivables.</span>
+            <span className="block text-xs text-gray-500">Enter just the <b>sample swatch quantity</b> (e.g. 1 piece or 0.5 m) — you&apos;ll set the full order quantity when you approve it to a bulk order. Kept out of your sales &amp; order-book figures.</span>
           </span>
         </label>
+        {isSample && sampleTooBig && (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+            A sample is usually a small swatch (≤ 1 metre / 1 piece). Anything over a metre is normally treated as a real order — untick “sample”, or reduce the quantity.
+          </p>
+        )}
       </div>
 
       {/* Customer details snapshot — what prints on the proforma PDF */}

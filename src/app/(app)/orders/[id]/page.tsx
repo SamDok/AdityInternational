@@ -10,7 +10,7 @@ import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty
 import { getFxRates, convert } from "@/lib/fx";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
-import { setOrderComplete, reorderOrder, convertSampleToBulk } from "../actions";
+import { setOrderComplete, reorderOrder, convertSampleToBulk, rejectSample } from "../actions";
 
 const SAMPLE_STATUS_LABEL: Record<string, string> = { PENDING: "Awaiting approval", APPROVED: "Approved", REJECTED: "Rejected" };
 
@@ -151,9 +151,14 @@ export default async function OrderDetailPage({
             <div className="flex items-center justify-between gap-3">
               <span className="font-semibold">Sample order{order.sampleStatus ? ` · ${SAMPLE_STATUS_LABEL[order.sampleStatus] ?? order.sampleStatus}` : ""}</span>
               {order.status !== "CANCELLED" && (
-                <form action={convertSampleToBulk.bind(null, order.id)}>
-                  <button type="submit" className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white active:bg-purple-700">Convert to bulk order</button>
-                </form>
+                <div className="flex shrink-0 gap-2">
+                  <form action={convertSampleToBulk.bind(null, order.id)}>
+                    <button type="submit" className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white active:bg-purple-700">Approve → bulk order</button>
+                  </form>
+                  <form action={rejectSample.bind(null, order.id)}>
+                    <button type="submit" className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-300 active:bg-purple-100">Reject</button>
+                  </form>
+                </div>
               )}
             </div>
             <p className="mt-1 text-xs text-purple-700">Kept out of your sales &amp; order-book figures. Ships on a sample dispatch note.</p>
