@@ -272,11 +272,16 @@ and as a card on Reports.
 Follow-up (🟢): the same on the **payables** side (paying a foreign supplier) —
 would need `VendorPayment.fxRate` + `MaterialPurchaseOrder`/`Job` booking rates.
 
-### 🟡 Sampling workflow
-**Why:** Buyers request samples before bulk — a distinct, usually-unbilled flow.
-**Where:** an order flag/type `SAMPLE` (or a light `Sample` model) excluded from
-revenue/margin; a sample-dispatch note.
-**Effort:** medium.
+### ✅ BUILT — Sampling workflow
+An order can be flagged **`isSample`** (toggle on the order form). Samples run
+through jobs/procurement normally but are kept **out of Sales, rankings and the
+order-book / open-order counts** (Reports + home); a **charged** sample still
+shows in receivables. The Orders list has a **Samples tab** + badge, the invoice
+& proforma print a **"Sample — value for customs purposes only"** banner, and
+**Convert to bulk** (`convertSampleToBulk`) clones an approved sample into a real
+order and links them (`Order.sampleSource`/`bulkOrders`, `Order.sampleStatus`).
+Migration 0035. Follow-up (🟢): a dedicated sample-dispatch document distinct
+from the commercial invoice.
 
 ### 🟡 TDS on job-work payments + input GST credit on purchases
 **Why:** Statutory — TDS (194C) when paying kaarigars; input GST credit on

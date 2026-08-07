@@ -78,6 +78,14 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
         </div>
       )}
 
+      {order.isSample && (
+        <div className="mx-auto max-w-[820px] px-8 pt-6 print:px-0 print:pt-0">
+          <p className="rounded border-2 border-purple-600 bg-purple-50 px-4 py-2 text-center text-sm font-bold uppercase tracking-wide text-purple-700">
+            Sample — no commercial value · value for customs purposes only
+          </p>
+        </div>
+      )}
+
       <div className="proforma mx-auto my-6 max-w-[820px] bg-white p-8 text-[13px] leading-relaxed text-gray-900 shadow-sm print:my-0 print:max-w-none print:p-0 print:shadow-none">
         {/* Letterhead */}
         <div className="flex items-start justify-between gap-4 border-b-2 border-gray-800 pb-4">

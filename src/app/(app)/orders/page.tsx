@@ -12,7 +12,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type View = "active" | "ready" | "done" | "all";
+type View = "active" | "ready" | "done" | "all" | "samples";
 
 export default async function OrdersPage({
   searchParams,
@@ -35,18 +35,24 @@ export default async function OrdersPage({
     o.status !== "CANCELLED" && !orderComplete(o) &&
     o.items.some((i) => i.quantity - i.shippedQty > 1e-9 && i.product.stockQty > 1e-9);
 
+  // Samples live in their own tab and are kept out of the real order views, so
+  // they never inflate the pipeline / ready-to-ship counts.
+  const real = all.filter((o) => !o.isSample);
+  const samples = all.filter((o) => o.isSample);
+
   // "Done" = complete (fully shipped or hand-closed); "Active" = not complete and
   // not cancelled.
-  const orders = all.filter((o) =>
-    view === "all" ? true
+  const orders = (view === "samples" ? samples : real).filter((o) =>
+    view === "samples" ? true
+    : view === "all" ? true
     : view === "ready" ? isReadyToShip(o)
     : view === "done" ? orderComplete(o)
     : !orderComplete(o) && o.status !== "CANCELLED",
   );
 
-  const readyCount = all.filter(isReadyToShip).length;
+  const readyCount = real.filter(isReadyToShip).length;
   const pagedOrders = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const tabs: [View, string][] = [["active", "Active"], ["ready", `Ready${readyCount ? ` (${readyCount})` : ""}`], ["done", "Done"], ["all", "All"]];
+  const tabs: [View, string][] = [["active", "Active"], ["ready", `Ready${readyCount ? ` (${readyCount})` : ""}`], ["done", "Done"], ["all", "All"], ["samples", `Samples${samples.length ? ` (${samples.length})` : ""}`]];
 
   const DAY = 86400000;
   const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
@@ -116,7 +122,10 @@ export default async function OrdersPage({
                     <div className="card flex items-center gap-2">
                       <Link href={`/orders/${o.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="whitespace-nowrap font-semibold text-gray-900">Order #{o.number}</p>
+                          <p className="flex items-center gap-1.5 whitespace-nowrap font-semibold text-gray-900">
+                            Order #{o.number}
+                            {o.isSample && <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-700">Sample</span>}
+                          </p>
                           <p className="truncate text-sm text-gray-500">
                             {o.customer.name} · {formatDate(o.orderDate)}
                           </p>

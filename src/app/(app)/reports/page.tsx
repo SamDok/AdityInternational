@@ -78,7 +78,7 @@ export default async function ReportsPage() {
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" } },
       select: {
-        date: true, currency: true, billToTaxId: true, status: true, discountPct: true, freight: true, insurance: true, otherCharges: true,
+        date: true, currency: true, billToTaxId: true, status: true, isSample: true, discountPct: true, freight: true, insurance: true, otherCharges: true,
         customer: { select: { name: true, salesperson: { select: { name: true, email: true } } } },
         items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true, code: true, name: true } } } } } },
       },
@@ -87,22 +87,25 @@ export default async function ReportsPage() {
     prisma.job.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } }),
     prisma.vendorPayment.findMany({ select: { amount: true, currency: true } }),
     prisma.product.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
-    prisma.order.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { quantity: true, shippedQty: true, rate: true } } } }),
+    prisma.order.findMany({ where: { status: { not: "CANCELLED" }, isSample: false }, select: { currency: true, items: { select: { quantity: true, shippedQty: true, rate: true } } } }),
     prisma.rawMaterial.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
     prisma.materialPurchaseOrder.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } }),
     prisma.customer.findMany({
       select: {
-        shipments: { where: { status: { not: "CANCELLED" } }, select: { date: true, currency: true, status: true, fxRate: true, billToTaxId: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } } },
+        shipments: { where: { status: { not: "CANCELLED" }, isSample: false }, select: { date: true, currency: true, status: true, fxRate: true, billToTaxId: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } } },
         payments: { select: { amount: true, currency: true, fxRate: true, date: true } },
       },
     }),
   ]);
 
-  // Sales: all-time billed and this financial year.
-  const billedAll = sumByCurrency(shipments.map((s) => ({ amount: shipmentGrandTotal(s, company), currency: s.currency })));
+  // Sales exclude samples (a sample isn't real business). Receivable keeps all
+  // shipments, so a *charged* sample you're still owed is not lost.
+  const saleShipments = shipments.filter((s) => !s.isSample);
+  const salesAll = sumByCurrency(saleShipments.map((s) => ({ amount: shipmentGrandTotal(s, company), currency: s.currency })));
   const salesFY = sumByCurrency(
-    shipments.filter((s) => financialYearLabel(s.date) === fyNow).map((s) => ({ amount: shipmentGrandTotal(s, company), currency: s.currency })),
+    saleShipments.filter((s) => financialYearLabel(s.date) === fyNow).map((s) => ({ amount: shipmentGrandTotal(s, company), currency: s.currency })),
   );
+  const billedAll = sumByCurrency(shipments.map((s) => ({ amount: shipmentGrandTotal(s, company), currency: s.currency })));
   const receivable = new Map(balances(billedAll, sumByCurrency(payments)).filter((b) => b.outstanding > 0.01).map((b) => [b.currency, b.outstanding]));
 
   // Payables: value received (job work + materials received) minus paid.
@@ -135,7 +138,7 @@ export default async function ReportsPage() {
   ), 0);
 
   // Rankings for the current financial year, kept within each currency.
-  const fyShipments = shipments.filter((s) => financialYearLabel(s.date) === fyNow);
+  const fyShipments = saleShipments.filter((s) => financialYearLabel(s.date) === fyNow);
   const topCustomers: Ranked = new Map();
   const bySalesperson: Ranked = new Map();
   const topDesignsValue: Ranked = new Map();
@@ -162,7 +165,7 @@ export default async function ReportsPage() {
         <MetricCard label="To pay" value={moneyLine(payable)} tone="red" hint="Outstanding to vendors" />
         <MetricCard label="Stock at cost" value={moneyLine(stockValue)} hint="Finished goods on hand" />
         <MetricCard label="Materials at cost" value={moneyLine(rawStockValue)} hint="Base fabric & materials on hand" />
-        <MetricCard label="Sales · all time" value={moneyLine(billedAll)} hint="Total invoiced" />
+        <MetricCard label="Sales · all time" value={moneyLine(salesAll)} hint="Total invoiced (excludes samples)" />
         {Math.abs(realizedFx) > 0.01 && (
           <MetricCard label="Realized FX" value={formatMoney(realizedFx, "INR")} tone={realizedFx >= 0 ? "green" : "red"} hint={realizedFx >= 0 ? "Gain on settled foreign invoices" : "Loss on settled foreign invoices"} />
         )}

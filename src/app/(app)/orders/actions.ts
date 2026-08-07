@@ -51,6 +51,7 @@ const OrderSchema = z.object({
   incoterms: nullableStr(),
   paymentTerms: nullableStr(),
   discountPct: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).max(100).nullable().optional()),
+  isSample: z.boolean().optional().default(false),
   items: z.array(ItemSchema).min(1, "Add at least one product line"),
 });
 
@@ -122,6 +123,8 @@ export async function createOrder(input: OrderInput) {
       notes: d.notes || null,
       createdByName: me.name || me.email,
       fxRates: fxSnapshot,
+      isSample: d.isSample,
+      sampleStatus: d.isSample ? "PENDING" : null,
       ...snapshotFields(d),
       items: { create: d.items.map(itemData) },
     },
@@ -142,7 +145,7 @@ export async function updateOrder(id: string, input: OrderInput) {
 
   const current = await prisma.order.findUnique({
     where: { id },
-    select: { items: { select: { id: true, productId: true, shippedQty: true } } },
+    select: { isSample: true, sampleStatus: true, items: { select: { id: true, productId: true, shippedQty: true } } },
   });
   if (!current) return { error: "Order not found." };
 
@@ -181,6 +184,9 @@ export async function updateOrder(id: string, input: OrderInput) {
         orderDate: toDate(d.orderDate) ?? undefined,
         dueDate: toDate(d.dueDate) ?? null,
         notes: d.notes || null,
+        isSample: d.isSample,
+        // Newly marked a sample → start PENDING; unmarked → clear the status.
+        sampleStatus: d.isSample ? (current.isSample ? current.sampleStatus : "PENDING") : null,
         ...snapshotFields(d),
       },
     }),
@@ -597,6 +603,49 @@ export async function reorderOrder(sourceId: string) {
     },
   });
   revalidatePath("/orders");
+  redirect(`/orders/${created.id}/edit`);
+}
+
+// Approve a sample and spin up the real bulk order from it — carries the
+// customer, currency, party/terms snapshot, and each line (design + agreed
+// rate) into a fresh DRAFT, links the two, and marks the sample APPROVED. Opens
+// the new order for editing so the owner can set the bulk quantities.
+export async function convertSampleToBulk(sampleId: string) {
+  await requireUser();
+  const src = await prisma.order.findUnique({ where: { id: sampleId }, include: { items: true } });
+  if (!src) redirect("/orders");
+  if (!src.isSample) redirect(`/orders/${sampleId}`);
+  const number = await nextOrderNumber();
+  const fxSnapshot = src.currency !== "INR" ? Object.fromEntries(await getFxRates()) : undefined;
+  const created = await prisma.order.create({
+    data: {
+      number,
+      customerId: src.customerId,
+      currency: src.currency,
+      status: "DRAFT",
+      orderDate: new Date(),
+      fxRates: fxSnapshot,
+      discountPct: src.discountPct,
+      sampleSourceId: src.id,
+      billToName: src.billToName, billToAddress: src.billToAddress, billToTaxId: src.billToTaxId,
+      shipToName: src.shipToName, shipToAddress: src.shipToAddress,
+      destinationPort: src.destinationPort, incoterms: src.incoterms, paymentTerms: src.paymentTerms,
+      items: {
+        create: src.items.map((it) => ({
+          productId: it.productId,
+          description: it.description,
+          quantity: it.quantity,
+          pieces: it.pieces,
+          perPieceQty: it.perPieceQty,
+          unit: it.unit,
+          rate: it.rate,
+        })),
+      },
+    },
+  });
+  await prisma.order.update({ where: { id: src.id }, data: { sampleStatus: "APPROVED" } });
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${src.id}`);
   redirect(`/orders/${created.id}/edit`);
 }
 

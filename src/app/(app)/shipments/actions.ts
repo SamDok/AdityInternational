@@ -98,7 +98,7 @@ export async function createShipment(input: ShipmentInput) {
     where: { id: { in: wanted.map((l) => l.orderItemId) } },
     select: {
       id: true, productId: true, quantity: true, shippedQty: true, unit: true, rate: true, description: true,
-      order: { select: { id: true, customerId: true, status: true, currency: true } },
+      order: { select: { id: true, customerId: true, status: true, currency: true, isSample: true } },
       product: { select: { name: true, stockQty: true } },
     },
   });
@@ -128,12 +128,15 @@ export async function createShipment(input: ShipmentInput) {
   const date = toDate(d.date) ?? new Date();
   const { number, seq, fyLabel } = await allocateShipmentNumbers(date);
   const lockedFxRate = await invoiceFxRate(d.currency, d.fxRate);
+  // A dispatch drawn from a sample order is itself a sample (kept out of sales).
+  const isSample = requests.some((r) => r.it.order.isSample);
 
   const shipment = await prisma.shipment.create({
     data: {
       number, seq, fyLabel, date,
       customerId: d.customerId,
       currency: d.currency,
+      isSample,
       billToName: d.billToName || null,
       billToAddress: d.billToAddress || null,
       billToTaxId: d.billToTaxId || null,

@@ -390,6 +390,16 @@ model Order {
   paymentTerms    String?
   discountPct     Float? // header discount %, prefilled from the customer's standing discount
 
+  // Sampling: a sample order is made specially and kept out of the sales /
+  // margin / order-book figures. It can still carry a price (charged samples
+  // show in receivables). sampleStatus tracks approval; sampleSource links a
+  // bulk order back to the sample it was converted from.
+  isSample     Boolean @default(false)
+  sampleStatus String? // PENDING | APPROVED | REJECTED (samples only)
+  sampleSource   Order?  @relation("SampleToBulk", fields: [sampleSourceId], references: [id], onDelete: SetNull)
+  sampleSourceId String?
+  bulkOrders     Order[] @relation("SampleToBulk") // bulk orders spawned from this sample
+
   items      OrderItem[]
   jobs       Job[] // job-work / purchase orders auto-generated from this order
   createdAt  DateTime    @default(now())
@@ -408,6 +418,7 @@ model Shipment {
   customerId String
   currency   String   @default("INR")
   status     String   @default("DISPATCHED") // DISPATCHED | CANCELLED
+  isSample   Boolean  @default(false) // a sample dispatch (inherited from the order); kept out of sales figures
 
   // Snapshot of parties/terms for the documents (frozen at ship time).
   billToName      String?

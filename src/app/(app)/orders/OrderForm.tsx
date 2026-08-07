@@ -66,6 +66,7 @@ type InitialOrder = {
   dueDate?: string | null;
   notes?: string | null;
   discountPct?: number | null;
+  isSample?: boolean | null;
   items: { id?: string; productId: string; productLabel?: string; description?: string | null; quantity: number; pieces?: number | null; perPieceQty?: number | null; dueDate?: string | null; unit: string; rate: number }[];
 } & Partial<Record<keyof Snapshot, string | null>>;
 
@@ -126,6 +127,7 @@ export default function OrderForm({ customers, hasProducts, initialPrices, initi
   const [orderDate, setOrderDate] = useState(initial?.orderDate?.slice(0, 10) ?? todayStr());
   const [dueDate, setDueDate] = useState(initial?.dueDate?.slice(0, 10) ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [isSample, setIsSample] = useState(initial?.isSample ?? false);
   const [galleryForLine, setGalleryForLine] = useState<string | null>(null);
   // Header discount %, from the saved order when editing else the customer's standing discount.
   const [discountPct, setDiscountPct] = useState(() => {
@@ -295,6 +297,7 @@ export default function OrderForm({ customers, hasProducts, initialPrices, initi
       incoterms: snap.incoterms || null,
       paymentTerms: snap.paymentTerms || null,
       discountPct: discountPct === "" ? null : Number(discountPct),
+      isSample,
       items: cleanLines.map((l) => ({
         id: l.id,
         productId: l.productId,
@@ -364,6 +367,13 @@ export default function OrderForm({ customers, hasProducts, initialPrices, initi
             </select>
           </div>
         </div>
+        <label className="flex items-start gap-3 rounded-xl bg-gray-50 p-3">
+          <input type="checkbox" checked={isSample} onChange={(e) => setIsSample(e.target.checked)} className="mt-0.5 h-5 w-5 rounded" />
+          <span className="text-sm">
+            <span className="font-medium text-gray-900">This is a sample order</span>
+            <span className="block text-xs text-gray-500">Kept out of your sales &amp; order-book figures. It still goes through jobs and can be shipped on a sample dispatch note; if you enter a rate, it shows in receivables.</span>
+          </span>
+        </label>
       </div>
 
       {/* Customer details snapshot — what prints on the proforma PDF */}

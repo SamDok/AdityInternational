@@ -51,6 +51,7 @@ export default async function EditOrderPage({
     incoterms: order.incoterms,
     paymentTerms: order.paymentTerms,
     discountPct: order.discountPct,
+    isSample: order.isSample,
     items: order.items.map((it) => ({
       id: it.id,
       productId: it.productId,

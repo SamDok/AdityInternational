@@ -29,7 +29,7 @@ export default async function HomePage() {
 
   // "Open" = not cancelled and not complete (per-line shipped, or hand-closed).
   const activeOrders = await prisma.order.findMany({
-    where: { status: { not: "CANCELLED" } },
+    where: { status: { not: "CANCELLED" }, isSample: false },
     select: { manualComplete: true, items: { select: { quantity: true, shippedQty: true } } },
   });
   const openOrders = activeOrders.filter((o) => !orderComplete(o)).length;

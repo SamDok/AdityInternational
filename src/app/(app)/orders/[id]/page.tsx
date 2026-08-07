@@ -10,7 +10,9 @@ import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty
 import { getFxRates, convert } from "@/lib/fx";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
-import { setOrderComplete, reorderOrder } from "../actions";
+import { setOrderComplete, reorderOrder, convertSampleToBulk } from "../actions";
+
+const SAMPLE_STATUS_LABEL: Record<string, string> = { PENDING: "Awaiting approval", APPROVED: "Approved", REJECTED: "Rejected" };
 
 const JOB_STATUS_LABEL: Record<string, string> = { OPEN: "Open", PARTIAL: "Partial", RECEIVED: "Received", CANCELLED: "Cancelled" };
 
@@ -26,6 +28,8 @@ export default async function OrderDetailPage({
     where: { id },
     include: {
       customer: true,
+      sampleSource: { select: { id: true, number: true } },
+      bulkOrders: { select: { id: true, number: true } },
       items: { include: { product: { include: { design: { include: { image: { select: { designId: true } } } } } } } },
     },
   });
@@ -130,6 +134,35 @@ export default async function OrderDetailPage({
       />
 
       <div className="space-y-4 p-4">
+        {order.isSample && (
+          <div className="rounded-xl bg-purple-50 px-4 py-3 text-sm text-purple-900">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold">Sample order{order.sampleStatus ? ` · ${SAMPLE_STATUS_LABEL[order.sampleStatus] ?? order.sampleStatus}` : ""}</span>
+              {order.status !== "CANCELLED" && (
+                <form action={convertSampleToBulk.bind(null, order.id)}>
+                  <button type="submit" className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white active:bg-purple-700">Convert to bulk order</button>
+                </form>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-purple-700">Kept out of your sales &amp; order-book figures. Ships on a sample dispatch note.</p>
+            {order.bulkOrders.length > 0 && (
+              <p className="mt-1 text-xs">
+                Bulk order{order.bulkOrders.length > 1 ? "s" : ""}:{" "}
+                {order.bulkOrders.map((b, i) => (
+                  <span key={b.id}>
+                    {i > 0 && ", "}
+                    <Link href={`/orders/${b.id}`} className="font-semibold underline">#{b.number}</Link>
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+        )}
+        {order.sampleSource && (
+          <div className="rounded-xl bg-gray-50 px-4 py-2 text-sm text-gray-700">
+            Converted from sample order <Link href={`/orders/${order.sampleSource.id}`} className="font-semibold text-brand-600 underline">#{order.sampleSource.number}</Link>.
+          </div>
+        )}
         <div className="card">
           <p className="text-sm text-gray-500">Placed {formatDate(order.orderDate)}</p>
           {order.dueDate && <p className="text-sm text-gray-500">Due {formatDate(order.dueDate)}</p>}
