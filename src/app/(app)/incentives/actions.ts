@@ -89,3 +89,59 @@ export async function deleteClaim(id: string) {
   revalidatePath("/reports");
   return { ok: true };
 }
+
+// ---------------------------------------------------- Bank statement (Kotak)
+
+import { normalizeRef } from "@/lib/incentives";
+
+// Ingest credit lines parsed from the bank statement. dedupeKey (date|amount|
+// narration|ref) means re-importing an overlapping statement is safe.
+export async function importBankCredits(
+  rows: { date: string; amount: number; narration?: string | null; reference?: string | null }[],
+): Promise<{ added: number; skipped: number } | { error: string }> {
+  await requireUser();
+  let added = 0;
+  let skipped = 0;
+  for (const r of rows) {
+    const d = new Date(r.date);
+    if (isNaN(d.getTime()) || !(r.amount > 0)) { skipped++; continue; }
+    const dedupeKey = `${d.toISOString().slice(0, 10)}|${Math.round(r.amount * 100)}|${normalizeRef(r.narration ?? "").slice(0, 40)}|${normalizeRef(r.reference ?? "")}`;
+    try {
+      await prisma.bankCredit.create({ data: { date: d, amount: r.amount, narration: r.narration || null, reference: r.reference || null, dedupeKey } });
+      added++;
+    } catch {
+      skipped++; // unique dedupeKey → already imported
+    }
+  }
+  revalidatePath("/incentives/reconcile");
+  return { added, skipped };
+}
+
+// Tie a bank credit to a claim and mark the claim received for the credited amount.
+export async function reconcileCredit(creditId: string, claimId: string) {
+  await requireUser();
+  const credit = await prisma.bankCredit.findUnique({ where: { id: creditId } });
+  if (!credit) return { error: "Credit not found." };
+  await prisma.$transaction([
+    prisma.bankCredit.update({ where: { id: creditId }, data: { reconciled: true, claimId } }),
+    prisma.incentiveClaim.update({ where: { id: claimId }, data: { status: "RECEIVED", receivedAmount: credit.amount, receivedDate: credit.date } }),
+  ]);
+  revalidatePath("/incentives/reconcile");
+  revalidatePath("/incentives");
+  revalidatePath("/reports");
+  return { ok: true };
+}
+
+export async function unlinkCredit(creditId: string) {
+  await requireUser();
+  await prisma.bankCredit.update({ where: { id: creditId }, data: { reconciled: false, claimId: null } });
+  revalidatePath("/incentives/reconcile");
+  return { ok: true };
+}
+
+export async function deleteBankCredit(creditId: string) {
+  await requireUser();
+  await prisma.bankCredit.delete({ where: { id: creditId } });
+  revalidatePath("/incentives/reconcile");
+  return { ok: true };
+}

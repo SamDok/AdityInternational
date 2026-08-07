@@ -240,12 +240,17 @@ These are **whole features**, not tweaks. None are built yet. Listed so we can
 decide order before starting. Priority reflects business value for an Indian
 textile **export** house.
 
-### 🔴 Export incentives — Duty Drawback / RoDTEP / GST input refund
-**Why:** Zero-rated exports let you reclaim GST paid on inputs (fabric, zari) and
-claim drawback/RoDTEP — often 1–5%+ of FOB. Real money, tracked nowhere.
-**Where:** capture input GST (add `gstRate` to `MaterialPOItem`); a claims/refund
-model tied to `Shipment`/HSN; a refund-due report on `src/app/(app)/reports`.
-**Effort:** large.
+### ✅ BUILT — Export incentives (Duty Drawback / RoDTEP / GST input refund)
+A maintained **HSN rate table** (`HsnIncentiveRate`, seeded from the catalogue,
+verify-flagged), **input GST** captured on material POs (`MaterialPOItem.gstRate`),
+and accrual helpers (`src/lib/incentives.ts`) auto-estimate Drawback + RoDTEP on
+each export's FOB and the ITC pool. A **claim tracker** (`IncentiveClaim`,
+Pending → Filed → Received) with a **Due-from-government** figure on
+`/incentives` and Reports. **Bank reconciliation** (`/incentives/reconcile`):
+Kotak statement CSV import (`BankCredit`) with **auto-match** to claims on
+shipping-bill / ARN / amount (`suggestClaim`, unit-tested). Migrations 0039-0041.
+Follow-ups (🟢): RoDTEP scrip utilisation/sale tracking; a live Kotak API / AA
+feed instead of CSV upload.
 
 ### ✅ BUILT — Receivables / Payables aging + customer / vendor statements
 Money page now shows **aging buckets** (0-30 / 31-60 / 61-90 / 90+) per currency

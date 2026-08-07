@@ -633,6 +633,23 @@ model IncentiveClaim {
   createdByName  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  bankCredits    BankCredit[] // bank credits reconciled to this claim
+}
+
+// A credit line imported from the bank statement (Kotak CSV), used to reconcile
+// incentive money that lands in the account (drawback, ITC refund). dedupeKey
+// stops the same line being imported twice.
+model BankCredit {
+  id         String          @id @default(cuid())
+  date       DateTime
+  amount     Float
+  narration  String?
+  reference  String? // chq / ref no from the statement
+  reconciled Boolean         @default(false)
+  claim      IncentiveClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  claimId    String?
+  dedupeKey  String          @unique
+  createdAt  DateTime        @default(now())
 }
 
 // Materials handed to a kaarigar for one design line of a job. Reconciliation:

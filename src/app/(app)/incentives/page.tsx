@@ -80,7 +80,12 @@ export default async function IncentivesPage() {
         title="Export incentives"
         subtitle={`Estimated · FY ${fyNow}`}
         backHref="/more"
-        action={<Link href="/settings/incentive-rates" className="btn-secondary !px-3 !py-2 text-sm">Rates</Link>}
+        action={
+          <div className="flex items-center gap-2">
+            <Link href="/incentives/reconcile" className="btn-secondary !px-3 !py-2 text-sm">Reconcile</Link>
+            <Link href="/settings/incentive-rates" className="btn-secondary !px-3 !py-2 text-sm">Rates</Link>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 p-4">
