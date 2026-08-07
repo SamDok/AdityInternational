@@ -134,7 +134,12 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
         )}
 
         <section className="space-y-3">
-          <h2 className="px-1 text-sm font-semibold text-gray-500">Money</h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-sm font-semibold text-gray-500">Money</h2>
+            {bills.length > 0 && (
+              <Link href={`/statement/vendor/${vendor.id}`} className="text-sm font-medium text-brand-600 hover:underline">Statement</Link>
+            )}
+          </div>
           {bsV.length === 0 ? (
             <p className="card text-sm text-gray-500">Nothing received to pay for yet.</p>
           ) : (

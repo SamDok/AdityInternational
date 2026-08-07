@@ -81,6 +81,61 @@ export function allocateFIFO(
   return out;
 }
 
+// Aging: split an outstanding balance by how long it has been due. Buckets are
+// 0–30 / 31–60 / 61–90 / 90+ days from the bill date.
+export type Aging = { d0_30: number; d31_60: number; d61_90: number; d90plus: number; total: number };
+
+export const AGING_BUCKETS: { key: keyof Aging; label: string }[] = [
+  { key: "d0_30", label: "0–30 days" },
+  { key: "d31_60", label: "31–60 days" },
+  { key: "d61_90", label: "61–90 days" },
+  { key: "d90plus", label: "90+ days" },
+];
+
+// Age one party's unpaid balance, per currency. Payments are applied oldest-first
+// (FIFO) before ageing, so a partly-paid old bill ages only its remainder. Call
+// this per customer / per vendor — never pool bills across parties, since one
+// party's receipts can't settle another's invoices.
+export function agingByCurrency(
+  bills: { date: Date; total: number; currency: string }[],
+  paidByCurrency: Map<string, number>,
+  asOf: Date = new Date(),
+): Map<string, Aging> {
+  const out = new Map<string, Aging>();
+  const currencies = new Set([...bills.map((b) => b.currency), ...paidByCurrency.keys()]);
+  for (const cur of currencies) {
+    const curBills = bills.filter((b) => b.currency === cur).sort((a, b) => +a.date - +b.date);
+    const alloc = allocateFIFO(curBills.map((b, i) => ({ id: String(i), total: b.total })), paidByCurrency.get(cur) ?? 0);
+    const a: Aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0, total: 0 };
+    curBills.forEach((b, i) => {
+      const unpaid = roundMoney(b.total - (alloc.get(String(i)) ?? 0));
+      if (unpaid <= 0.01) return;
+      const days = Math.floor((+asOf - +b.date) / 86400000);
+      if (days <= 30) a.d0_30 += unpaid;
+      else if (days <= 60) a.d31_60 += unpaid;
+      else if (days <= 90) a.d61_90 += unpaid;
+      else a.d90plus += unpaid;
+      a.total += unpaid;
+    });
+    if (a.total > 0.01) {
+      out.set(cur, { d0_30: roundMoney(a.d0_30), d31_60: roundMoney(a.d31_60), d61_90: roundMoney(a.d61_90), d90plus: roundMoney(a.d90plus), total: roundMoney(a.total) });
+    }
+  }
+  return out;
+}
+
+// Fold one party's aging into a running per-currency total (for the dashboard).
+export function addAging(into: Map<string, Aging>, add: Map<string, Aging>) {
+  for (const [cur, a] of add) {
+    const cur0 = into.get(cur) ?? { d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0, total: 0 };
+    into.set(cur, {
+      d0_30: roundMoney(cur0.d0_30 + a.d0_30), d31_60: roundMoney(cur0.d31_60 + a.d31_60),
+      d61_90: roundMoney(cur0.d61_90 + a.d61_90), d90plus: roundMoney(cur0.d90plus + a.d90plus),
+      total: roundMoney(cur0.total + a.total),
+    });
+  }
+}
+
 export type PaidState = "PAID" | "PART" | "UNPAID";
 
 export function paidState(total: number, paid: number): PaidState {

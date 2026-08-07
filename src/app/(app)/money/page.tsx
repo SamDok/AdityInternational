@@ -5,7 +5,7 @@ import EmptyState from "@/components/EmptyState";
 import { ChevronRightIcon, DocumentIcon } from "@/components/Icons";
 import { formatMoney } from "@/lib/format";
 import { getCompanyProfile } from "../settings/companyActions";
-import { shipmentGrandTotal, jobReceivedValue, sumByCurrency, balances, type Balance } from "@/lib/money";
+import { shipmentGrandTotal, jobReceivedValue, sumByCurrency, balances, agingByCurrency, addAging, AGING_BUCKETS, type Balance, type Aging } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,40 @@ function grandOutstanding(all: Balance[][]): Map<string, number> {
   return sumByCurrency(rows);
 }
 
+// Aging breakdown by bucket, one row per currency. `tone` colours the oldest column.
+function AgingTable({ aging, tone }: { aging: Map<string, Aging>; tone: "in" | "out" }) {
+  const currencies = [...aging.keys()].sort();
+  if (currencies.length === 0) return null;
+  return (
+    <div className="mx-2 mb-2 overflow-x-auto rounded-xl bg-white ring-1 ring-gray-100">
+      <table className="w-full min-w-[440px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            <th className="py-2 pl-3 text-left">Currency</th>
+            {AGING_BUCKETS.map((b) => <th key={b.key} className="px-2 py-2">{b.label}</th>)}
+            <th className="py-2 pr-3">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {currencies.map((cur) => {
+            const a = aging.get(cur)!;
+            return (
+              <tr key={cur} className="text-right tabular-nums">
+                <td className="py-2 pl-3 text-left font-semibold text-gray-700">{cur}</td>
+                <td className="px-2 py-2 text-gray-700">{a.d0_30 ? formatMoney(a.d0_30, cur) : "—"}</td>
+                <td className="px-2 py-2 text-gray-700">{a.d31_60 ? formatMoney(a.d31_60, cur) : "—"}</td>
+                <td className="px-2 py-2 text-amber-700">{a.d61_90 ? formatMoney(a.d61_90, cur) : "—"}</td>
+                <td className={`px-2 py-2 font-medium ${a.d90plus ? "text-red-700" : "text-gray-400"}`}>{a.d90plus ? formatMoney(a.d90plus, cur) : "—"}</td>
+                <td className={`py-2 pr-3 font-bold ${tone === "in" ? "text-green-700" : "text-red-700"}`}>{formatMoney(a.total, cur)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function MoneyPage() {
   const company = await getCompanyProfile();
 
@@ -31,7 +65,7 @@ export default async function MoneyPage() {
         id: true, name: true, company: true,
         shipments: {
           where: { status: { not: "CANCELLED" } },
-          select: { currency: true, status: true, billToTaxId: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
+          select: { date: true, currency: true, status: true, billToTaxId: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } },
         },
         payments: { select: { amount: true, currency: true } },
       },
@@ -40,30 +74,34 @@ export default async function MoneyPage() {
       where: { archived: false },
       select: {
         id: true, name: true, kind: true,
-        jobs: { where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } },
-        materialPos: { where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } },
+        jobs: { where: { status: { not: "CANCELLED" } }, select: { issueDate: true, currency: true, items: { select: { qtyReceived: true, rate: true } } } },
+        materialPos: { where: { status: { not: "CANCELLED" } }, select: { issueDate: true, currency: true, items: { select: { qtyReceived: true, rate: true } } } },
         payments: { select: { amount: true, currency: true } },
       },
     }),
   ]);
 
+  const receivablesAging = new Map<string, Aging>();
   const receivables = customers
     .map((c) => {
-      const billed = sumByCurrency(c.shipments.map((s) => ({ amount: shipmentGrandTotal(s, company), currency: s.currency })));
+      const bills = c.shipments.map((s) => ({ date: s.date, total: shipmentGrandTotal(s, company), currency: s.currency }));
       const paid = sumByCurrency(c.payments);
-      return { id: c.id, name: c.company || c.name, bs: balances(billed, paid) };
+      addAging(receivablesAging, agingByCurrency(bills, paid));
+      return { id: c.id, name: c.company || c.name, bs: balances(sumByCurrency(bills.map((b) => ({ amount: b.total, currency: b.currency }))), paid) };
     })
     .filter((r) => r.bs.some((b) => b.outstanding > 0.01))
     .sort((a, b) => Math.max(...a.bs.map((x) => x.outstanding), 0) < Math.max(...b.bs.map((x) => x.outstanding), 0) ? 1 : -1);
 
+  const payablesAging = new Map<string, Aging>();
   const payables = vendors
     .map((v) => {
-      const billed = sumByCurrency([
-        ...v.jobs.map((j) => ({ amount: jobReceivedValue(j), currency: j.currency })),
-        ...v.materialPos.map((po) => ({ amount: po.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyReceived, 0), currency: po.currency })),
-      ]);
+      const bills = [
+        ...v.jobs.map((j) => ({ date: j.issueDate, total: jobReceivedValue(j), currency: j.currency })),
+        ...v.materialPos.map((po) => ({ date: po.issueDate, total: po.items.reduce((s, i) => s + (i.rate ?? 0) * i.qtyReceived, 0), currency: po.currency })),
+      ];
       const paid = sumByCurrency(v.payments);
-      return { id: v.id, name: v.name, bs: balances(billed, paid) };
+      addAging(payablesAging, agingByCurrency(bills, paid));
+      return { id: v.id, name: v.name, bs: balances(sumByCurrency(bills.map((b) => ({ amount: b.total, currency: b.currency }))), paid) };
     })
     .filter((r) => r.bs.some((b) => b.outstanding > 0.01))
     .sort((a, b) => Math.max(...a.bs.map((x) => x.outstanding), 0) < Math.max(...b.bs.map((x) => x.outstanding), 0) ? 1 : -1);
@@ -91,6 +129,8 @@ export default async function MoneyPage() {
       </div>
 
       <section className="px-2">
+        <h2 className="px-2 pb-1 pt-2 text-sm font-semibold text-gray-500">Receivables aging</h2>
+        <AgingTable aging={receivablesAging} tone="in" />
         <h2 className="px-2 pb-1 pt-2 text-sm font-semibold text-gray-500">Receivables</h2>
         {receivables.length === 0 ? (
           <EmptyState icon={<DocumentIcon className="h-8 w-8" />} title="Nothing outstanding" message="Every customer is settled up." />
@@ -112,6 +152,8 @@ export default async function MoneyPage() {
       </section>
 
       <section className="mt-4 px-2 pb-8">
+        <h2 className="px-2 pb-1 pt-2 text-sm font-semibold text-gray-500">Payables aging</h2>
+        <AgingTable aging={payablesAging} tone="out" />
         <h2 className="px-2 pb-1 pt-2 text-sm font-semibold text-gray-500">Payables</h2>
         {payables.length === 0 ? (
           <EmptyState icon={<DocumentIcon className="h-8 w-8" />} title="Nothing to pay" message="Every vendor is settled up." />

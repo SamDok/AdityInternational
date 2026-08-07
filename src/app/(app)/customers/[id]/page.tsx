@@ -154,7 +154,12 @@ export default async function CustomerDetailPage({
         </section>
 
         <section className="space-y-3">
-          <h2 className="px-1 text-sm font-semibold text-gray-500">Money</h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-sm font-semibold text-gray-500">Money</h2>
+            {invoices.length > 0 && (
+              <Link href={`/statement/customer/${customer.id}`} className="text-sm font-medium text-brand-600 hover:underline">Statement</Link>
+            )}
+          </div>
           {bs.length === 0 ? (
             <p className="card text-sm text-gray-500">No invoices raised yet.</p>
           ) : (
