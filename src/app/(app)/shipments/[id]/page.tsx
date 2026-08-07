@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatDate, formatMoney, formatQty } from "@/lib/format";
+import { formatDate, formatMoney, formatQty, orderNo } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
 import ToggleButton from "../../products/ToggleButton";
 import ShipmentDetailsForm from "../ShipmentDetailsForm";
@@ -17,7 +17,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
     where: { id },
     include: {
       customer: true,
-      items: { include: { product: { select: { name: true } }, orderItem: { select: { order: { select: { id: true, number: true } } } } }, orderBy: { createdAt: "asc" } },
+      items: { include: { product: { select: { name: true } }, orderItem: { select: { order: { select: { id: true, number: true, isSample: true, sampleNo: true, seq: true, fyLabel: true } } } } }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!shipment) notFound();
@@ -29,11 +29,11 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
   const totalNet = shipment.items.reduce((a, i) => a + i.netWeight, 0);
 
   // Group by the order each line came from.
-  const groups = new Map<number, { orderId: string; items: typeof shipment.items }>();
+  const groups = new Map<number, { orderId: string; label: string; items: typeof shipment.items }>();
   for (const it of shipment.items) {
-    const num = it.orderItem.order.number;
-    if (!groups.has(num)) groups.set(num, { orderId: it.orderItem.order.id, items: [] as typeof shipment.items });
-    groups.get(num)!.items.push(it);
+    const ord = it.orderItem.order;
+    if (!groups.has(ord.number)) groups.set(ord.number, { orderId: ord.id, label: orderNo(ord), items: [] as typeof shipment.items });
+    groups.get(ord.number)!.items.push(it);
   }
   const orderGroups = [...groups.entries()].sort((a, b) => a[0] - b[0]);
 
@@ -64,7 +64,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
         {orderGroups.map(([number, g]) => (
           <section key={number}>
             <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">
-              From <Link href={`/orders/${g.orderId}`} className="text-brand-600 hover:underline">order #{number}</Link>
+              From <Link href={`/orders/${g.orderId}`} className="text-brand-600 hover:underline">{g.label}</Link>
             </h2>
             <ul className="space-y-2">
               {g.items.map((it) => (

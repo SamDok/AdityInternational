@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CURRENCIES, formatMoney, formatQty } from "@/lib/format";
+import { CURRENCIES, formatMoney, formatQty, orderNo } from "@/lib/format";
 import { useToast } from "@/components/Toast";
 import type { ShipmentInput } from "./actions";
 import type { ReadyLine } from "./ready";
@@ -72,14 +72,14 @@ export default function ShipmentBuilder({
   );
   const setRow = (id: string, patch: Partial<Row>) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
 
-  // Group ready lines by order for display.
+  // Group ready lines by order for display (label with the AI/ document number).
   const groups = useMemo(() => {
-    const m = new Map<number, ReadyLine[]>();
+    const m = new Map<string, { label: string; sortKey: number; lines: ReadyLine[] }>();
     for (const l of lines) {
-      if (!m.has(l.orderNumber)) m.set(l.orderNumber, []);
-      m.get(l.orderNumber)!.push(l);
+      if (!m.has(l.orderId)) m.set(l.orderId, { label: orderNo({ number: l.orderNumber, isSample: l.isSample, sampleNo: l.sampleNo, seq: l.seq, fyLabel: l.fyLabel }), sortKey: l.orderNumber, lines: [] });
+      m.get(l.orderId)!.lines.push(l);
     }
-    return [...m.entries()].sort((a, b) => a[0] - b[0]);
+    return [...m.values()].sort((a, b) => a.sortKey - b.sortKey);
   }, [lines]);
 
   const totals = useMemo(() => {
@@ -173,11 +173,11 @@ export default function ShipmentBuilder({
       <div>
         <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">What&apos;s going out</h2>
         <div className="space-y-4">
-          {groups.map(([orderNumber, glines]) => (
-            <div key={orderNumber}>
-              <p className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Order #{orderNumber}</p>
+          {groups.map((g) => (
+            <div key={g.lines[0].orderId}>
+              <p className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.label}</p>
               <div className="space-y-2">
-                {glines.map((l) => {
+                {g.lines.map((l) => {
                   const r = rows[l.orderItemId];
                   const q = parseFloat(r.qty) || 0;
                   const pcsHint = l.perPieceQty && l.perPieceQty > 0 && q > 0 ? Math.round((q / l.perPieceQty) * 100) / 100 : null;

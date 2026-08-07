@@ -7,6 +7,10 @@ export type ReadyLine = {
   orderItemId: string;
   orderId: string;
   orderNumber: number;
+  isSample: boolean;
+  sampleNo: number | null;
+  seq: number | null;
+  fyLabel: string | null;
   productName: string;
   designImage: string | null;
   unit: string;
@@ -42,6 +46,7 @@ export async function customerReadyLines(customerId: string): Promise<ReadyLine[
       pool.set(it.productId, avail - ready);
       lines.push({
         orderItemId: it.id, orderId: o.id, orderNumber: o.number,
+        isSample: o.isSample, sampleNo: o.sampleNo, seq: o.seq, fyLabel: o.fyLabel,
         productName: it.product.name, designImage: it.product.design?.image ? `/designs/${it.product.design.id}/image` : null,
         unit: it.unit, perPieceQty: it.perPieceQty, ordered: roundQty(it.quantity), shipped: roundQty(it.shippedQty),
         remaining: roundQty(remaining), stock: roundQty(it.product.stockQty || 0), ready: roundQty(ready), rate: it.rate,
