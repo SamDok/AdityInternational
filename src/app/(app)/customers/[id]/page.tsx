@@ -7,7 +7,8 @@ import {
   fulfillmentOf, orderComplete, orderBadge,
 } from "@/lib/format";
 import { shipmentDocNo } from "@/lib/jobNumber";
-import { shipmentGrandTotal, sumByCurrency, balances, allocateFIFO, paidState, PAID_LABEL, PAID_COLOR } from "@/lib/money";
+import { shipmentGrandTotal, sumByCurrency, balances, allocateFIFO, paidState, PAID_LABEL, PAID_COLOR, realizedFxGain } from "@/lib/money";
+import { getFxRates } from "@/lib/fx";
 import { getCompanyProfile } from "../../settings/companyActions";
 import PaymentForm from "../../money/PaymentForm";
 import PaymentList from "../../money/PaymentList";
@@ -42,18 +43,25 @@ export default async function CustomerDetailPage({
           where: { status: { not: "CANCELLED" } },
           orderBy: { date: "asc" },
           select: {
-            id: true, number: true, seq: true, fyLabel: true, date: true, currency: true, status: true, billToTaxId: true,
+            id: true, number: true, seq: true, fyLabel: true, date: true, currency: true, status: true, billToTaxId: true, fxRate: true,
             discountPct: true, freight: true, insurance: true, otherCharges: true,
             items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } },
           },
         },
-        payments: { orderBy: { date: "desc" }, select: { id: true, amount: true, currency: true, date: true, method: true, reference: true, note: true, shipmentId: true } },
+        payments: { orderBy: { date: "desc" }, select: { id: true, amount: true, currency: true, fxRate: true, date: true, method: true, reference: true, note: true, shipmentId: true } },
       },
     }),
     getCompanyProfile(),
   ]);
 
   if (!customer) notFound();
+
+  const fxRates = Object.fromEntries(await getFxRates());
+  // Realized FX gain/loss: foreign invoices booked at one rate, paid at another.
+  const realizedFx = realizedFxGain(
+    customer.shipments.map((s) => ({ total: shipmentGrandTotal(s, company), currency: s.currency, rate: s.fxRate, date: s.date })),
+    customer.payments.map((p) => ({ amount: p.amount, currency: p.currency, rate: p.fxRate, date: p.date })),
+  );
 
   // Money: invoice totals (incl. GST), balances per currency, per-invoice paid state.
   const invoices = customer.shipments.map((s) => ({
@@ -175,6 +183,12 @@ export default async function CustomerDetailPage({
               {customer.creditLimit != null && bs.some((b) => b.outstanding > customer.creditLimit!) && (
                 <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">Over the {formatMoney(customer.creditLimit, customer.currency)} credit limit.</p>
               )}
+              {Math.abs(realizedFx) > 0.01 && (
+                <div className="flex items-baseline justify-between border-t border-gray-50 pt-2">
+                  <span className="text-sm text-gray-500">Realized FX {realizedFx >= 0 ? "gain" : "loss"}</span>
+                  <span className={`text-sm font-semibold ${realizedFx >= 0 ? "text-green-700" : "text-red-700"}`}>{formatMoney(realizedFx, "INR")}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -203,6 +217,7 @@ export default async function CustomerDetailPage({
             allocationKey="shipmentId"
             allocationLabel="Against invoice"
             buttonLabel="Record payment"
+            fxRates={fxRates}
           />
           {paymentRows.length > 0 && <PaymentList payments={paymentRows} onDelete={deletePayment} />}
         </section>

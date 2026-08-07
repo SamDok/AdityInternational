@@ -136,6 +136,37 @@ export function addAging(into: Map<string, Aging>, add: Map<string, Aging>) {
   }
 }
 
+// Realized FX gain/loss (in INR): when a foreign invoice booked at one rate is
+// paid at another, the rupee difference on the settled amount is real P&L. We
+// match receipts to invoices oldest-first (FIFO), within each currency, and sum
+// settledAmount × (receiptRate − invoiceRate). A positive number is a gain
+// (received more INR than the invoice was booked at). INR-only and rows without
+// both rates contribute nothing.
+export function realizedFxGain(
+  invoices: { total: number; currency: string; rate: number | null; date: Date }[],
+  receipts: { amount: number; currency: string; rate: number | null; date: Date }[],
+): number {
+  let gain = 0;
+  const currencies = new Set(invoices.filter((i) => i.currency !== "INR").map((i) => i.currency));
+  for (const cur of currencies) {
+    const inv = invoices.filter((i) => i.currency === cur).sort((a, b) => +a.date - +b.date).map((i) => ({ left: i.total, rate: i.rate }));
+    const pay = receipts.filter((p) => p.currency === cur).sort((a, b) => +a.date - +b.date);
+    let ii = 0;
+    for (const p of pay) {
+      let amt = p.amount;
+      while (amt > 0.01 && ii < inv.length) {
+        const cur0 = inv[ii];
+        if (cur0.left <= 0.01) { ii++; continue; }
+        const chunk = Math.min(amt, cur0.left);
+        if (p.rate != null && cur0.rate != null) gain += chunk * (p.rate - cur0.rate);
+        cur0.left = roundMoney(cur0.left - chunk);
+        amt = roundMoney(amt - chunk);
+      }
+    }
+  }
+  return roundMoney(gain);
+}
+
 export type PaidState = "PAID" | "PART" | "UNPAID";
 
 export function paidState(total: number, paid: number): PaidState {

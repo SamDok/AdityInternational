@@ -127,6 +127,7 @@ model Payment {
   shipmentId    String? // optional: receipt booked against a specific invoice
   amount        Float
   currency      String    @default("INR")
+  fxRate        Float? // realization rate: INR per 1 unit of the receipt currency, for FX gain/loss
   date          DateTime  @default(now())
   method        String? // Bank / Cash / Cheque / LC / Other
   reference     String? // UTR / cheque no. / LC no.

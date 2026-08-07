@@ -20,6 +20,7 @@ export default function PaymentForm({
   allocationKey,
   allocationLabel,
   buttonLabel = "Record payment",
+  fxRates,
 }: {
   action: (input: unknown) => Promise<{ error?: string; ok?: boolean } | void>;
   defaultCurrency: string;
@@ -27,12 +28,16 @@ export default function PaymentForm({
   allocationKey?: AllocKey;
   allocationLabel?: string;
   buttonLabel?: string;
+  // INR-per-unit reference rates, to prefill the realization rate on a foreign receipt.
+  fxRates?: Record<string, number>;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
+  const rateFor = (cur: string) => (cur !== "INR" && fxRates?.[cur] ? String(fxRates[cur]) : "");
   const [currency, setCurrency] = useState(defaultCurrency);
+  const [fxRate, setFxRate] = useState(rateFor(defaultCurrency));
   const [date, setDate] = useState(todayStr());
   const [method, setMethod] = useState("Bank");
   const [reference, setReference] = useState("");
@@ -43,7 +48,8 @@ export default function PaymentForm({
   function submit() {
     const n = parseFloat(amount);
     if (isNaN(n) || n <= 0) return toast("Enter an amount greater than zero", { kind: "error" });
-    const input: Record<string, unknown> = { amount: n, currency, date, method, reference: reference || null, note: note || null };
+    const rate = parseFloat(fxRate);
+    const input: Record<string, unknown> = { amount: n, currency, date, method, reference: reference || null, note: note || null, fxRate: currency !== "INR" && rate > 0 ? rate : null };
     if (allocId) {
       const key = allocations?.find((a) => a.id === allocId)?.key ?? allocationKey;
       if (key) input[key] = allocId;
@@ -72,11 +78,18 @@ export default function PaymentForm({
         </div>
         <div>
           <label className="field-label">Currency</label>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="field-input">
+          <select value={currency} onChange={(e) => { setCurrency(e.target.value); setFxRate(rateFor(e.target.value)); }} className="field-input">
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
+      {currency !== "INR" && (
+        <div>
+          <label className="field-label">Rate at receipt <span className="text-gray-400">(INR per {currency})</span></label>
+          <input value={fxRate} onChange={(e) => setFxRate(e.target.value)} type="number" inputMode="decimal" step="0.0001" min="0" className="field-input" placeholder="e.g. 83.20" />
+          <p className="mt-1 text-xs text-gray-400">The rate you actually realised — used for FX gain/loss vs the invoice rate.</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="field-label">Date</label>

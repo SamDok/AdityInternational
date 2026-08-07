@@ -262,12 +262,15 @@ kaarigars; today a job = one vendor, with no chaining.
 touches `Job`, `receiveJob`, procurement.
 **Effort:** large.
 
-### 🟡 FX gain / loss on realization
-**Why:** Invoice USD, get paid weeks later at a different rate — the INR
-difference is real P&L, currently lost.
-**Where:** capture a realization rate on `Payment`; compare to the invoice rate;
-surface on Money/Reports. Builds on the new `FxRate` table.
-**Effort:** medium.
+### ✅ BUILT — FX gain / loss on realization
+Each foreign invoice locks its booking rate (`Shipment.fxRate`, auto-filled from
+the daily reference rate at creation), and each receipt captures a realization
+rate (`Payment.fxRate`, prefilled and editable on the payment form). The rupee
+difference on the settled amount is computed FIFO (`realizedFxGain` in
+`src/lib/money.ts`) and shown as **Realized FX gain/loss** on the customer page
+and as a card on Reports.
+Follow-up (🟢): the same on the **payables** side (paying a foreign supplier) —
+would need `VendorPayment.fxRate` + `MaterialPurchaseOrder`/`Job` booking rates.
 
 ### 🟡 Sampling workflow
 **Why:** Buyers request samples before bulk — a distinct, usually-unbilled flow.

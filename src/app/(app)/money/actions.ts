@@ -2,14 +2,18 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { getFxRates } from "@/lib/fx";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 const nullableStr = () => z.string().trim().optional().nullable();
 
+const optionalNum = () => z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().positive().nullable().optional());
+
 const PaymentSchema = z.object({
   amount: z.coerce.number().positive("Enter an amount greater than zero"),
   currency: z.string().min(1).default("INR"),
+  fxRate: optionalNum(),
   date: z.string().optional(),
   method: nullableStr(),
   reference: nullableStr(),
@@ -25,6 +29,15 @@ function toDate(v?: string) {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
+// The realization rate (INR per 1 unit) to store on a receipt/payment: what the
+// user typed, else today's reference rate. INR receipts carry no rate.
+async function realizationRate(currency: string, typed: number | null | undefined): Promise<number | null> {
+  if (currency === "INR") return null;
+  if (typed != null && typed > 0) return typed;
+  const rate = (await getFxRates()).get(currency);
+  return rate && rate > 0 ? rate : null;
+}
+
 // Record a receipt from a customer.
 export async function recordPayment(customerId: string, input: unknown) {
   const me = await requireUser();
@@ -37,6 +50,7 @@ export async function recordPayment(customerId: string, input: unknown) {
       shipmentId: d.shipmentId || null,
       amount: d.amount,
       currency: d.currency,
+      fxRate: await realizationRate(d.currency, d.fxRate),
       date: toDate(d.date),
       method: d.method || null,
       reference: d.reference || null,

@@ -3,7 +3,7 @@ import PageHeader from "@/components/PageHeader";
 import { formatMoney } from "@/lib/format";
 import { financialYearLabel } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../settings/companyActions";
-import { shipmentGrandTotal, jobReceivedValue, sumByCurrency, balances } from "@/lib/money";
+import { shipmentGrandTotal, jobReceivedValue, sumByCurrency, balances, realizedFxGain } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +74,7 @@ export default async function ReportsPage() {
   const company = await getCompanyProfile();
   const fyNow = financialYearLabel(new Date());
 
-  const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials, materialPOs] = await Promise.all([
+  const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials, materialPOs, customersFx] = await Promise.all([
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" } },
       select: {
@@ -90,6 +90,12 @@ export default async function ReportsPage() {
     prisma.order.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { quantity: true, shippedQty: true, rate: true } } } }),
     prisma.rawMaterial.findMany({ where: { archived: false }, select: { stockQty: true, costPrice: true, currency: true } }),
     prisma.materialPurchaseOrder.findMany({ where: { status: { not: "CANCELLED" } }, select: { currency: true, items: { select: { qtyReceived: true, rate: true } } } }),
+    prisma.customer.findMany({
+      select: {
+        shipments: { where: { status: { not: "CANCELLED" } }, select: { date: true, currency: true, status: true, fxRate: true, billToTaxId: true, discountPct: true, freight: true, insurance: true, otherCharges: true, items: { select: { quantity: true, rate: true, product: { select: { design: { select: { gstRate: true } } } } } } } },
+        payments: { select: { amount: true, currency: true, fxRate: true, date: true } },
+      },
+    }),
   ]);
 
   // Sales: all-time billed and this financial year.
@@ -121,6 +127,13 @@ export default async function ReportsPage() {
     rawMaterials.filter((m) => m.costPrice != null && m.stockQty > 0).map((m) => ({ amount: m.stockQty * (m.costPrice as number), currency: m.currency })),
   );
 
+  // Realized FX gain/loss across all customers (foreign invoices paid at a
+  // different rate than booked). Matched per customer so receipts don't cross.
+  const realizedFx = customersFx.reduce((sum, c) => sum + realizedFxGain(
+    c.shipments.map((s) => ({ total: shipmentGrandTotal(s, company), currency: s.currency, rate: s.fxRate, date: s.date })),
+    c.payments.map((p) => ({ amount: p.amount, currency: p.currency, rate: p.fxRate, date: p.date })),
+  ), 0);
+
   // Rankings for the current financial year, kept within each currency.
   const fyShipments = shipments.filter((s) => financialYearLabel(s.date) === fyNow);
   const topCustomers: Ranked = new Map();
@@ -150,6 +163,9 @@ export default async function ReportsPage() {
         <MetricCard label="Stock at cost" value={moneyLine(stockValue)} hint="Finished goods on hand" />
         <MetricCard label="Materials at cost" value={moneyLine(rawStockValue)} hint="Base fabric & materials on hand" />
         <MetricCard label="Sales · all time" value={moneyLine(billedAll)} hint="Total invoiced" />
+        {Math.abs(realizedFx) > 0.01 && (
+          <MetricCard label="Realized FX" value={formatMoney(realizedFx, "INR")} tone={realizedFx >= 0 ? "green" : "red"} hint={realizedFx >= 0 ? "Gain on settled foreign invoices" : "Loss on settled foreign invoices"} />
+        )}
       </div>
 
       <div className="space-y-5 px-4 pb-6">

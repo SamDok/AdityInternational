@@ -8,6 +8,17 @@ import { applyMovements, type StockMove } from "@/lib/stock";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { financialYearLabel } from "@/lib/jobNumber";
 import { roundQty } from "@/lib/format";
+import { getFxRates } from "@/lib/fx";
+
+// The rate to lock onto a foreign invoice: what the user typed, else today's
+// reference rate (INR per 1 unit), so the invoice's INR value is on record for
+// FX gain/loss when it's later realized.
+async function invoiceFxRate(currency: string, typed: number | null | undefined): Promise<number | null> {
+  if (currency === "INR") return null;
+  if (typed != null && typed > 0) return typed;
+  const rate = (await getFxRates()).get(currency);
+  return rate && rate > 0 ? rate : null;
+}
 
 const nullableStr = () => z.string().optional().nullable();
 
@@ -116,6 +127,7 @@ export async function createShipment(input: ShipmentInput) {
 
   const date = toDate(d.date) ?? new Date();
   const { number, seq, fyLabel } = await allocateShipmentNumbers(date);
+  const lockedFxRate = await invoiceFxRate(d.currency, d.fxRate);
 
   const shipment = await prisma.shipment.create({
     data: {
@@ -138,7 +150,7 @@ export async function createShipment(input: ShipmentInput) {
       freight: d.freight ?? null,
       insurance: d.insurance ?? null,
       otherCharges: d.otherCharges ?? null,
-      fxRate: d.fxRate ?? null,
+      fxRate: lockedFxRate,
       portOfLoading: d.portOfLoading || null,
       vessel: d.vessel || null,
       blAwbNo: d.blAwbNo || null,
@@ -229,7 +241,9 @@ export async function updateShipmentDetails(id: string, input: unknown) {
       freight: d.freight ?? null,
       insurance: d.insurance ?? null,
       otherCharges: d.otherCharges ?? null,
-      fxRate: d.fxRate ?? null,
+      // Only overwrite the locked invoice rate when a rate is actually typed —
+      // a blank field keeps the rate the invoice was booked at.
+      ...(d.fxRate != null ? { fxRate: d.fxRate } : {}),
       portOfLoading: d.portOfLoading || null,
       vessel: d.vessel || null,
       blAwbNo: d.blAwbNo || null,
