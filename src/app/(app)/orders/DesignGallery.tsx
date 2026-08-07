@@ -8,22 +8,24 @@ import { getDesignGallery, type GalleryDesign } from "./actions";
 // server-side (capped + searchable, no image bytes) and each thumbnail is
 // lazy-loaded individually from the design image route, so only what's on screen
 // downloads. For when a customer sends a picture and you don't know the code.
-export default function DesignGallery({ onPick, onClose }: { onPick: (variantId: string) => void; onClose: () => void }) {
+export default function DesignGallery({ onPick, onClose, customerId, customerName }: { onPick: (variantId: string) => void; onClose: () => void; customerId?: string; customerName?: string }) {
   const [designs, setDesigns] = useState<GalleryDesign[] | null>(null);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Default to this customer's own designs when we have a customer to scope to.
+  const [customerOnly, setCustomerOnly] = useState(!!customerId);
 
   // Debounced server-side search so the payload/DOM stay bounded for big catalogues.
   useEffect(() => {
     let live = true;
     const t = setTimeout(() => {
-      getDesignGallery(query)
+      getDesignGallery(query, customerId, customerOnly)
         .then((r) => { if (live) { setDesigns(r.designs); setTotal(r.total); } })
         .catch(() => { if (live) { setDesigns([]); setTotal(0); } });
     }, query ? 250 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [query]);
+  }, [query, customerId, customerOnly]);
 
   function choose(d: GalleryDesign) {
     if (d.variants.length === 1) onPick(d.variants[0].id);
@@ -34,19 +36,43 @@ export default function DesignGallery({ onPick, onClose }: { onPick: (variantId:
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex items-center gap-2 border-b border-gray-100 p-3">
-        <input
-          autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search designs by code or name…"
-          className="min-w-0 flex-1 rounded-xl border-0 bg-gray-50 px-4 py-2.5 text-sm ring-1 ring-inset ring-gray-200 focus:ring-2 focus:ring-brand-500 focus:outline-none" />
-        <button type="button" onClick={onClose} className="btn-secondary shrink-0 !px-4 !py-2 text-sm">Close</button>
+      <div className="space-y-2 border-b border-gray-100 p-3">
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder={customerOnly ? "Search this customer's designs…" : "Search designs by code or name…"}
+            className="min-w-0 flex-1 rounded-xl border-0 bg-gray-50 px-4 py-2.5 text-sm ring-1 ring-inset ring-gray-200 focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+          <button type="button" onClick={onClose} className="btn-secondary shrink-0 !px-4 !py-2 text-sm">Close</button>
+        </div>
+        {customerId && (
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setCustomerOnly(true)}
+              className={`rounded-lg px-3 py-1 text-xs font-medium ring-1 ring-inset ${customerOnly ? "bg-brand-50 text-brand-700 ring-brand-200" : "bg-gray-50 text-gray-600 ring-gray-200"}`}>
+              {customerName ? `${customerName}'s designs` : "This customer's designs"}
+            </button>
+            <button type="button" onClick={() => setCustomerOnly(false)}
+              className={`rounded-lg px-3 py-1 text-xs font-medium ring-1 ring-inset ${!customerOnly ? "bg-brand-50 text-brand-700 ring-brand-200" : "bg-gray-50 text-gray-600 ring-gray-200"}`}>
+              All designs
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
         {designs === null ? (
           <p className="py-16 text-center text-sm text-gray-400">Loading designs…</p>
         ) : shown === 0 ? (
-          <p className="py-16 text-center text-sm text-gray-400">No designs match “{query}”.</p>
+          customerOnly && !query ? (
+            <p className="py-16 text-center text-sm text-gray-400">
+              This customer hasn&apos;t ordered before.{" "}
+              <button type="button" onClick={() => setCustomerOnly(false)} className="font-semibold text-brand-600 underline">Show all designs</button>
+            </p>
+          ) : (
+            <p className="py-16 text-center text-sm text-gray-400">
+              No designs match “{query}”{customerOnly ? " for this customer" : ""}.
+              {customerOnly && <> <button type="button" onClick={() => setCustomerOnly(false)} className="font-semibold text-brand-600 underline">Search all designs</button></>}
+            </p>
+          )
         ) : (
           <>
             {total > shown && (

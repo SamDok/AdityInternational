@@ -344,6 +344,8 @@ export default function OrderForm({ customers, hasProducts, initialPrices, initi
         <DesignGallery
           onPick={(variantId) => { onGalleryPick(galleryForLine, variantId); setGalleryForLine(null); }}
           onClose={() => setGalleryForLine(null)}
+          customerId={customerId || undefined}
+          customerName={customers.find((c) => c.id === customerId)?.name}
         />
       )}
       {error && (

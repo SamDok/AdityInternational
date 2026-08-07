@@ -464,12 +464,24 @@ export async function assignDesignVendor(productId: string, vendorId: string) {
 // route and lazy-loaded by the browser. `hasImage` just tells the grid whether to
 // request one. Optional `q` filters server-side by code/name so the payload and
 // DOM stay bounded for very large catalogues.
-export async function getDesignGallery(q?: string) {
+export async function getDesignGallery(q?: string, customerId?: string, customerOnly?: boolean) {
   await requireUser();
   const query = (q ?? "").trim();
+  // When picking for a specific customer, default to the designs they've ordered
+  // before — far more useful for a reorder than the whole 2000+ catalogue.
+  let idFilter: { id?: { in: string[] } } = {};
+  if (customerOnly && customerId) {
+    const items = await prisma.orderItem.findMany({
+      where: { order: { customerId } },
+      select: { product: { select: { designId: true } } },
+    });
+    const ids = [...new Set(items.map((i) => i.product.designId).filter(Boolean))] as string[];
+    idFilter = { id: { in: ids.length ? ids : ["__none__"] } }; // no history → match nothing
+  }
   const where = {
     archived: false,
     variants: { some: { archived: false } },
+    ...idFilter,
     ...(query
       ? { OR: [{ code: { contains: query, mode: "insensitive" as const } }, { name: { contains: query, mode: "insensitive" as const } }] }
       : {}),
