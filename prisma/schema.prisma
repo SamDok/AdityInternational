@@ -323,6 +323,18 @@ model Job {
   // The sales order this job was auto-generated from, if any.
   order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId   String?
+  // Multi-process production: a job can be one stage of a route (embroidery →
+  // wash → finishing), each stage a job to its own kaarigar. An intermediate
+  // stage's output is work-in-progress (not sellable stock); only the final
+  // stage's receipt lands in finished stock. routeId groups a route's stages.
+  routeId      String? // shared across a route's stages (the first stage's id)
+  stageNo      Int? // 1-based position in the route (null = a plain single job)
+  stageName    String? // e.g. "Embroidery", "Wash", "Finishing"
+  prevStage    Job?    @relation("JobStages", fields: [prevStageId], references: [id], onDelete: SetNull)
+  prevStageId  String?
+  nextStages   Job[]   @relation("JobStages")
+  isFinalStage Boolean @default(true) // false = output is WIP handed to the next stage
+
   items     JobItem[]
   payments  VendorPayment[] // payments booked against this job / PO
   materials JobMaterial[]   // raw materials issued to the kaarigar for this job

@@ -20,7 +20,9 @@ type View = "open" | "awaiting" | "done" | "all";
 
 // A job-work job is "awaiting materials" while any of its design lines has had
 // no materials issued yet — the kaarigar can't start that line until fabric goes out.
-const AWAITING_WHERE = { kind: "JOB_WORK", status: { in: ["OPEN", "PARTIAL"] }, items: { some: { materials: { none: {} } } } };
+// Only a first stage (prevStageId null) needs materials issued — later production
+// stages are labour only, so they never count as "awaiting materials".
+const AWAITING_WHERE = { kind: "JOB_WORK", status: { in: ["OPEN", "PARTIAL"] }, prevStageId: null, items: { some: { materials: { none: {} } } } };
 
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ view?: string; page?: string }> }) {
   const sp = await searchParams;

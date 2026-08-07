@@ -41,6 +41,18 @@ export default async function OrderDetailPage({
     select: { qtyIssued: true, qtyReturned: true, material: { select: { costPrice: true, currency: true } } },
   });
 
+  // Multi-process production routes for this order (stage chains), grouped by route.
+  const routeJobs = await prisma.job.findMany({
+    where: { orderId: id, stageNo: { not: null }, status: { not: "CANCELLED" } },
+    orderBy: [{ routeId: "asc" }, { stageNo: "asc" }],
+    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, stageNo: true, stageName: true, status: true, isFinalStage: true, routeId: true, vendor: { select: { name: true } }, items: { select: { qtyOrdered: true, qtyReceived: true, unit: true } } },
+  });
+  const routes = new Map<string, typeof routeJobs>();
+  for (const j of routeJobs) {
+    const key = j.routeId ?? j.id;
+    (routes.get(key) ?? routes.set(key, []).get(key)!).push(j);
+  }
+
   const total = order.items.reduce((s, i) => s + i.quantity * i.rate, 0);
   const totalPieces = order.items.reduce((s, i) => s + (i.pieces ?? 0), 0);
 
@@ -234,6 +246,35 @@ export default async function OrderDetailPage({
             <p className="mt-2 px-1 text-sm text-gray-500">Payment terms: <span className="font-medium text-gray-700">{order.paymentTerms}</span></p>
           )}
         </details>
+
+        {routes.size > 0 && (
+          <section className="card space-y-3">
+            <h2 className="text-sm font-semibold text-gray-900">Production route{routes.size > 1 ? "s" : ""}</h2>
+            {[...routes.values()].map((stages) => (
+              <ol key={stages[0].id} className="space-y-1.5">
+                {stages.map((st, i) => {
+                  const ordered = st.items.reduce((s, it) => s + it.qtyOrdered, 0);
+                  const received = st.items.reduce((s, it) => s + it.qtyReceived, 0);
+                  const unit = st.items[0]?.unit ?? "";
+                  return (
+                    <li key={st.id} className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">{st.stageNo ?? i + 1}</span>
+                      <Link href={`/jobs/${st.id}`} className="min-w-0 flex-1 truncate text-sm hover:underline">
+                        <span className="font-medium text-gray-900">{st.stageName ?? "Stage"}</span>
+                        <span className="text-gray-500"> · {st.vendor.name}</span>
+                      </Link>
+                      <span className="shrink-0 text-xs text-gray-500">{formatQty(received)}/{formatQty(ordered)} {unit}</span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.isFinalStage ? "bg-green-100 text-green-700" : "bg-indigo-100 text-indigo-700"}`}>
+                        {st.isFinalStage ? "→ stock" : "→ next"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ))}
+            <p className="text-xs text-gray-400">Only the final stage&apos;s output becomes sellable stock; earlier stages are work-in-progress.</p>
+          </section>
+        )}
 
         {/* Procurement — make/buy the shortfall from kaarigars & suppliers */}
         {order.status === "DRAFT" && plan && (plan.groups.length > 0 || plan.unassigned.length > 0) && (

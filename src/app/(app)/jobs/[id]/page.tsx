@@ -9,8 +9,9 @@ import ReturnForm from "../../shipments/ReturnForm";
 import ToggleButton from "../../products/ToggleButton";
 import DeleteButton from "@/components/DeleteButton";
 import JobMaterials from "../JobMaterials";
+import NextStageForm from "../NextStageForm";
 import { defaultMaterialsForDesign } from "@/lib/materials";
-import { cancelJob, deleteJob, closeJobShort, recordRejection } from "../actions";
+import { cancelJob, deleteJob, closeJobShort, recordRejection, setJobStageMode } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     include: {
       vendor: true,
       order: true,
+      prevStage: { select: { id: true, number: true, seq: true, fyLabel: true, kind: true, stageNo: true, stageName: true, vendor: { select: { name: true } } } },
+      nextStages: { where: { status: { not: "CANCELLED" } }, select: { id: true, number: true, seq: true, fyLabel: true, kind: true, stageNo: true, stageName: true, status: true, vendor: { select: { name: true } }, items: { select: { productId: true, qtyOrdered: true } } } },
       items: {
         include: {
           product: { include: { design: { select: { id: true } } } },
@@ -38,6 +41,17 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     },
   });
   if (!job) notFound();
+
+  // Multi-process: WIP here = received at this stage minus what's already been
+  // forwarded to a next stage. An intermediate stage is one whose output goes to
+  // another kaarigar (isFinalStage=false) rather than into sellable stock.
+  const forwarded = new Map<string, number>();
+  for (const ns of job.nextStages) for (const it of ns.items) forwarded.set(it.productId, (forwarded.get(it.productId) ?? 0) + it.qtyOrdered);
+  const wip = job.items.reduce((s, it) => s + Math.max(0, it.qtyReceived - (forwarded.get(it.productId) ?? 0)), 0);
+  const inRoute = !job.isFinalStage || job.prevStage != null || job.nextStages.length > 0;
+  const stageVendors = !job.isFinalStage
+    ? await prisma.vendor.findMany({ where: { archived: false, kind: { in: ["KAARIGAR", "BOTH"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } })
+    : [];
 
   // Materials issued to the kaarigar are only relevant for job work.
   const showMaterials = job.kind === "JOB_WORK";
@@ -96,6 +110,42 @@ export default async function JobPage({ params, searchParams }: { params: Promis
           </div>
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${s.cls}`}>{s.label}</span>
         </div>
+
+        {inRoute && (
+          <div className="card space-y-2 bg-indigo-50/60">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-indigo-900">
+                Production route · Stage {job.stageNo ?? 1}{job.stageName ? ` · ${job.stageName}` : ""}
+              </p>
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-indigo-700">
+                {job.isFinalStage ? "Final → finished stock" : "Intermediate → next kaarigar"}
+              </span>
+            </div>
+            {job.prevStage && (
+              <p className="text-xs text-indigo-800">
+                ← Previous: <Link href={`/jobs/${job.prevStage.id}`} className="font-semibold underline">{jobDocNo(job.prevStage)}</Link>
+                {job.prevStage.stageName ? ` (${job.prevStage.stageName})` : ""} · {job.prevStage.vendor.name}
+              </p>
+            )}
+            {job.nextStages.map((ns) => (
+              <p key={ns.id} className="text-xs text-indigo-800">
+                → Next: <Link href={`/jobs/${ns.id}`} className="font-semibold underline">{jobDocNo(ns)}</Link>
+                {ns.stageName ? ` (${ns.stageName})` : ""} · {ns.vendor.name}
+              </p>
+            ))}
+            {!job.isFinalStage && wip > 0 && (
+              <p className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-indigo-900">
+                Work-in-progress here: {formatQty(wip)} — received but not yet sent to the next stage.
+              </p>
+            )}
+          </div>
+        )}
+
+        {canReceive && !job.isFinalStage && (
+          <p className="rounded-xl bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
+            This is an intermediate stage — what you receive here becomes work-in-progress (not sellable stock) and is sent to the next kaarigar.
+          </p>
+        )}
 
         {canReceive && (
           <ReceiveForm
@@ -169,7 +219,18 @@ export default async function JobPage({ params, searchParams }: { params: Promis
           />
         )}
 
+        {!job.isFinalStage && wip > 0 && job.status !== "CANCELLED" && (
+          <NextStageForm jobId={job.id} vendors={stageVendors} />
+        )}
+
         <div className="space-y-2 pt-2">
+          {job.kind === "JOB_WORK" && !anyReceived && job.status !== "CANCELLED" && (
+            <ToggleButton
+              action={setJobStageMode.bind(null, job.id, job.isFinalStage)}
+              label={job.isFinalStage ? "Make this a multi-stage job (output goes to another kaarigar)" : "Output goes to finished stock instead"}
+              toastMessage={job.isFinalStage ? "Marked as an intermediate stage" : "Marked as the final stage"}
+            />
+          )}
           {canCloseShort && (
             <ToggleButton action={closeJobShort.bind(null, job.id)} label="Close job (short-delivered)" toastMessage="Job closed" />
           )}

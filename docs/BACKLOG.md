@@ -255,12 +255,18 @@ and per vendor (`/statement/vendor/[id]`) with a running-balance ledger. Vendor
 figures include **material purchases** alongside job work.
 Follow-up (🟢): a date-range / "as-of" filter on the statement, and PDF email-out.
 
-### 🟡 Multi-process job work (sequential operations)
-**Why:** One design may go embroidery → wash → finishing across **different**
-kaarigars; today a job = one vendor, with no chaining.
-**Where:** a `JobStage`/route concept where one stage's receipt feeds the next;
-touches `Job`, `receiveJob`, procurement.
-**Effort:** large.
+### ✅ BUILT — Multi-process job work (sequential operations)
+A job can be marked an **intermediate stage** (`Job.isFinalStage=false`); its
+receipt becomes **work-in-progress**, not sellable stock. **"Send to next stage"**
+(`addNextStage`) creates the next stage as a job to another kaarigar, carrying the
+received WIP forward; only the **final** stage's receipt lands in finished stock
+(`receiveJob` guards on `isFinalStage`). Stage chain fields on `Job`
+(`routeId`/`stageNo`/`stageName`/`prevStageId`, migration 0036), a route strip +
+WIP + "Send to next stage" on the job page, and a **Production route** timeline on
+the order page. Materials are expected on the first stage only (later stages are
+exempt from the awaiting-materials gate). Migration 0036.
+Follow-ups (🟢): reverse-stock helper so a job can be marked intermediate *after*
+receiving; per-stage material issue (currently first-stage only, by design).
 
 ### ✅ BUILT — FX gain / loss on realization
 Each foreign invoice locks its booking rate (`Shipment.fxRate`, auto-filled from

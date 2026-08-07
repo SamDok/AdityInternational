@@ -59,13 +59,14 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   // binding (latest) job date.
   const jobs = await prisma.job.findMany({
     where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null } },
-    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, materials: { select: { id: true }, take: 1 } } } },
+    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, materials: { select: { id: true }, take: 1 } } } },
   });
   type JobCover = { outstanding: number; jobId: string; jobNumber: number; jobDocNo: string; jobDue: Date | null; materialsPending: boolean };
   const cover = new Map<string, JobCover>();
   for (const j of jobs) {
-    // Job work can't start on a line until its materials have been issued.
-    const jobMaterialsPending = j.kind === "JOB_WORK" && j.items.some((it) => it.materials.length === 0);
+    // Job work can't start on a line until its materials have been issued — but
+    // only the first stage needs materials; later production stages are labour only.
+    const jobMaterialsPending = j.kind === "JOB_WORK" && j.prevStageId == null && j.items.some((it) => it.materials.length === 0);
     for (const it of j.items) {
       const out = it.qtyOrdered - it.qtyReceived;
       if (out <= 0) continue;

@@ -183,9 +183,13 @@ export async function receiveJob(
   if (ops.length === 0) return { error: "Enter what you received." };
   await prisma.$transaction(ops);
 
-  // Bring received metres into stock and log each as a movement (JOB_RECEIVE).
-  const userId = (await getCurrentUser())?.id ?? null;
-  await applyMovements(moves.map((m) => ({ ...m, userId })));
+  // Only the final stage's output is sellable finished stock. An intermediate
+  // stage's receipt is work-in-progress (recorded on the job's qtyReceived) that
+  // is handed to the next stage — so it must NOT move finished-goods stock.
+  if (job.isFinalStage) {
+    const userId = (await getCurrentUser())?.id ?? null;
+    await applyMovements(moves.map((m) => ({ ...m, userId })));
+  }
 
   // Completion: a piece-wise line is done once all pieces are in; a loose line by metres.
   const items = await prisma.jobItem.findMany({ where: { jobId } });
@@ -205,6 +209,109 @@ export async function cancelJob(id: string) {
   await prisma.job.update({ where: { id }, data: { status: "CANCELLED" } });
   revalidatePath(`/jobs/${id}`);
   revalidatePath("/jobs");
+}
+
+// Mark a job as an intermediate production stage (its output is semi-finished and
+// goes to another kaarigar) or as final (output is sellable stock). Only allowed
+// before anything is received, so we never have to un-book finished stock.
+export async function setJobStageMode(jobId: string, sendToNextProcess: boolean) {
+  await requireUser();
+  const job = await prisma.job.findUnique({ where: { id: jobId }, select: { routeId: true, stageNo: true, items: { select: { qtyReceived: true, piecesReceived: true } } } });
+  if (!job) return { error: "Job not found." };
+  const received = job.items.some((i) => i.qtyReceived > 0 || i.piecesReceived > 0);
+  if (received) return { error: "Set this before receiving anything from the kaarigar." };
+  await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      isFinalStage: !sendToNextProcess,
+      // Start the route on the first stage so later stages can group under it.
+      ...(sendToNextProcess ? { routeId: job.routeId ?? jobId, stageNo: job.stageNo ?? 1 } : {}),
+    },
+  });
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/jobs");
+  return { ok: true };
+}
+
+const NextStageSchema = z.object({
+  vendorId: z.string().min(1, "Please choose a kaarigar"),
+  stageName: z.string().trim().min(1, "Name this step (e.g. Wash)"),
+  currency: z.string().optional().nullable(),
+  rate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
+  dueDate: z.string().optional().nullable(),
+  sendToNextProcess: z.boolean().optional().default(false),
+});
+
+// Hand this stage's work-in-progress on to the next kaarigar: creates the next
+// stage job, carrying each design line's received-but-not-yet-forwarded quantity
+// as the new job's ordered quantity. Only the last stage lands in finished stock.
+export async function addNextStage(jobId: string, input: unknown) {
+  await requireUser();
+  const r = NextStageSchema.safeParse(input);
+  if (!r.success) return { error: r.error.issues[0]?.message ?? "Invalid input" };
+  const d = r.data;
+
+  const prev = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { items: true, nextStages: { where: { status: { not: "CANCELLED" } }, select: { items: { select: { productId: true, qtyOrdered: true, pieces: true } } } } },
+  });
+  if (!prev) return { error: "Job not found." };
+  if (prev.isFinalStage) return { error: "Mark this job as “send to next process” before adding a next stage." };
+
+  // What's already been forwarded to existing next stages, per product.
+  const fwdMeters = new Map<string, number>();
+  const fwdPieces = new Map<string, number>();
+  for (const ns of prev.nextStages) for (const it of ns.items) {
+    fwdMeters.set(it.productId, (fwdMeters.get(it.productId) ?? 0) + it.qtyOrdered);
+    fwdPieces.set(it.productId, (fwdPieces.get(it.productId) ?? 0) + (it.pieces ?? 0));
+  }
+
+  const lines = [];
+  for (const it of prev.items) {
+    const meters = Math.max(0, it.qtyReceived - (fwdMeters.get(it.productId) ?? 0));
+    const pieces = Math.max(0, it.piecesReceived - (fwdPieces.get(it.productId) ?? 0));
+    if (meters <= 0 && pieces <= 0) continue;
+    lines.push({
+      productId: it.productId,
+      pieces: pieces > 0 ? pieces : null,
+      perPieceQty: it.perPieceQty ?? meters,
+      qtyOrdered: meters,
+      rate: d.rate ?? null,
+      unit: it.unit,
+      note: it.note,
+    });
+  }
+  if (lines.length === 0) return { error: "Receive from this stage before sending it onward." };
+
+  const issueDate = new Date();
+  const { number, seq, fyLabel } = await allocateJobNumbers("JOB_WORK", issueDate);
+  const routeId = prev.routeId ?? prev.id;
+  // Keep the previous stage flagged as intermediate and part of the route.
+  if (prev.routeId == null || prev.stageNo == null) {
+    await prisma.job.update({ where: { id: prev.id }, data: { routeId, stageNo: prev.stageNo ?? 1, isFinalStage: false } });
+  }
+  const created = await prisma.job.create({
+    data: {
+      number, seq, fyLabel,
+      vendorId: d.vendorId,
+      kind: "JOB_WORK",
+      currency: d.currency || prev.currency,
+      issueDate,
+      dueDate: toDate(d.dueDate) ?? null,
+      orderId: prev.orderId,
+      routeId,
+      stageNo: (prev.stageNo ?? 1) + 1,
+      stageName: d.stageName,
+      prevStageId: prev.id,
+      isFinalStage: !d.sendToNextProcess,
+      items: { create: lines },
+    },
+  });
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath(`/jobs/${created.id}`);
+  revalidatePath("/jobs");
+  if (prev.orderId) revalidatePath(`/orders/${prev.orderId}`);
+  redirect(`/jobs/${created.id}`);
 }
 
 // Close a short-delivered job: the vendor won't send the rest, so treat what
