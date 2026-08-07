@@ -71,34 +71,12 @@ the app filesystem is ephemeral). New `Attachment` model + upload UI on the
 detail page. **Blocked on** choosing a storage provider.
 **Effort:** large (infra decision required).
 
-### 🟡 Tags / labels
-**Why:** `category` is a single value. Free-form tags ("VIP", "slow payer",
-"sampling") allow flexible grouping and filtering.
-**Where:** simplest first version — a `tags String[]` (Postgres array) on
-`Customer` + a tag input on the form + a tag filter in `CustomerFilters.tsx`.
-**Effort:** small–medium.
-
-### 🟡 Smarter duplicate detection
-**Why:** We block exact-name duplicates, but "Classic Textile" vs "Classic
-Textiles" slips through, and duplicate GST/tax IDs aren't caught.
-**Where:** `nameTaken()` / create+import paths in
-`src/app/(app)/customers/actions.ts`. Add a warning (not hard block) on close
-matches and on duplicate `gstin`/`taxId`.
-**Effort:** medium.
-
 ### 🟢 Customer merge
 **Why:** When duplicates do happen, merge two records (and move their orders)
 into one.
 **Where:** a server action that re-points `Order.customerId` and copies missing
 fields, then deletes the loser. UI on the detail page.
 **Effort:** medium.
-
-### 🟡 Audit trail (created-by / updated-by)
-**Why:** In a team, it helps to know who added or last changed a customer.
-**Where:** add `createdById` / `updatedById` (relations to `User`) on `Customer`
-+ migration; set them in the create/update actions using `getCurrentUser()`
-(`src/lib/auth.ts`); show on the detail page.
-**Effort:** small–medium.
 
 ### 🟢 Structured address + map links
 **Why:** One free-text address blob can't be filtered by city/state or opened in
@@ -135,11 +113,11 @@ Per-customer price lists and colour-per-width are **built**. Follow-ups:
     catalogue. The catalogue page, and the customer/job/shipment lists, paginate
     in the database. Customer prices are fetched per-customer (`getCustomerPrices`)
     on the order form, not all at once.
-  - The catalogue-wide **recent stock movements** feed is now built
+  - The catalogue-wide **recent stock movements** feed is built
     (`src/app/(app)/products/movements/page.tsx`, powered by the `StockMovement`
-    log, including the new `CUSTOMER_RETURN` / `VENDOR_REJECT` reasons). A
-    **🟢 per-variant stock report** (opening/closing over a date range) would
-    round it out.
+    log, including the `CUSTOMER_RETURN` / `VENDOR_REJECT` reasons), and the
+    **per-variant stock report** (opening/received/issued/closing over a date
+    range) is now built too (`src/app/(app)/products/stock-report/page.tsx`).
   - **🟢 Reserve stock on Confirmed** — stock now leaves **per shipment**
     (`recordShipment` in `src/app/(app)/orders/actions.ts`). If the workflow ever
     needs soft allocation, add a "reserved" concept that holds stock from Confirmed
@@ -176,17 +154,6 @@ commercial invoice, and the catalogue-wide stock-movements feed
 - **✅ BUILT — Base material issued to a kaarigar.** The whole **Materials module**
   now covers this (catalogue, POs, per-design-line issue + reconcile). See the
   "Built in the walkthrough fixes" recap at the end of this file.
-
-### 🟡 Ranked reports (top customers / top designs)
-**Why:** The Reports dashboard shows per-currency totals but no rankings.
-**Where:** `src/app/(app)/reports/page.tsx`. Held back because ranking sales
-**across currencies** is misleading without a common unit — do it once an FX/base-
-currency conversion exists (see below), or rank **within** each currency.
-**Effort:** small once the currency question is settled.
-
-### 🟢 Salesperson performance
-With orders + invoicing in place, report sales grouped by `salespersonId` on the
-Reports page. **Effort:** small–medium.
 
 ---
 
@@ -252,14 +219,18 @@ correctness/robustness for speed on pages that aren't hot:
 
 ## Cross-cutting / platform (not customer-specific)
 
-- **🟡 Toasts + undo.** Success/error toasts, and an "Undo" on archive/delete.
+- **Toasts + undo — built.** Success/error toasts app-wide; one-tap **Undo** on
+  archive for customers, designs and vendors (`ToggleButton` / `ArchiveButton`).
+  Hard deletes stay confirm-only (nothing to restore).
 - **🟡 Role-based permissions.** Restrict destructive actions (delete, import,
   managing teammates) to owners/managers. Builds on the existing `role` field in
   `prisma/schema.prisma`.
 - **🟢 Whole-database export / backup.** A one-click export of all data for the
   owner's peace of mind (beyond per-module CSV).
-- **🟢 Product & Order modules deserve the same treatment** as Customers got:
-  search, filters, CSV import/export, codes/SKUs, and pagination.
+- **🟢 Product & Order modules — mostly done.** Product CSV import/export,
+  search, filters, codes/SKUs and pagination are built; **Order CSV export** is
+  built (`src/app/(app)/orders/ExportButton.tsx`). Remaining: an **Order CSV
+  import** (create orders in bulk from a sheet).
 
 ---
 
