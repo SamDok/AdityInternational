@@ -64,7 +64,7 @@ export default function DesignGallery({ onPick, onClose, customerId, customerNam
         ) : shown === 0 ? (
           customerOnly && !query ? (
             <p className="py-16 text-center text-sm text-gray-400">
-              This customer hasn&apos;t ordered before.{" "}
+              No price-list or past-order designs for this customer yet.{" "}
               <button type="button" onClick={() => setCustomerOnly(false)} className="font-semibold text-brand-600 underline">Show all designs</button>
             </p>
           ) : (
