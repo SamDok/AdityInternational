@@ -247,12 +247,13 @@ claim drawback/RoDTEP — often 1–5%+ of FOB. Real money, tracked nowhere.
 model tied to `Shipment`/HSN; a refund-due report on `src/app/(app)/reports`.
 **Effort:** large.
 
-### 🔴 Receivables / Payables aging + customer / vendor statements
-**Why:** Money shows *totals*, not 30/60/90 buckets or a printable statement to
-chase money.
-**Where:** `src/app/(app)/money/` — bucket `balances()` (`src/lib/money.ts`) by
-invoice/PO date; a printable statement page per customer/vendor.
-**Effort:** medium.
+### ✅ BUILT — Receivables / Payables aging + customer / vendor statements
+Money page now shows **aging buckets** (0-30 / 31-60 / 61-90 / 90+) per currency
+for receivables and payables (`agingByCurrency` in `src/lib/money.ts`), and there
+are **printable statements of account** per customer (`/statement/customer/[id]`)
+and per vendor (`/statement/vendor/[id]`) with a running-balance ledger. Vendor
+figures include **material purchases** alongside job work.
+Follow-up (🟢): a date-range / "as-of" filter on the statement, and PDF email-out.
 
 ### 🟡 Multi-process job work (sequential operations)
 **Why:** One design may go embroidery → wash → finishing across **different**
