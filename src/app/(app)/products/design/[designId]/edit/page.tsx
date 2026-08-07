@@ -43,6 +43,7 @@ export default async function EditDesignPage({ params }: { params: Promise<{ des
         <ToggleButton action={duplicateDesign.bind(null, designId)} label="Duplicate design" toastMessage="Design duplicated" />
         <ToggleButton
           action={setDesignArchived.bind(null, designId, !design.archived)}
+          undoAction={setDesignArchived.bind(null, designId, design.archived)}
           label={design.archived ? "Unarchive design" : "Archive design"}
           toastMessage={design.archived ? "Design restored" : "Design archived"}
         />
