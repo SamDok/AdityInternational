@@ -73,6 +73,7 @@ function RankCard({ title, hint, agg, unit, limit = 5 }: { title: string; hint?:
 export default async function ReportsPage() {
   const company = await getCompanyProfile();
   const fyNow = financialYearLabel(new Date());
+  const incentivesDue = (await prisma.incentiveClaim.aggregate({ where: { status: { not: "RECEIVED" } }, _sum: { amount: true } }))._sum.amount ?? 0;
 
   const [shipments, payments, jobs, vendorPayments, products, orders, rawMaterials, materialPOs, customersFx] = await Promise.all([
     prisma.shipment.findMany({
@@ -168,6 +169,9 @@ export default async function ReportsPage() {
         <MetricCard label="Sales · all time" value={moneyLine(salesAll)} hint="Total invoiced (excludes samples)" />
         {Math.abs(realizedFx) > 0.01 && (
           <MetricCard label="Realized FX" value={formatMoney(realizedFx, "INR")} tone={realizedFx >= 0 ? "green" : "red"} hint={realizedFx >= 0 ? "Gain on settled foreign invoices" : "Loss on settled foreign invoices"} />
+        )}
+        {incentivesDue > 0.5 && (
+          <MetricCard label="Incentives due" value={formatMoney(incentivesDue, "INR")} tone="green" hint="Drawback / RoDTEP / ITC not yet received" />
         )}
       </div>
 

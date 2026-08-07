@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { formatMoney, formatDate } from "@/lib/format";
 import { shipmentDocNo, financialYearLabel } from "@/lib/jobNumber";
-import { getHsnRates, shipmentIncentive, inputGstPaid } from "@/lib/incentives";
+import { getHsnRates, shipmentIncentive, inputGstPaid, INCENTIVE_LABEL, type IncentiveType } from "@/lib/incentives";
+import ClaimsPanel, { type ClaimRow } from "./ClaimsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ function Card({ label, value, hint, tone = "gray" }: { label: string; value: str
 
 export default async function IncentivesPage() {
   const fyNow = financialYearLabel(new Date());
-  const [rates, shipments, materialItems] = await Promise.all([
+  const [rates, shipments, materialItems, claims] = await Promise.all([
     getHsnRates(),
     prisma.shipment.findMany({
       where: { status: { not: "CANCELLED" }, isSample: false, currency: { not: "INR" } },
@@ -34,7 +35,27 @@ export default async function IncentivesPage() {
       where: { po: { status: { not: "CANCELLED" } }, gstRate: { not: null } },
       select: { qtyReceived: true, rate: true, gstRate: true },
     }),
+    prisma.incentiveClaim.findMany({
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true, type: true, fyLabel: true, amount: true, status: true, reference: true,
+        filedDate: true, receivedDate: true, receivedAmount: true,
+        shipment: { select: { number: true, seq: true, fyLabel: true } },
+      },
+    }),
   ]);
+
+  const claimRows: ClaimRow[] = claims.map((c) => ({
+    id: c.id, type: c.type,
+    title: INCENTIVE_LABEL[c.type as IncentiveType] ?? c.type,
+    sub: c.shipment ? shipmentDocNo(c.shipment, "BG") : c.fyLabel ? `FY ${c.fyLabel}` : "—",
+    amount: c.amount, status: c.status, reference: c.reference,
+    filedDate: c.filedDate ? c.filedDate.toISOString() : null,
+    receivedDate: c.receivedDate ? c.receivedDate.toISOString() : null,
+    receivedAmount: c.receivedAmount,
+  }));
+  const dueFromGovt = claims.filter((c) => c.status !== "RECEIVED").reduce((a, c) => a + c.amount, 0);
+  const receivedTotal = claims.filter((c) => c.status === "RECEIVED").reduce((a, c) => a + (c.receivedAmount ?? c.amount), 0);
 
   const rows = shipments.map((s) => {
     const inc = shipmentIncentive(
@@ -66,7 +87,14 @@ export default async function IncentivesPage() {
         <Card label={`Duty Drawback · FY ${fyNow}`} value={formatMoney(drawbackFy, "INR")} tone="green" hint="Auto-credited to your bank" />
         <Card label={`RoDTEP · FY ${fyNow}`} value={formatMoney(rodtepFy, "INR")} tone="green" hint="Issued as e-scrips" />
         <Card label="GST input pool (ITC)" value={formatMoney(itcPool, "INR")} hint="Input GST paid on materials — refundable on LUT exports" />
-        <Card label="Estimated total · FY" value={formatMoney(drawbackFy + rodtepFy, "INR")} tone="green" hint="Drawback + RoDTEP" />
+        <Card label="Due from government" value={formatMoney(dueFromGovt, "INR")} tone="amber" hint="Claimed, not yet received" />
+      </div>
+
+      <div className="px-2">
+        <h2 className="px-2 pb-1 pt-2 text-sm font-semibold text-gray-500">Claims{receivedTotal > 0.5 ? ` · ${formatMoney(receivedTotal, "INR")} received` : ""}</h2>
+        <div className="px-2">
+          <ClaimsPanel claims={claimRows} />
+        </div>
       </div>
 
       {rates.size === 0 && (

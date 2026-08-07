@@ -472,6 +472,7 @@ model Shipment {
   items     ShipmentItem[]
   movements StockMovement[]
   payments  Payment[] // receipts booked against this invoice
+  incentiveClaims IncentiveClaim[] // drawback / RoDTEP claims for this export
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -610,6 +611,28 @@ model HsnIncentiveRate {
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// A tracked export-incentive claim. Drawback/RoDTEP claims are per export
+// shipment; an ITC-refund claim is per period (fyLabel). Status runs
+// PENDING → FILED → RECEIVED; reconciliation (a bank credit / scrip) sets
+// receivedAmount + receivedDate.
+model IncentiveClaim {
+  id             String    @id @default(cuid())
+  type           String // DRAWBACK | RODTEP | ITC_REFUND
+  shipment       Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId     String? // for DRAWBACK / RODTEP
+  fyLabel        String? // financial year (esp. for ITC period claims)
+  amount         Float // estimated/claimed amount in INR
+  status         String    @default("PENDING") // PENDING | FILED | RECEIVED
+  reference      String? // shipping bill no / ARN / scrip no
+  filedDate      DateTime?
+  receivedDate   DateTime?
+  receivedAmount Float? // actual amount realised
+  notes          String?
+  createdByName  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 // Materials handed to a kaarigar for one design line of a job. Reconciliation:
