@@ -93,9 +93,21 @@ function itemData(it: Item) {
   };
 }
 
+// Samples get their own running number and their `number` is parked in a high
+// range so it never collides with a production number and never inflates the
+// production series (which stays gapless).
+const SAMPLE_OFFSET = 1_000_000;
+
+// Next production order number — ignores samples, so the series stays gapless.
 async function nextOrderNumber(): Promise<number> {
-  const last = await prisma.order.findFirst({ orderBy: { number: "desc" } });
+  const last = await prisma.order.findFirst({ where: { number: { lt: SAMPLE_OFFSET } }, orderBy: { number: "desc" }, select: { number: true } });
   return last ? last.number + 1 : 1001;
+}
+
+// Next sample number (Sample #1, #2, …), independent of production numbering.
+async function nextSampleNo(): Promise<number> {
+  const last = await prisma.order.findFirst({ where: { isSample: true }, orderBy: { sampleNo: "desc" }, select: { sampleNo: true } });
+  return (last?.sampleNo ?? 0) + 1;
 }
 
 export async function createOrder(input: OrderInput) {
@@ -105,7 +117,9 @@ export async function createOrder(input: OrderInput) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid order" };
   }
   const d = parsed.data;
-  const number = await nextOrderNumber();
+  // Samples number in their own series; production keeps the gapless order series.
+  const sampleNo = d.isSample ? await nextSampleNo() : null;
+  const number = d.isSample ? SAMPLE_OFFSET + sampleNo! : await nextOrderNumber();
   // Freeze today's reference FX onto foreign-currency orders, so the estimated
   // export margin stays locked to the order date and doesn't drift when the
   // daily rate refresh runs. Domestic (INR) orders need no conversion.
@@ -124,6 +138,7 @@ export async function createOrder(input: OrderInput) {
       createdByName: me.name || me.email,
       fxRates: fxSnapshot,
       isSample: d.isSample,
+      sampleNo,
       sampleStatus: d.isSample ? "PENDING" : null,
       ...snapshotFields(d),
       items: { create: d.items.map(itemData) },
@@ -145,9 +160,19 @@ export async function updateOrder(id: string, input: OrderInput) {
 
   const current = await prisma.order.findUnique({
     where: { id },
-    select: { isSample: true, sampleStatus: true, items: { select: { id: true, productId: true, shippedQty: true } } },
+    select: { isSample: true, sampleNo: true, sampleStatus: true, items: { select: { id: true, productId: true, shippedQty: true } } },
   });
   if (!current) return { error: "Order not found." };
+
+  // Toggling sample ⇄ production on an existing order re-numbers it into the
+  // right series so the two never share a number.
+  let numbering: { number?: number; sampleNo?: number | null } = {};
+  if (d.isSample && !current.isSample) {
+    const sampleNo = await nextSampleNo();
+    numbering = { number: SAMPLE_OFFSET + sampleNo, sampleNo };
+  } else if (!d.isSample && current.isSample) {
+    numbering = { number: await nextOrderNumber(), sampleNo: null };
+  }
 
   const existingById = new Map(current.items.map((i) => [i.id, i]));
   const incomingIds = new Set(d.items.map((it) => it.id).filter(Boolean) as string[]);
@@ -185,6 +210,7 @@ export async function updateOrder(id: string, input: OrderInput) {
         dueDate: toDate(d.dueDate) ?? null,
         notes: d.notes || null,
         isSample: d.isSample,
+        ...numbering,
         // Newly marked a sample → start PENDING; unmarked → clear the status.
         sampleStatus: d.isSample ? (current.isSample ? current.sampleStatus : "PENDING") : null,
         ...snapshotFields(d),

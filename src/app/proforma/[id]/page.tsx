@@ -109,7 +109,7 @@ export default async function ProformaPage({ params }: { params: Promise<{ id: s
         <div className="mt-5 flex items-end justify-between">
           <h1 className="text-lg font-bold uppercase tracking-wide">Proforma Invoice</h1>
           <div className="text-right text-xs">
-            <p><span className="text-gray-500">No.:</span> <span className="font-semibold">PI-{order.number}</span></p>
+            <p><span className="text-gray-500">No.:</span> <span className="font-semibold">{order.isSample ? `SMP-${order.sampleNo ?? order.number}` : `PI-${order.number}`}</span></p>
             <p><span className="text-gray-500">Date:</span> {formatDate(order.orderDate)}</p>
             {order.dueDate && <p><span className="text-gray-500">Due:</span> {formatDate(order.dueDate)}</p>}
           </div>

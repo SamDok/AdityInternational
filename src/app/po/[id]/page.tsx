@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatDate, formatQty, roundMoney } from "@/lib/format";
+import { formatMoney, formatDate, formatQty, roundMoney, orderNo } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 import { getCompanyProfile } from "../../(app)/settings/companyActions";
 import PrintBar from "./PrintBar";
@@ -103,7 +103,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Details</p>
             {v.paymentTerms && <p className="text-xs text-gray-700">Payment terms: {v.paymentTerms}</p>}
             <p className="text-xs text-gray-700">Currency: {job.currency}</p>
-            {job.order && <p className="text-xs text-gray-700">Against order #{job.order.number} · {job.order.customer.name}</p>}
+            {job.order && <p className="text-xs text-gray-700">Against {orderNo(job.order).toLowerCase()} · {job.order.customer.name}</p>}
           </div>
         </div>
 

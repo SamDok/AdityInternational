@@ -6,7 +6,7 @@ import StagePicker from "../StagePicker";
 import DropLineButton from "../DropLineButton";
 import GeneratePanel from "../GeneratePanel";
 import { planProcurement } from "../procurement";
-import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty } from "@/lib/format";
+import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty, orderNo } from "@/lib/format";
 import { getFxRates, convert } from "@/lib/fx";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
 import ToggleButton from "../../products/ToggleButton";
@@ -28,7 +28,7 @@ export default async function OrderDetailPage({
     where: { id },
     include: {
       customer: true,
-      sampleSource: { select: { id: true, number: true } },
+      sampleSource: { select: { id: true, number: true, sampleNo: true, isSample: true } },
       bulkOrders: { select: { id: true, number: true } },
       items: { include: { product: { include: { design: { include: { image: { select: { designId: true } } } } } } } },
     },
@@ -127,7 +127,7 @@ export default async function OrderDetailPage({
   return (
     <div>
       <PageHeader
-        title={`Order #${order.number}`}
+        title={orderNo(order)}
         subtitle={order.customer.name}
         backHref="/orders"
         action={
@@ -177,7 +177,7 @@ export default async function OrderDetailPage({
         )}
         {order.sampleSource && (
           <div className="rounded-xl bg-gray-50 px-4 py-2 text-sm text-gray-700">
-            Converted from sample order <Link href={`/orders/${order.sampleSource.id}`} className="font-semibold text-brand-600 underline">#{order.sampleSource.number}</Link>.
+            Converted from <Link href={`/orders/${order.sampleSource.id}`} className="font-semibold text-brand-600 underline">{orderNo(order.sampleSource)}</Link>.
           </div>
         )}
         <div className="card">

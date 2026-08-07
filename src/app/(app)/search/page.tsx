@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import { UsersIcon, BoxIcon, CartIcon, ChevronRightIcon, SearchIcon } from "@/components/Icons";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, orderNo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +87,7 @@ export default async function SearchPage({
               {orders.map((o) => {
                 const t = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
                 return (
-                  <Row key={o.id} href={`/orders/${o.id}`} icon={<CartIcon className="h-5 w-5" />} title={`Order #${o.number} · ${o.customer.name}`} sub={`${formatDate(o.orderDate)} · ${formatMoney(t, o.currency)}`} />
+                  <Row key={o.id} href={`/orders/${o.id}`} icon={<CartIcon className="h-5 w-5" />} title={`${orderNo(o)} · ${o.customer.name}`} sub={`${formatDate(o.orderDate)} · ${formatMoney(t, o.currency)}`} />
                 );
               })}
             </Section>

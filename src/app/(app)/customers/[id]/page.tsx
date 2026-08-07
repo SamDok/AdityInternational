@@ -4,8 +4,11 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
-  fulfillmentOf, orderComplete, orderBadge,
+  fulfillmentOf, orderComplete, orderBadge, orderNo,
 } from "@/lib/format";
+
+const SAMPLE_STATUS_LABEL: Record<string, string> = { PENDING: "Awaiting approval", APPROVED: "Approved", REJECTED: "Rejected" };
+const SAMPLE_STATUS_COLOR: Record<string, string> = { PENDING: "bg-amber-100 text-amber-700", APPROVED: "bg-green-100 text-green-700", REJECTED: "bg-red-100 text-red-700" };
 import { shipmentDocNo } from "@/lib/jobNumber";
 import { shipmentGrandTotal, sumByCurrency, balances, allocateFIFO, paidState, PAID_LABEL, PAID_COLOR, realizedFxGain } from "@/lib/money";
 import { getFxRates } from "@/lib/fx";
@@ -55,6 +58,10 @@ export default async function CustomerDetailPage({
   ]);
 
   if (!customer) notFound();
+
+  // Split the customer's orders so samples and real production aren't lumped together.
+  const sampleOrders = customer.orders.filter((o) => o.isSample);
+  const productionOrders = customer.orders.filter((o) => !o.isSample);
 
   const fxRates = Object.fromEntries(await getFxRates());
   // Realized FX gain/loss: foreign invoices booked at one rate, paid at another.
@@ -222,15 +229,37 @@ export default async function CustomerDetailPage({
           {paymentRows.length > 0 && <PaymentList payments={paymentRows} onDelete={deletePayment} />}
         </section>
 
+        {sampleOrders.length > 0 && (
+          <section>
+            <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">Being sampled ({sampleOrders.length})</h2>
+            <ul className="space-y-2">
+              {sampleOrders.map((o) => (
+                <li key={o.id}>
+                  <Link href={`/orders/${o.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900">{orderNo(o)}</p>
+                      <p className="text-sm text-gray-500">{formatDate(o.orderDate)}</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o.sampleStatus ? SAMPLE_STATUS_COLOR[o.sampleStatus] ?? "bg-gray-100 text-gray-600" : "bg-purple-100 text-purple-700"}`}>
+                      {o.sampleStatus ? SAMPLE_STATUS_LABEL[o.sampleStatus] ?? o.sampleStatus : "Sample"}
+                    </span>
+                    <ChevronRightIcon className="h-5 w-5 text-gray-300" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section>
           <h2 className="mb-2 px-1 text-sm font-semibold text-gray-500">
-            Orders ({customer.orders.length})
+            Orders ({productionOrders.length})
           </h2>
-          {customer.orders.length === 0 ? (
-            <p className="card text-sm text-gray-500">No orders yet.</p>
+          {productionOrders.length === 0 ? (
+            <p className="card text-sm text-gray-500">No production orders yet.</p>
           ) : (
             <ul className="space-y-2">
-              {customer.orders.map((o) => {
+              {productionOrders.map((o) => {
                 const total = o.items.reduce((s, i) => s + i.quantity * i.rate, 0);
                 const showShip = o.status !== "CANCELLED" && (orderComplete(o) || fulfillmentOf(o.items) !== "NONE");
                 const fb = orderBadge(o);
@@ -238,7 +267,7 @@ export default async function CustomerDetailPage({
                   <li key={o.id}>
                     <Link href={`/orders/${o.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900">Order #{o.number}</p>
+                        <p className="font-semibold text-gray-900">{orderNo(o)}</p>
                         <p className="text-sm text-gray-500">{formatDate(o.orderDate)}</p>
                       </div>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${showShip ? fb.className : STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>

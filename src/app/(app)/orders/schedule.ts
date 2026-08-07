@@ -41,7 +41,7 @@ const dayStart = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.ge
 // Business-wide delivery schedule with readiness, from a few bulk queries.
 export async function dueSoonSchedule(): Promise<Schedule> {
   const orders = await prisma.order.findMany({
-    where: { status: "CONFIRMED", manualComplete: false },
+    where: { status: "CONFIRMED", manualComplete: false, isSample: false },
     select: {
       id: true, number: true, dueDate: true,
       customer: { select: { name: true } },
@@ -58,7 +58,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   // Open/partial jobs linked to orders → per (order, product) outstanding + the
   // binding (latest) job date.
   const jobs = await prisma.job.findMany({
-    where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null } },
+    where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null }, order: { isSample: false } },
     select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, materials: { select: { id: true }, take: 1 } } } },
   });
   type JobCover = { outstanding: number; jobId: string; jobNumber: number; jobDocNo: string; jobDue: Date | null; materialsPending: boolean };

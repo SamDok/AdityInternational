@@ -7,7 +7,7 @@ import Pager from "@/components/Pager";
 import { CartIcon, PlusIcon, ChevronRightIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
-  orderComplete, orderBadge,
+  orderComplete, orderBadge, orderNo,
 } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -122,10 +122,7 @@ export default async function OrdersPage({
                     <div className="card flex items-center gap-2">
                       <Link href={`/orders/${o.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="flex items-center gap-1.5 whitespace-nowrap font-semibold text-gray-900">
-                            Order #{o.number}
-                            {o.isSample && <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-purple-700">Sample</span>}
-                          </p>
+                          <p className="whitespace-nowrap font-semibold text-gray-900">{orderNo(o)}</p>
                           <p className="truncate text-sm text-gray-500">
                             {o.customer.name} · {formatDate(o.orderDate)}
                           </p>

@@ -17,7 +17,7 @@ export type MaterialNeed = {
 // quantified (embellishment consumption isn't modelled — that was left out of scope).
 export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
   const orders = await prisma.order.findMany({
-    where: { status: "CONFIRMED" },
+    where: { status: "CONFIRMED", isSample: false },
     select: {
       manualComplete: true,
       items: { select: { quantity: true, shippedQty: true, product: { select: { design: { select: { id: true, categoryId: true, sourcingType: true } } } } } },

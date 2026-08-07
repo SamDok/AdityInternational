@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ClipboardIcon, CartIcon, PlusIcon, GearIcon, ChevronRightIcon, SearchIcon } from "@/components/Icons";
 import {
   formatMoney, formatDate, STAGE_LABELS, STAGE_COLORS, type OrderStage,
-  fulfillmentOf, orderComplete, orderBadge,
+  fulfillmentOf, orderComplete, orderBadge, orderNo,
 } from "@/lib/format";
 import { dueSoonSchedule } from "./orders/schedule";
 
@@ -124,7 +124,7 @@ export default async function HomePage() {
                 <li key={o.id}>
                   <Link href={`/orders/${o.id}`} className="card flex items-center gap-3 hover:bg-gray-50">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900">#{o.number} · {o.customer.name}</p>
+                      <p className="font-semibold text-gray-900">{orderNo(o)} · {o.customer.name}</p>
                       <p className="text-sm text-gray-500">{formatDate(o.orderDate)}</p>
                     </div>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${showShip ? fb.className : STAGE_COLORS[o.status as OrderStage] ?? "bg-gray-100 text-gray-700"}`}>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
-import { formatMoney, formatDate, formatQty } from "@/lib/format";
+import { formatMoney, formatDate, formatQty, orderNo } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 import ReceiveForm from "../ReceiveForm";
 import ReturnForm from "../../shipments/ReturnForm";
@@ -104,7 +104,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
             </p>
             {job.order && (
               <p className="mt-1 text-sm text-gray-500">
-                From <Link href={`/orders/${job.orderId}`} className="font-medium text-brand-600 hover:underline">order #{job.order.number}</Link>
+                From <Link href={`/orders/${job.orderId}`} className="font-medium text-brand-600 hover:underline">{orderNo(job.order).toLowerCase()}</Link>
               </p>
             )}
           </div>

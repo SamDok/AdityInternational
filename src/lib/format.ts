@@ -91,6 +91,13 @@ export const FULFILLMENT_COLORS: Record<Fulfillment, string> = {
   FULL: "bg-green-100 text-green-700",
 };
 
+// Display label for an order: samples run their own series ("Sample #1"),
+// production keeps the order series ("Order #1001"). Falls back to `number` for
+// any legacy sample without its own sampleNo.
+export function orderNo(o: { isSample?: boolean | null; sampleNo?: number | null; number: number }): string {
+  return o.isSample ? `Sample #${o.sampleNo ?? o.number}` : `Order #${o.number}`;
+}
+
 type OrderLike = { manualComplete: boolean; items: { quantity: number; shippedQty: number }[] };
 
 // An order is complete when every line is fully shipped, or it's been closed by

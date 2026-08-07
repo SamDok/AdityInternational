@@ -407,6 +407,7 @@ model Order {
   // show in receivables). sampleStatus tracks approval; sampleSource links a
   // bulk order back to the sample it was converted from.
   isSample     Boolean @default(false)
+  sampleNo     Int? // sample's own running number (samples only); production uses `number`
   sampleStatus String? // PENDING | APPROVED | REJECTED (samples only)
   sampleSource   Order?  @relation("SampleToBulk", fields: [sampleSourceId], references: [id], onDelete: SetNull)
   sampleSourceId String?

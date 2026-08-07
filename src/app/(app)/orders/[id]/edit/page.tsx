@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import OrderForm from "../../OrderForm";
 import { updateOrder, deleteOrder, getCustomerPrices } from "../../actions";
 import DeleteButton from "@/components/DeleteButton";
+import { orderNo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -70,10 +71,10 @@ export default async function EditOrderPage({
 
   return (
     <div>
-      <PageHeader title={`Edit order #${order.number}`} backHref={`/orders/${id}`} />
+      <PageHeader title={`Edit ${orderNo(order)}`} backHref={`/orders/${id}`} />
       <OrderForm customers={customers} hasProducts={productCount > 0} initialPrices={initialPrices} initial={initial} action={update} submitLabel="Save changes" />
       <div className="p-4 pt-0">
-        <DeleteButton action={remove} label="Delete order" confirmMessage={`Delete order #${order.number}? This can't be undone.`} />
+        <DeleteButton action={remove} label="Delete order" confirmMessage={`Delete ${orderNo(order)}? This can't be undone.`} />
       </div>
     </div>
   );

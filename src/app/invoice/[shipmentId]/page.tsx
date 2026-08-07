@@ -22,7 +22,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
         orderBy: { createdAt: "asc" },
         include: {
           product: { include: { design: { include: { image: { select: { designId: true } } } } } },
-          orderItem: { select: { order: { select: { number: true } } } },
+          orderItem: { select: { order: { select: { number: true, isSample: true, sampleNo: true } } } },
         },
       },
     },
@@ -67,9 +67,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
   ].filter(([, v]) => v) as [string, string][];
 
   // The customer orders this dispatch draws from, for the buyer to reconcile.
-  const orderRefs = [...new Set(shipment.items.map((i) => i.orderItem?.order?.number).filter(Boolean))].sort(
-    (a, b) => (a as number) - (b as number),
-  );
+  const orderRefs = [...new Map(
+    shipment.items
+      .map((i) => i.orderItem?.order)
+      .filter((o): o is NonNullable<typeof o> => !!o)
+      .map((o) => [o.number, o.isSample ? `Sample #${o.sampleNo ?? o.number}` : `#${o.number}`] as const),
+  )].sort((a, b) => a[0] - b[0]).map(([, label]) => label);
 
   const originCountry = company.country || "India";
   const destCountry = shipment.destinationCountry;
@@ -162,7 +165,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ shipme
 
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700">
           {orderRefs.length > 0 && (
-            <span><span className="text-gray-500">Buyer&apos;s order{orderRefs.length > 1 ? "s" : ""}:</span> {orderRefs.map((n) => `#${n}`).join(", ")}</span>
+            <span><span className="text-gray-500">Buyer&apos;s order{orderRefs.length > 1 ? "s" : ""}:</span> {orderRefs.join(", ")}</span>
           )}
           <span><span className="text-gray-500">Country of origin:</span> {originCountry}</span>
           {destCountry && <span><span className="text-gray-500">Final destination:</span> {destCountry}</span>}
