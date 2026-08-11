@@ -240,6 +240,11 @@ const NextStageSchema = z.object({
   rate: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0).nullable().optional()),
   dueDate: z.string().optional().nullable(),
   sendToNextProcess: z.boolean().optional().default(false),
+  // Unit conversion at the handoff — e.g. dyed yarn (kg) woven into fabric (mtr).
+  // outUnit blank/same = straight carry-forward; convRatio is output units per 1
+  // input unit (20 kg × 3 = 60 mtr).
+  outUnit: z.string().trim().optional().nullable(),
+  convRatio: z.preprocess((v) => (v === "" || v == null ? 1 : v), z.coerce.number().positive().optional().default(1)),
 });
 
 // Hand this stage's work-in-progress on to the next kaarigar: creates the next
@@ -266,20 +271,26 @@ export async function addNextStage(jobId: string, input: unknown) {
     fwdPieces.set(it.productId, (fwdPieces.get(it.productId) ?? 0) + (it.pieces ?? 0));
   }
 
+  const ratio = d.convRatio && d.convRatio > 0 ? d.convRatio : 1;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   const lines = [];
   for (const it of prev.items) {
     const meters = Math.max(0, it.qtyReceived - (fwdMeters.get(it.productId) ?? 0));
     const pieces = Math.max(0, it.piecesReceived - (fwdPieces.get(it.productId) ?? 0));
     if (meters <= 0 && pieces <= 0) continue;
-    lines.push({
-      productId: it.productId,
-      pieces: pieces > 0 ? pieces : null,
-      perPieceQty: it.perPieceQty ?? meters,
-      qtyOrdered: meters,
-      rate: d.rate ?? null,
-      unit: it.unit,
-      note: it.note,
-    });
+    const outUnit = d.outUnit?.trim() || it.unit;
+    // A unit change (kg → mtr) or a ratio ≠ 1 means the goods are being
+    // transformed, not just handed on — carry the CONVERTED quantity as a loose
+    // figure in the new unit (pieces don't survive a yarn→fabric conversion).
+    const converting = ratio !== 1 || outUnit !== it.unit;
+    if (converting) {
+      const outQty = round2(meters * ratio);
+      if (outQty <= 0) continue;
+      lines.push({ productId: it.productId, pieces: null, perPieceQty: outQty, qtyOrdered: outQty, rate: d.rate ?? null, unit: outUnit, note: it.note });
+    } else {
+      lines.push({ productId: it.productId, pieces: pieces > 0 ? pieces : null, perPieceQty: it.perPieceQty ?? meters, qtyOrdered: meters, rate: d.rate ?? null, unit: it.unit, note: it.note });
+    }
   }
   if (lines.length === 0) return { error: "Receive from this stage before sending it onward." };
 

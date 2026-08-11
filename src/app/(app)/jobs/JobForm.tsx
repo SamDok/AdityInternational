@@ -23,6 +23,11 @@ export type JobInitial = {
   items: { id: string; productId: string; productLabel?: string; pieces: string; perPieceQty: string; rate: string; unit: string; dueDate: string; note: string }[];
 };
 
+// Units a job line can be measured in. Yarn-processing stages (dyeing) run in
+// kg; woven/finished goods in mtr, etc. The line's own unit is always included
+// even if it's something custom off the product.
+const UNITS = ["mtr", "kg", "pcs", "sq mtr", "gm", "yd"];
+
 let counter = 0;
 const newKey = () => `j${counter++}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -149,14 +154,20 @@ export default function JobForm({
                 <ProductTypeahead value={l.productId} label={l.productLabel} onPick={(hit) => onProductPick(l.key, hit)} />
               </div>
               {/* Pieces × qty-per-piece = total (same as the order form) */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="field-label">Pieces</label>
                   <input value={l.pieces} onChange={(e) => updateLine(l.key, { pieces: e.target.value })} type="number" inputMode="numeric" step="1" min="0" className="field-input" placeholder="e.g. 10" />
                 </div>
                 <div>
-                  <label className="field-label">Qty / piece ({l.unit})</label>
+                  <label className="field-label">Qty / piece</label>
                   <input value={l.perPieceQty} onChange={(e) => updateLine(l.key, { perPieceQty: e.target.value })} type="number" inputMode="decimal" step="0.01" min="0" className="field-input" placeholder="0" />
+                </div>
+                <div>
+                  <label className="field-label">Unit</label>
+                  <select value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} className="field-input">
+                    {[...new Set([l.unit, ...UNITS])].map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
                 </div>
               </div>
               <p className="px-1 text-xs text-gray-500">

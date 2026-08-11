@@ -135,7 +135,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
             ))}
             {!job.isFinalStage && wip > 0 && (
               <p className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-indigo-900">
-                Work-in-progress here: {formatQty(wip)} — received but not yet sent to the next stage.
+                Work-in-progress here: {formatQty(wip)} {job.items[0]?.unit ?? ""} — received but not yet sent to the next stage.
               </p>
             )}
           </div>
@@ -220,7 +220,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
         )}
 
         {!job.isFinalStage && wip > 0 && job.status !== "CANCELLED" && (
-          <NextStageForm jobId={job.id} vendors={stageVendors} />
+          <NextStageForm jobId={job.id} vendors={stageVendors} wipQty={wip} inUnit={job.items[0]?.unit ?? "mtr"} />
         )}
 
         <div className="space-y-2 pt-2">
