@@ -61,8 +61,12 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null }, order: { isSample: false } },
     select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, dueDate: true, materials: { select: { id: true }, take: 1 } } } },
   });
-  type JobCover = { outstanding: number; jobId: string; jobNumber: number; jobDocNo: string; jobDue: Date | null; materialsPending: boolean };
-  const cover = new Map<string, JobCover>();
+  // Each job LINE is a coverage entry with its OWN deadline (a job can carry
+  // designs due on different dates). We keep them as a per-(order,product) queue,
+  // sorted earliest-due first, and match deliveries to them earliest-first — so a
+  // design due early is judged against the early job line, not a later one.
+  type CoverEntry = { qty: number; due: Date | null; jobId: string; jobNumber: number; jobDocNo: string; materialsPending: boolean };
+  const cover = new Map<string, CoverEntry[]>();
   for (const j of jobs) {
     // Job work can't start on a line until its materials have been issued — but
     // only the first stage needs materials; later production stages are labour only.
@@ -70,20 +74,14 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     for (const it of j.items) {
       const out = it.qtyOrdered - it.qtyReceived;
       if (out <= 0) continue;
-      // Judge each design by its OWN job-line deadline (a job can carry designs
-      // with different dates); fall back to the job's overall date.
-      const itemDue = it.dueDate ?? j.dueDate;
       const k = `${j.orderId}:${it.productId}`;
-      const prev = cover.get(k);
-      if (!prev) {
-        cover.set(k, { outstanding: out, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), jobDue: itemDue, materialsPending: jobMaterialsPending });
-      } else {
-        prev.outstanding += out;
-        // Keep the latest date (the binding constraint) and its job for the link.
-        if (itemDue && (!prev.jobDue || itemDue > prev.jobDue)) { prev.jobDue = itemDue; prev.jobId = j.id; prev.jobNumber = j.number; prev.jobDocNo = jobDocNo(j); prev.materialsPending = jobMaterialsPending; }
-      }
+      const arr = cover.get(k) ?? [];
+      arr.push({ qty: out, due: it.dueDate ?? j.dueDate, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), materialsPending: jobMaterialsPending });
+      cover.set(k, arr);
     }
   }
+  const DUE_INF = Number.MAX_SAFE_INTEGER;
+  for (const arr of cover.values()) arr.sort((a, b) => (a.due ? dayStart(a.due) : DUE_INF) - (b.due ? dayStart(b.due) : DUE_INF));
 
   const today = dayStart(new Date());
   const items: ScheduleItem[] = [];
@@ -100,7 +98,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       // Fall back to the covering job's expected date when neither the line nor
       // the order carries a delivery date, so a job with a due date still lands
       // on the board.
-      const due = it.dueDate ?? o.dueDate ?? cover.get(`${o.id}:${it.productId}`)?.jobDue ?? null;
+      const due = it.dueDate ?? o.dueDate ?? cover.get(`${o.id}:${it.productId}`)?.[0]?.due ?? null;
       if (!due) continue; // nothing to schedule against
       lines.push({ o, it, remaining, due });
     }
@@ -108,20 +106,33 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   lines.sort((a, b) => dayStart(a.due) - dayStart(b.due));
 
   const stockPool = new Map<string, number>(); // GLOBAL, per product
-  const jobPool = new Map<string, number>(); // per order:product
+  const jobQueues = new Map<string, CoverEntry[]>(); // per order:product, consumed as we allocate
+  const queueFor = (k: string) => {
+    let q = jobQueues.get(k);
+    if (!q) { q = (cover.get(k) ?? []).map((e) => ({ ...e })); jobQueues.set(k, q); }
+    return q;
+  };
 
   for (const { o, it, remaining, due } of lines) {
     const pid = it.productId;
-    if (!stockPool.has(pid)) stockPool.set(pid, it.product.stockQty || 0);
-    const jc = cover.get(`${o.id}:${pid}`);
     const jkey = `${o.id}:${pid}`;
-    if (!jobPool.has(jkey)) jobPool.set(jkey, jc?.outstanding ?? 0);
+    if (!stockPool.has(pid)) stockPool.set(pid, it.product.stockQty || 0);
 
     const fromStock = Math.min(remaining, stockPool.get(pid)!);
     stockPool.set(pid, stockPool.get(pid)! - fromStock);
-    const rem2 = remaining - fromStock;
-    const fromJob = Math.min(rem2, jobPool.get(jkey)!);
-    jobPool.set(jkey, jobPool.get(jkey)! - fromJob);
+
+    // Consume job coverage earliest-due first; the last (latest-due) entry used is
+    // this line's binding constraint — its ETA and the job we link to.
+    let need = remaining - fromStock;
+    let fromJob = 0;
+    let jc: CoverEntry | null = null;
+    for (const e of queueFor(jkey)) {
+      if (need <= 1e-9) break;
+      if (e.qty <= 1e-9) continue;
+      const take = Math.min(need, e.qty);
+      e.qty -= take; need -= take; fromJob += take;
+      jc = e;
+    }
 
     let readiness: Readiness;
     if (fromStock >= remaining - 1e-9) readiness = "READY";
@@ -133,7 +144,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     const startBy = leadDays != null ? dDay - leadDays * DAY : null;
     const withinSoon = (d: number) => d <= today + SOON_WINDOW_DAYS * DAY;
 
-    const jobDue = readiness === "MAKING" ? jc?.jobDue ?? null : null;
+    const jobDue = readiness === "MAKING" ? jc?.due ?? null : null;
     const jobDueDay = jobDue ? dayStart(jobDue) : null;
     const jobLate = !!(jobDueDay != null && jobDueDay > dDay); // arrives after the deadline
     const jobOverdue = !!(jobDueDay != null && jobDueDay < today); // job's own date already passed
