@@ -15,7 +15,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
     where: { id },
     include: {
       vendor: true,
-      order: { include: { customer: true } },
+      order: { select: { id: true, number: true, isSample: true, sampleNo: true, seq: true, fyLabel: true } }, // no customer — this doc goes to the kaarigar/supplier
       items: {
         orderBy: { id: "asc" },
         include: {
@@ -103,7 +103,8 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Details</p>
             {v.paymentTerms && <p className="text-xs text-gray-700">Payment terms: {v.paymentTerms}</p>}
             <p className="text-xs text-gray-700">Currency: {job.currency}</p>
-            {job.order && <p className="text-xs text-gray-700">Against {orderNo(job.order).toLowerCase()} · {job.order.customer.name}</p>}
+            {/* Internal order ref only — the kaarigar/supplier must not see the customer. */}
+            {job.order && <p className="text-xs text-gray-700">Against {orderNo(job.order).toLowerCase()}</p>}
           </div>
         </div>
 
