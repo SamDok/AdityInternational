@@ -59,7 +59,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   // binding (latest) job date.
   const jobs = await prisma.job.findMany({
     where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null }, order: { isSample: false } },
-    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, materials: { select: { id: true }, take: 1 } } } },
+    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, dueDate: true, materials: { select: { id: true }, take: 1 } } } },
   });
   type JobCover = { outstanding: number; jobId: string; jobNumber: number; jobDocNo: string; jobDue: Date | null; materialsPending: boolean };
   const cover = new Map<string, JobCover>();
@@ -70,14 +70,17 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     for (const it of j.items) {
       const out = it.qtyOrdered - it.qtyReceived;
       if (out <= 0) continue;
+      // Judge each design by its OWN job-line deadline (a job can carry designs
+      // with different dates); fall back to the job's overall date.
+      const itemDue = it.dueDate ?? j.dueDate;
       const k = `${j.orderId}:${it.productId}`;
       const prev = cover.get(k);
       if (!prev) {
-        cover.set(k, { outstanding: out, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), jobDue: j.dueDate, materialsPending: jobMaterialsPending });
+        cover.set(k, { outstanding: out, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), jobDue: itemDue, materialsPending: jobMaterialsPending });
       } else {
         prev.outstanding += out;
-        // Keep the latest date (the constraint) and its job for the link.
-        if (j.dueDate && (!prev.jobDue || j.dueDate > prev.jobDue)) { prev.jobDue = j.dueDate; prev.jobId = j.id; prev.jobNumber = j.number; prev.jobDocNo = jobDocNo(j); prev.materialsPending = jobMaterialsPending; }
+        // Keep the latest date (the binding constraint) and its job for the link.
+        if (itemDue && (!prev.jobDue || itemDue > prev.jobDue)) { prev.jobDue = itemDue; prev.jobId = j.id; prev.jobNumber = j.number; prev.jobDocNo = jobDocNo(j); prev.materialsPending = jobMaterialsPending; }
       }
     }
   }

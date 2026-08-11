@@ -457,6 +457,7 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
           perPieceQty: pieces ? per : l.shortfall,
           qtyOrdered: l.shortfall,
           rate: chosenLine.rate ?? l.rate ?? null,
+          dueDate: l.dueDate ?? null, // each design keeps its own delivery deadline
           unit: l.unit,
         });
       }
