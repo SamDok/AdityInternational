@@ -129,7 +129,7 @@ export default async function ProcurementPage({
                         </span>
                         <span className="shrink-0 text-gray-400">
                           <Link href={`/jobs/${i.jobId}`} className="text-brand-600">{i.jobDocNo}</Link>
-                          {i.orderNumber ? ` · ord #${i.orderNumber}` : ""}
+                          {i.orderLabel ? ` · ${i.orderLabel}` : ""}
                           {i.dueDate ? ` · ${i.overdue ? "overdue " : "due "}${formatDate(i.dueDate)}` : ""}
                         </span>
                       </li>

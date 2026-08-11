@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fulfillmentOf, roundQty } from "@/lib/format";
+import { fulfillmentOf, roundQty, orderNo } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 
 // One order line's procurement view: how much is needed, what's coverable from
@@ -171,7 +171,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
 
 export type NeedGroup = { vendorId: string; vendorName: string; kind: ProcKind; lines: { productId: string; name: string; shortfall: number; unit: string }[] };
 export type OrderNeed = { orderId: string; number: number; customerId: string; customerName: string; dueDate: Date | null; groups: NeedGroup[]; unassignedCount: number; vendorIds: string[] };
-export type AwaitingItem = { productName: string; outstanding: number; unit: string; jobId: string; jobNumber: number; jobDocNo: string; orderNumber: number | null; orderId: string | null; dueDate: Date | null; overdue: boolean };
+export type AwaitingItem = { productName: string; outstanding: number; unit: string; jobId: string; jobNumber: number; jobDocNo: string; orderLabel: string | null; orderId: string | null; dueDate: Date | null; overdue: boolean };
 export type AwaitingVendor = { vendorId: string; vendorName: string; items: AwaitingItem[]; anyOverdue: boolean };
 export type DesignRollup = { productId: string; name: string; unit: string; demand: number; stock: number; onOrder: number; toProcure: number };
 
@@ -213,7 +213,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   // All open/partial jobs (one query) — the "awaiting" side + aggregate on-order.
   const openJobs = await prisma.job.findMany({
     where: { status: { in: ["OPEN", "PARTIAL"] } },
-    include: { vendor: { select: { id: true, name: true } }, order: { select: { id: true, number: true } }, items: { include: { product: { select: { name: true } } } } },
+    include: { vendor: { select: { id: true, name: true } }, order: { select: { id: true, number: true, isSample: true, sampleNo: true, seq: true, fyLabel: true } }, items: { include: { product: { select: { name: true } } } } },
     orderBy: [{ dueDate: "asc" }, { number: "asc" }],
   });
 
@@ -248,14 +248,21 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     const outstanding = j.items.filter((i) => i.qtyReceived < i.qtyOrdered);
     for (const i of j.items) openByProduct.set(i.productId, (openByProduct.get(i.productId) ?? 0) + Math.max(0, i.qtyOrdered - i.qtyReceived));
     if (outstanding.length === 0) continue;
-    const overdue = !!(j.dueDate && j.dueDate < now);
+    const orderLabel = j.order ? orderNo(j.order) : null;
     let av = avMap.get(j.vendorId);
     if (!av) { av = { vendorId: j.vendorId, vendorName: j.vendor.name, items: [], anyOverdue: false }; avMap.set(j.vendorId, av); }
     for (const i of outstanding) {
-      av.items.push({ productName: i.product.name, outstanding: roundQty(i.qtyOrdered - i.qtyReceived), unit: i.unit, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), orderNumber: j.order?.number ?? null, orderId: j.order?.id ?? null, dueDate: j.dueDate, overdue });
+      // Each design line's own deadline (a job can carry designs due on different
+      // dates); fall back to the job's overall date when the line has none.
+      const itemDue = i.dueDate ?? j.dueDate;
+      const itemOverdue = !!(itemDue && itemDue < now);
+      if (itemOverdue) av.anyOverdue = true;
+      av.items.push({ productName: i.product.name, outstanding: roundQty(i.qtyOrdered - i.qtyReceived), unit: i.unit, jobId: j.id, jobNumber: j.number, jobDocNo: jobDocNo(j), orderLabel, orderId: j.order?.id ?? null, dueDate: itemDue, overdue: itemOverdue });
     }
-    if (overdue) av.anyOverdue = true;
   }
+  // Show each vendor's outstanding lines soonest-due first.
+  const INF = Number.MAX_SAFE_INTEGER;
+  for (const av of avMap.values()) av.items.sort((a, b) => (a.dueDate ? a.dueDate.getTime() : INF) - (b.dueDate ? b.dueDate.getTime() : INF));
   const awaiting = [...avMap.values()];
 
   // By-design rollup: true aggregate net demand (remaining to fulfil) across all live orders.
