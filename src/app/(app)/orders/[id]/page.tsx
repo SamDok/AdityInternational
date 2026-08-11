@@ -29,7 +29,7 @@ export default async function OrderDetailPage({
     include: {
       customer: true,
       sampleSource: { select: { id: true, number: true, sampleNo: true, isSample: true, seq: true, fyLabel: true } },
-      bulkOrders: { select: { id: true, number: true } },
+      bulkOrders: { select: { id: true, number: true, sampleNo: true, isSample: true, seq: true, fyLabel: true } },
       items: { include: { product: { include: { design: { include: { image: { select: { designId: true } } } } } } } },
     },
   });
@@ -168,7 +168,7 @@ export default async function OrderDetailPage({
                 {order.bulkOrders.map((b, i) => (
                   <span key={b.id}>
                     {i > 0 && ", "}
-                    <Link href={`/orders/${b.id}`} className="font-semibold underline">#{b.number}</Link>
+                    <Link href={`/orders/${b.id}`} className="font-semibold underline">{orderNo(b)}</Link>
                   </span>
                 ))}
               </p>

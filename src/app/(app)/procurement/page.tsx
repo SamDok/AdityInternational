@@ -83,7 +83,7 @@ export default async function ProcurementPage({
               {needs.map((n) => (
                 <li key={n.orderId} className="card space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <Link href={`/orders/${n.orderId}`} className="font-semibold text-brand-600 hover:underline">Order #{n.number} · {n.customerName}</Link>
+                    <Link href={`/orders/${n.orderId}`} className="font-semibold text-brand-600 hover:underline">{n.label} · {n.customerName}</Link>
                     {n.dueDate && <span className="shrink-0 text-xs text-gray-400">due {formatDate(n.dueDate)}</span>}
                   </div>
                   {n.groups.map((g) => (

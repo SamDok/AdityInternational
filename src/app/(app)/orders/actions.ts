@@ -475,7 +475,7 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
         issueDate: now,
         dueDate: dues.length ? dues.reduce((a, b) => (a < b ? a : b)) : null,
         orderId,
-        notes: `Auto-generated from order #${plan.orderNumber}`,
+        notes: `Auto-generated from ${plan.orderLabel.toLowerCase()}`,
         items: { create: items },
       },
     });

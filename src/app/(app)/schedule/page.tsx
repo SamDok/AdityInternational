@@ -60,7 +60,7 @@ function Item({ it }: { it: ScheduleItem }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Link href={`/orders/${it.orderId}`} className="font-semibold text-brand-600 hover:underline">
-            Order #{it.orderNumber} · {it.customerName}
+            {it.orderLabel} · {it.customerName}
           </Link>
           <p className="truncate text-sm text-gray-700">{it.productName}</p>
           <p className="text-xs text-gray-500">{it.remaining} {it.unit} to deliver · due {formatDate(it.deliveryDate)}</p>

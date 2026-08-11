@@ -32,6 +32,7 @@ export type ExistingJob = { id: string; number: number; docNo: string; vendorNam
 
 export type ProcPlan = {
   orderNumber: number;
+  orderLabel: string; // AI/25-26/001 document number
   groups: ProcGroup[]; // ready to generate, one job per vendor + kind
   unassigned: ProcLine[]; // short, but the design has no vendor/sourcing set
   inStock: ProcLine[]; // fully covered — no job needed
@@ -158,6 +159,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
 
   return {
     orderNumber: order.number,
+    orderLabel: orderNo(order),
     groups,
     unassigned,
     inStock,
@@ -170,7 +172,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
 // queries (NOT per-order), so it stays fast with hundreds of live orders.
 
 export type NeedGroup = { vendorId: string; vendorName: string; kind: ProcKind; lines: { productId: string; name: string; shortfall: number; unit: string }[] };
-export type OrderNeed = { orderId: string; number: number; customerId: string; customerName: string; dueDate: Date | null; groups: NeedGroup[]; unassignedCount: number; vendorIds: string[] };
+export type OrderNeed = { orderId: string; number: number; label: string; customerId: string; customerName: string; dueDate: Date | null; groups: NeedGroup[]; unassignedCount: number; vendorIds: string[] };
 export type AwaitingItem = { productName: string; outstanding: number; unit: string; jobId: string; jobNumber: number; jobDocNo: string; orderLabel: string | null; orderId: string | null; dueDate: Date | null; overdue: boolean };
 export type AwaitingVendor = { vendorId: string; vendorName: string; items: AwaitingItem[]; anyOverdue: boolean };
 export type DesignRollup = { productId: string; name: string; unit: string; demand: number; stock: number; onOrder: number; toProcure: number };
@@ -188,7 +190,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   const orders = await prisma.order.findMany({
     where: { status: "CONFIRMED" },
     select: {
-      id: true, number: true, dueDate: true, manualComplete: true,
+      id: true, number: true, dueDate: true, manualComplete: true, seq: true, fyLabel: true, isSample: true, sampleNo: true,
       customer: { select: { id: true, name: true } },
       items: { select: { id: true, productId: true, quantity: true, shippedQty: true } },
     },
@@ -236,7 +238,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
       g.lines.push({ productId: it.productId, name: prod.name, shortfall, unit: prod.unit });
     }
     if (groups.size || unassignedCount) {
-      needs.push({ orderId: o.id, number: o.number, customerId: o.customer.id, customerName: o.customer.name, dueDate: o.dueDate, groups: [...groups.values()], unassignedCount, vendorIds: [...groups.values()].map((g) => g.vendorId) });
+      needs.push({ orderId: o.id, number: o.number, label: orderNo(o), customerId: o.customer.id, customerName: o.customer.name, dueDate: o.dueDate, groups: [...groups.values()], unassignedCount, vendorIds: [...groups.values()].map((g) => g.vendorId) });
     }
   }
 

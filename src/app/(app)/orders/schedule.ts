@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { roundQty } from "@/lib/format";
+import { roundQty, orderNo } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
 
 // Readiness of an unshipped line toward its delivery date.
@@ -9,6 +9,7 @@ export type Bucket = "OVERDUE" | "BEHIND" | "SOON";
 export type ScheduleItem = {
   orderId: string;
   orderNumber: number;
+  orderLabel: string; // AI/25-26/001 document number
   customerName: string;
   productName: string;
   remaining: number;
@@ -43,7 +44,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   const orders = await prisma.order.findMany({
     where: { status: "CONFIRMED", manualComplete: false, isSample: false },
     select: {
-      id: true, number: true, dueDate: true,
+      id: true, number: true, dueDate: true, seq: true, fyLabel: true, isSample: true, sampleNo: true,
       customer: { select: { name: true } },
       items: {
         select: {
@@ -179,7 +180,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     if (!bucket) continue;
 
     items.push({
-      orderId: o.id, orderNumber: o.number, customerName: o.customer.name,
+      orderId: o.id, orderNumber: o.number, orderLabel: orderNo(o), customerName: o.customer.name,
       productName: it.product.name, remaining: roundQty(remaining), unit: it.unit,
       deliveryDate: due, startBy: startBy != null ? new Date(startBy) : null, leadDays,
       readiness, jobNumber: readiness === "MAKING" ? jc?.jobNumber ?? null : null,
