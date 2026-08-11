@@ -94,7 +94,10 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     for (const it of o.items) {
       const remaining = it.quantity - it.shippedQty;
       if (remaining <= 1e-9) continue; // already shipped
-      const due = it.dueDate ?? o.dueDate;
+      // Fall back to the covering job's expected date when neither the line nor
+      // the order carries a delivery date, so a job with a due date still lands
+      // on the board.
+      const due = it.dueDate ?? o.dueDate ?? cover.get(`${o.id}:${it.productId}`)?.jobDue ?? null;
       if (!due) continue; // nothing to schedule against
       lines.push({ o, it, remaining, due });
     }
@@ -145,7 +148,10 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       } else if (jobOverdue || jobLate) {
         bucket = "BEHIND"; // vendor is late, or the job lands after the deadline
       } else {
-        bucket = null; // arrives in time — drop off the board
+        // On track to land by the deadline — but if the job is due within the
+        // soon window it's still imminent and not yet received, so surface it as
+        // a heads-up to chase the kaarigar rather than hiding it.
+        bucket = jobDueDay != null && withinSoon(jobDueDay) ? "SOON" : null;
       }
     } else if (readiness === "NOT_PROCURED" && leadDays == null) {
       // No lead time to plan by — always surface (with a nudge), never hide it
