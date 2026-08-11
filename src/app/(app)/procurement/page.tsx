@@ -60,7 +60,8 @@ export default async function ProcurementPage({
                 <div key={f.materialId} className="flex items-center justify-between text-sm">
                   <span className="min-w-0 truncate text-gray-800">{f.name}</span>
                   <span className="shrink-0 text-gray-500">
-                    need ~{formatQty(f.needed)} · have {formatQty(f.inStock)} {f.unit}
+                    still to issue ~{formatQty(f.needed)} · have {formatQty(f.inStock)} {f.unit}
+                    {f.issued > 0 && <span className="ml-1.5 text-xs text-gray-400">({formatQty(f.issued)} already issued)</span>}
                     {f.short > 0 && <span className="ml-1.5 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">short {formatQty(f.short)}</span>}
                   </span>
                 </div>

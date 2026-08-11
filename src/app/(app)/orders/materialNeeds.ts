@@ -5,7 +5,8 @@ export type MaterialNeed = {
   materialId: string;
   name: string;
   unit: string;
-  needed: number; // estimated base-fabric requirement for open job-work orders
+  needed: number; // fabric STILL to issue = estimated requirement minus what's already been issued
+  issued: number; // base fabric already issued (net of returns) to these orders' jobs
   inStock: number;
   short: number; // max(0, needed - inStock)
 };
@@ -19,14 +20,15 @@ export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
   const orders = await prisma.order.findMany({
     where: { status: "CONFIRMED", isSample: false },
     select: {
-      manualComplete: true,
+      id: true, manualComplete: true,
       items: { select: { quantity: true, shippedQty: true, product: { select: { design: { select: { id: true, categoryId: true, sourcingType: true } } } } } },
     },
   });
 
-  // Remaining finished quantity per job-work design.
+  // Remaining finished quantity per job-work design + the orders in play.
   const remainingByDesign = new Map<string, number>();
   const catOfDesign = new Map<string, string>();
+  const openOrderIds = new Set<string>();
   for (const o of orders) {
     if (o.manualComplete) continue;
     for (const it of o.items) {
@@ -36,6 +38,7 @@ export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
       if (rem <= 0) continue;
       remainingByDesign.set(d.id, (remainingByDesign.get(d.id) ?? 0) + rem);
       catOfDesign.set(d.id, d.categoryId);
+      openOrderIds.add(o.id);
     }
   }
   if (remainingByDesign.size === 0) return [];
@@ -70,6 +73,17 @@ export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
   }
   if (neededByMaterial.size === 0) return [];
 
+  // Base fabric already issued (net of returns) to these orders' jobs — that
+  // requirement is already met, so it must be netted out of what's still needed.
+  const issuedRows = openOrderIds.size
+    ? await prisma.jobMaterial.findMany({
+        where: { job: { orderId: { in: [...openOrderIds] } }, material: { kind: "BASE_FABRIC" } },
+        select: { materialId: true, qtyIssued: true, qtyReturned: true },
+      })
+    : [];
+  const issuedByMaterial = new Map<string, number>();
+  for (const r of issuedRows) issuedByMaterial.set(r.materialId, (issuedByMaterial.get(r.materialId) ?? 0) + Math.max(0, r.qtyIssued - r.qtyReturned));
+
   const materials = await prisma.rawMaterial.findMany({
     where: { id: { in: [...neededByMaterial.keys()] } },
     select: { id: true, name: true, unit: true, stockQty: true },
@@ -77,8 +91,11 @@ export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
 
   return materials
     .map((m) => {
-      const needed = roundQty(neededByMaterial.get(m.id) ?? 0);
-      return { materialId: m.id, name: m.name, unit: m.unit, needed, inStock: m.stockQty, short: roundQty(Math.max(0, needed - m.stockQty)) };
+      const gross = neededByMaterial.get(m.id) ?? 0;
+      const issued = roundQty(issuedByMaterial.get(m.id) ?? 0);
+      const needed = roundQty(Math.max(0, gross - issued)); // still to issue
+      return { materialId: m.id, name: m.name, unit: m.unit, needed, issued, inStock: m.stockQty, short: roundQty(Math.max(0, needed - m.stockQty)) };
     })
+    .filter((m) => m.needed > 1e-9) // fully-issued fabrics are done — drop them
     .sort((a, b) => b.short - a.short || b.needed - a.needed);
 }
