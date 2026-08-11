@@ -11,6 +11,7 @@ import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 import { allocateJobNumbers } from "../jobs/actions";
 import { shipmentDocNo, financialYearLabel } from "@/lib/jobNumber";
+import { routeForDesign, effectiveRatio, type RouteStepDef } from "@/lib/routes";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -423,15 +424,40 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
     shortByProduct.set(l.productId, arr);
   }
 
+  // Routed designs (a multi-step production route on the design or its fabric
+  // type — e.g. dupion: dye → weave) don't get a single job to their maker.
+  // Instead the FIRST step (the dyer) is auto-created, and the rest of the chain
+  // is added stage-by-stage. Pull those products out of the normal flow here so
+  // they aren't ALSO created as a single mtr job to their final vendor.
+  const shortPids = [...shortByProduct.keys()];
+  const prods = shortPids.length
+    ? await prisma.product.findMany({ where: { id: { in: shortPids } }, select: { id: true, designId: true } })
+    : [];
+  const designByProduct = new Map(prods.map((p) => [p.id, p.designId]));
+  const routeByDesign = new Map<string, RouteStepDef[]>();
+  for (const designId of new Set([...designByProduct.values()].filter((d): d is string => !!d))) {
+    const r = await routeForDesign(designId);
+    if (r.length >= 2) routeByDesign.set(designId, r); // only multi-step routes reroute
+  }
+  const routedLines: { l: Proc; steps: RouteStepDef[] }[] = [];
+  for (const pid of shortPids) {
+    const designId = designByProduct.get(pid);
+    const steps = designId ? routeByDesign.get(designId) : undefined;
+    if (!steps) continue;
+    for (const l of shortByProduct.get(pid)!) routedLines.push({ l, steps });
+    shortByProduct.delete(pid); // handled by the routed path below
+  }
+
   // Default to the design-assigned grouping when the caller doesn't review.
   const chosen: GenJob[] = jobs && jobs.length
     ? jobs
     : plan.groups.map((g) => ({ kind: g.kind, vendorId: g.vendorId, lines: g.lines.map((l) => ({ productId: l.productId, rate: l.rate })) }));
-  if (chosen.length === 0) {
+  if (chosen.length === 0 && routedLines.length === 0) {
     return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
   }
 
-  const vendorIds = [...new Set(chosen.map((j) => j.vendorId))];
+  const routedVendorIds = routedLines.map((r) => r.steps[0]?.vendorId).filter((v): v is string => !!v);
+  const vendorIds = [...new Set([...chosen.map((j) => j.vendorId), ...routedVendorIds])];
   const validVendor = new Set((await prisma.vendor.findMany({ where: { id: { in: vendorIds }, archived: false }, select: { id: true } })).map((v) => v.id));
 
   const now = new Date();
@@ -481,7 +507,50 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
     });
     count++;
   }
-  if (count === 0) return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
+
+  // ── Routed designs: create the first step's job (e.g. the dyer, in kg) ──
+  // Quantity works backwards from the finished shortfall through the chain's
+  // conversion ratios (60 mtr ÷ 3 mtr/kg = 20 kg of yarn). The job is flagged as
+  // an intermediate stage so its receipt becomes WIP, and the next kaarigar is
+  // added one tap at a time (pre-filled from the route).
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  type JobItemData = { productId: string; note: string | null; pieces: number | null; perPieceQty: number; qtyOrdered: number; rate: number | null; dueDate: Date | null; unit: string };
+  let routedSkipped = false;
+  const routedGroups = new Map<string, { vendorId: string; stageName: string; unit: string; items: JobItemData[]; dues: Date[]; currency: string }>();
+  for (const { l, steps } of routedLines) {
+    const s1 = steps[0];
+    if (!s1.vendorId || !validVendor.has(s1.vendorId)) { routedSkipped = true; continue; }
+    const q1 = round2(l.shortfall / effectiveRatio(steps));
+    if (q1 <= 0) continue;
+    const key = `${s1.vendorId}|${s1.name}|${s1.unit}`;
+    let g = routedGroups.get(key);
+    if (!g) { g = { vendorId: s1.vendorId, stageName: s1.name, unit: s1.unit, items: [], dues: [], currency: "INR" }; routedGroups.set(key, g); }
+    g.items.push({ productId: l.productId, note: l.description || null, pieces: null, perPieceQty: q1, qtyOrdered: q1, rate: s1.rate ?? l.rate ?? null, dueDate: l.dueDate ?? null, unit: s1.unit });
+    if (l.dueDate) g.dues.push(l.dueDate);
+    g.currency = l.currency;
+  }
+  for (const g of routedGroups.values()) {
+    if (g.items.length === 0) continue;
+    const { number, seq, fyLabel } = await allocateJobNumbers("JOB_WORK", now);
+    const created = await prisma.job.create({
+      data: {
+        number, seq, fyLabel,
+        vendorId: g.vendorId, kind: "JOB_WORK", status: "OPEN", currency: g.currency, issueDate: now,
+        dueDate: g.dues.length ? g.dues.reduce((a, b) => (a < b ? a : b)) : null,
+        orderId, stageNo: 1, stageName: g.stageName, isFinalStage: false,
+        notes: `Auto-generated from ${plan.orderLabel.toLowerCase()} · route step 1 (${g.stageName})`,
+        items: { create: g.items },
+      },
+    });
+    await prisma.job.update({ where: { id: created.id }, data: { routeId: created.id } });
+    count++;
+  }
+
+  if (count === 0) {
+    return { error: routedSkipped
+      ? "Set a kaarigar on the first step of the production route (fabric type → Production route)."
+      : "Nothing to generate — every line is covered by stock or has no vendor assigned." };
+  }
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/jobs");

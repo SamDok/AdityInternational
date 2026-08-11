@@ -9,17 +9,21 @@ type Vendor = { id: string; name: string };
 
 const UNITS = ["mtr", "kg", "pcs", "sq mtr", "gm", "yd"];
 
-export default function NextStageForm({ jobId, vendors, wipQty, inUnit }: { jobId: string; vendors: Vendor[]; wipQty: number; inUnit: string }) {
+type Prefill = { name: string; vendorId: string | null; unit: string; ratioFromPrev: number | null; isFinal: boolean } | null;
+
+export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill }: { jobId: string; vendors: Vendor[]; wipQty: number; inUnit: string; prefill?: Prefill }) {
   const toast = useToast();
+  const p = prefill ?? null;
+  const preConvert = !!(p && (p.unit !== inUnit || (p.ratioFromPrev != null && p.ratioFromPrev !== 1)));
   const [open, setOpen] = useState(false);
-  const [vendorId, setVendorId] = useState("");
-  const [stageName, setStageName] = useState("");
+  const [vendorId, setVendorId] = useState(p?.vendorId ?? "");
+  const [stageName, setStageName] = useState(p?.name ?? "");
   const [rate, setRate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [alsoNext, setAlsoNext] = useState(false);
-  const [convert, setConvert] = useState(false);
-  const [outUnit, setOutUnit] = useState(inUnit);
-  const [ratio, setRatio] = useState("1");
+  const [alsoNext, setAlsoNext] = useState(p ? !p.isFinal : false);
+  const [convert, setConvert] = useState(preConvert);
+  const [outUnit, setOutUnit] = useState(p?.unit ?? inUnit);
+  const [ratio, setRatio] = useState(p?.ratioFromPrev != null ? String(p.ratioFromPrev) : "1");
   const [isPending, startTransition] = useTransition();
 
   const ratioNum = parseFloat(ratio) || 0;
@@ -47,7 +51,7 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit }: { jobI
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="btn-primary w-full">
-        Send to next stage →
+        {p ? `Send to next step: ${p.name} →` : "Send to next stage →"}
       </button>
     );
   }
@@ -55,7 +59,11 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit }: { jobI
   return (
     <div className="card space-y-3">
       <p className="font-semibold text-gray-900">Send work to the next kaarigar</p>
-      <p className="text-xs text-gray-500">Carries this stage&apos;s received (work-in-progress) quantity forward as the next job&apos;s quantity.</p>
+      {p ? (
+        <p className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs text-indigo-800">Pre-filled from this design&apos;s production route — check the details and confirm.</p>
+      ) : (
+        <p className="text-xs text-gray-500">Carries this stage&apos;s received (work-in-progress) quantity forward as the next job&apos;s quantity.</p>
+      )}
       <div>
         <label className="field-label">Next step</label>
         <input value={stageName} onChange={(e) => setStageName(e.target.value)} list="stage-name-options" className="field-input" placeholder="e.g. Wash, Weaving, Finishing" />

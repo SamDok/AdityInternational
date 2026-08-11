@@ -180,6 +180,7 @@ model ProductCategory {
   archived  Boolean  @default(false)
   designs   Design[]
   materialDefaults CategoryMaterial[] // default materials for every design of this type
+  routeSteps RouteStep[] // default production route for every design of this type
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -209,6 +210,7 @@ model Design {
   archived  Boolean   @default(false)
   variants  Product[] // its width-variants
   materialOverrides DesignMaterial[] // per-design default materials (override the type)
+  routeSteps RouteStep[] // per-design production route (overrides the type's route)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -299,6 +301,7 @@ model Vendor {
   payments  VendorPayment[]
   materialsSupplied RawMaterial[]        // materials this supplier provides
   materialPos       MaterialPurchaseOrder[] // material POs raised to this supplier
+  routeSteps        RouteStep[]          // production-route steps this kaarigar performs
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -680,6 +683,30 @@ model CategoryMaterial {
   note        String?
 
   @@unique([categoryId, materialId])
+}
+
+// One step in a design's / fabric-type's production route, in order. Lets a
+// multi-process design flow through several kaarigars automatically — e.g.
+// dupion: dye the yarn (kg) → weave it into fabric (mtr). Steps live on the
+// fabric type (default for every design of that type) OR on a single design
+// (override). The last step's output is the finished, sellable goods.
+model RouteStep {
+  id         String           @id @default(cuid())
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String?
+  design     Design?          @relation(fields: [designId], references: [id], onDelete: Cascade)
+  designId   String?
+  seq        Int // 1, 2, 3 … order of the step
+  name       String // "Dyeing", "Weaving"
+  vendor     Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  vendorId   String? // the kaarigar who does this step
+  unit       String           @default("mtr") // this step's measure — kg for yarn, mtr for cloth
+  ratioFromPrev Float? // this step's output units per 1 unit of the PREVIOUS step's output (null/1 = same unit carried straight)
+  rate       Float? // default making charge per unit
+  createdAt  DateTime         @default(now())
+
+  @@index([categoryId])
+  @@index([designId])
 }
 
 // Optional per-design override / addition to the type's default materials.

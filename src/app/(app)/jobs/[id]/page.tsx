@@ -11,6 +11,7 @@ import DeleteButton from "@/components/DeleteButton";
 import JobMaterials from "../JobMaterials";
 import NextStageForm from "../NextStageForm";
 import { defaultMaterialsForDesign } from "@/lib/materials";
+import { routeForDesign } from "@/lib/routes";
 import { cancelJob, deleteJob, closeJobShort, recordRejection, setJobStageMode } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,20 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const stageVendors = !job.isFinalStage
     ? await prisma.vendor.findMany({ where: { archived: false, kind: { in: ["KAARIGAR", "BOTH"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } })
     : [];
+
+  // If this job sits on a configured production route, pre-fill the next step
+  // (who, unit, conversion) so sending it onward is one tap.
+  let nextStep: { name: string; vendorId: string | null; unit: string; ratioFromPrev: number | null; isFinal: boolean } | null = null;
+  if (!job.isFinalStage && job.nextStages.length === 0 && job.items[0]?.product.design) {
+    const route = await routeForDesign(job.items[0].product.design.id);
+    if (route.length >= 2) {
+      const idx = route.findIndex((s) => s.seq === (job.stageNo ?? 1));
+      if (idx >= 0 && idx + 1 < route.length) {
+        const ns = route[idx + 1];
+        nextStep = { name: ns.name, vendorId: ns.vendorId, unit: ns.unit, ratioFromPrev: ns.ratioFromPrev, isFinal: idx + 1 === route.length - 1 };
+      }
+    }
+  }
 
   // Materials issued to the kaarigar are only relevant for job work.
   const showMaterials = job.kind === "JOB_WORK";
@@ -220,7 +235,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
         )}
 
         {!job.isFinalStage && wip > 0 && job.status !== "CANCELLED" && (
-          <NextStageForm jobId={job.id} vendors={stageVendors} wipQty={wip} inUnit={job.items[0]?.unit ?? "mtr"} />
+          <NextStageForm jobId={job.id} vendors={stageVendors} wipQty={wip} inUnit={job.items[0]?.unit ?? "mtr"} prefill={nextStep} />
         )}
 
         <div className="space-y-2 pt-2">
