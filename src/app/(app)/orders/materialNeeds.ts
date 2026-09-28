@@ -62,27 +62,60 @@ export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
     defaultsByCat.set(c.categoryId, arr);
   }
 
-  // Aggregate needed base fabric per material.
-  const neededByMaterial = new Map<string, number>();
+  // Gross base-fabric requirement per (design, material). Kept per-design so the
+  // fabric issued for one design can only offset THAT design's need — never
+  // another design that happens to share the same base fabric, and never a
+  // design in the same order that's already been shipped.
+  const grossByDesignMat = new Map<string, Map<string, number>>();
   for (const [designId, remaining] of remainingByDesign) {
     const mats = overrideByDesign.get(designId) ?? defaultsByCat.get(catOfDesign.get(designId)!) ?? [];
+    if (mats.length === 0) continue;
+    const inner = new Map<string, number>();
     for (const m of mats) {
       const need = remaining * (m.qtyPerPiece && m.qtyPerPiece > 0 ? m.qtyPerPiece : 1);
-      neededByMaterial.set(m.materialId, (neededByMaterial.get(m.materialId) ?? 0) + need);
+      inner.set(m.materialId, (inner.get(m.materialId) ?? 0) + need);
+    }
+    grossByDesignMat.set(designId, inner);
+  }
+  if (grossByDesignMat.size === 0) return [];
+
+  // Base fabric already issued (net of returns), attributed to the SAME design it
+  // was issued for — and only for designs that still have work remaining. Fabric
+  // issued to a now-shipped design in the same order is ignored, since it doesn't
+  // reduce what's left to issue for the open work.
+  const issuedRows = openOrderIds.size
+    ? await prisma.jobMaterial.findMany({
+        where: {
+          material: { kind: "BASE_FABRIC" },
+          job: { orderId: { in: [...openOrderIds] } },
+          jobItem: { product: { designId: { in: designIds } } },
+        },
+        select: { materialId: true, qtyIssued: true, qtyReturned: true, jobItem: { select: { product: { select: { designId: true } } } } },
+      })
+    : [];
+  const issuedByDesignMat = new Map<string, Map<string, number>>();
+  for (const r of issuedRows) {
+    const did = r.jobItem.product.designId;
+    if (!did) continue;
+    const inner = issuedByDesignMat.get(did) ?? new Map<string, number>();
+    inner.set(r.materialId, (inner.get(r.materialId) ?? 0) + Math.max(0, r.qtyIssued - r.qtyReturned));
+    issuedByDesignMat.set(did, inner);
+  }
+
+  // Net per design, then roll up to each material.
+  const neededByMaterial = new Map<string, number>(); // still to issue
+  const coveredByMaterial = new Map<string, number>(); // already issued against open work
+  for (const [designId, mats] of grossByDesignMat) {
+    const issuedInner = issuedByDesignMat.get(designId);
+    for (const [materialId, gross] of mats) {
+      // Clamp per design so an over-issued design can't create a surplus that
+      // hides another design's shortfall.
+      const issued = Math.min(gross, issuedInner?.get(materialId) ?? 0);
+      neededByMaterial.set(materialId, (neededByMaterial.get(materialId) ?? 0) + Math.max(0, gross - issued));
+      coveredByMaterial.set(materialId, (coveredByMaterial.get(materialId) ?? 0) + issued);
     }
   }
   if (neededByMaterial.size === 0) return [];
-
-  // Base fabric already issued (net of returns) to these orders' jobs — that
-  // requirement is already met, so it must be netted out of what's still needed.
-  const issuedRows = openOrderIds.size
-    ? await prisma.jobMaterial.findMany({
-        where: { job: { orderId: { in: [...openOrderIds] } }, material: { kind: "BASE_FABRIC" } },
-        select: { materialId: true, qtyIssued: true, qtyReturned: true },
-      })
-    : [];
-  const issuedByMaterial = new Map<string, number>();
-  for (const r of issuedRows) issuedByMaterial.set(r.materialId, (issuedByMaterial.get(r.materialId) ?? 0) + Math.max(0, r.qtyIssued - r.qtyReturned));
 
   const materials = await prisma.rawMaterial.findMany({
     where: { id: { in: [...neededByMaterial.keys()] } },
@@ -91,9 +124,8 @@ export async function baseFabricNeeds(): Promise<MaterialNeed[]> {
 
   return materials
     .map((m) => {
-      const gross = neededByMaterial.get(m.id) ?? 0;
-      const issued = roundQty(issuedByMaterial.get(m.id) ?? 0);
-      const needed = roundQty(Math.max(0, gross - issued)); // still to issue
+      const needed = roundQty(neededByMaterial.get(m.id) ?? 0); // still to issue
+      const issued = roundQty(coveredByMaterial.get(m.id) ?? 0);
       return { materialId: m.id, name: m.name, unit: m.unit, needed, issued, inStock: m.stockQty, short: roundQty(Math.max(0, needed - m.stockQty)) };
     })
     .filter((m) => m.needed > 1e-9) // fully-issued fabrics are done — drop them
