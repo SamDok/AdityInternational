@@ -64,12 +64,34 @@ export async function allocateShortfalls(): Promise<Map<string, number>> {
 
   const orderIds = active.map((o) => o.id);
   const linkedJobs = orderIds.length
-    ? await prisma.job.findMany({ where: { orderId: { in: orderIds }, status: { not: "CANCELLED" } }, select: { orderId: true, items: { select: { productId: true, qtyOrdered: true } } } })
+    ? await prisma.job.findMany({ where: { orderId: { in: orderIds }, status: { not: "CANCELLED" } }, select: { orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true } } } })
     : [];
+
+  // A routed design's job is its first step (e.g. the dyer, in kg), so its
+  // qtyOrdered must be converted to finished units before it counts as coverage
+  // (50 kg × 3 = 150 mtr). Only the route ENTRY job (prevStageId == null) is
+  // counted — later stages are the same goods moving forward, not extra quantity.
+  const linkedPids = [...new Set(linkedJobs.flatMap((j) => j.items.map((it) => it.productId)))];
+  const prodDesign = linkedPids.length
+    ? await prisma.product.findMany({ where: { id: { in: linkedPids } }, select: { id: true, designId: true } })
+    : [];
+  const designByProduct = new Map(prodDesign.map((p) => [p.id, p.designId]));
+  const routeByDesign = new Map<string, Awaited<ReturnType<typeof routeForDesign>>>();
+  for (const designId of new Set([...designByProduct.values()].filter((d): d is string => !!d))) {
+    const r = await routeForDesign(designId);
+    if (r.length >= 2) routeByDesign.set(designId, r);
+  }
+  const routeOfProduct = (pid: string) => { const d = designByProduct.get(pid); return d ? routeByDesign.get(d) : undefined; };
+
   const linked = new Map<string, number>();
-  for (const j of linkedJobs) for (const it of j.items) {
-    const k = `${j.orderId}:${it.productId}`;
-    linked.set(k, (linked.get(k) ?? 0) + it.qtyOrdered);
+  for (const j of linkedJobs) {
+    if (j.prevStageId != null) continue; // downstream stage — same goods as the entry job
+    for (const it of j.items) {
+      const route = routeOfProduct(it.productId);
+      const qty = route ? it.qtyOrdered * effectiveRatio(route) : it.qtyOrdered;
+      const k = `${j.orderId}:${it.productId}`;
+      linked.set(k, (linked.get(k) ?? 0) + qty);
+    }
   }
 
   // Flatten all active lines and allocate to the most urgent (line due, else order due) first.
