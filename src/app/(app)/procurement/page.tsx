@@ -57,16 +57,32 @@ export default async function ProcurementPage({
             </div>
             <div className="card space-y-1.5">
               {fabricNeeds.map((f) => (
-                <div key={f.materialId} className="flex items-center justify-between text-sm">
-                  <span className="min-w-0 truncate text-gray-800">{f.name}</span>
-                  <span className="shrink-0 text-gray-500">
-                    still to issue ~{formatQty(f.needed)} · have {formatQty(f.inStock)} {f.unit}
-                    {f.issued > 0 && <span className="ml-1.5 text-xs text-gray-400">({formatQty(f.issued)} already issued)</span>}
-                    {f.short > 0 && <span className="ml-1.5 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">short {formatQty(f.short)}</span>}
-                  </span>
-                </div>
+                <details key={f.materialId} className="group text-sm">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-gray-800">{f.name}</span>
+                    <span className="flex shrink-0 items-center text-gray-500">
+                      still to issue ~{formatQty(f.needed)} · have {formatQty(f.inStock)} {f.unit}
+                      {f.issued > 0 && <span className="ml-1.5 text-xs text-gray-400">({formatQty(f.issued)} already issued)</span>}
+                      {f.short > 0 && <span className="ml-1.5 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">short {formatQty(f.short)}</span>}
+                      {f.contributors.length > 0 && <span className="ml-1.5 text-gray-300 transition-transform group-open:rotate-90">▸</span>}
+                    </span>
+                  </summary>
+                  {f.contributors.length > 0 && (
+                    <ul className="mt-1.5 space-y-1 border-l-2 border-gray-100 pl-3">
+                      {f.contributors.map((c, i) => (
+                        <li key={c.orderId + i} className="flex items-center justify-between gap-2 text-xs">
+                          <Link href={`/orders/${c.orderId}`} className="min-w-0 truncate text-brand-600 hover:underline">{c.orderLabel} · {c.designCode}</Link>
+                          <span className="shrink-0 text-gray-500">
+                            issue {formatQty(c.still)} {f.unit}
+                            <span className="ml-1 text-gray-400">(needs {formatQty(c.gross)}, {formatQty(c.issued)} issued)</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
               ))}
-              <p className="pt-1 text-[11px] text-gray-400">Estimated at 1 {fabricNeeds[0]?.unit ?? "mtr"} fabric per finished unit (or your per-piece figure). Issue fabric on each job to start it.</p>
+              <p className="pt-1 text-[11px] text-gray-400">Estimated at 1 {fabricNeeds[0]?.unit ?? "mtr"} fabric per finished unit (or your per-piece figure). Tap a fabric to see which orders it&apos;s for. Issue fabric on each job to start it.</p>
             </div>
           </section>
         )}
