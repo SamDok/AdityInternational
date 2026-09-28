@@ -299,7 +299,18 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   const openByProduct = new Map<string, number>();
   for (const j of openJobs) {
     const outstanding = j.items.filter((i) => i.qtyReceived < i.qtyOrdered);
-    for (const i of j.items) openByProduct.set(i.productId, (openByProduct.get(i.productId) ?? 0) + Math.max(0, i.qtyOrdered - i.qtyReceived));
+    // On-order for the by-design rollup (below): count only the route ENTRY job
+    // and convert its quantity to finished units (a dyer's kg → woven mtr), so it
+    // nets correctly against demand, which is in the finished unit. Downstream
+    // stages are the same goods moving forward.
+    if (j.prevStageId == null) {
+      for (const i of j.items) {
+        const design = pmap.get(i.productId)?.design;
+        const route = design?.id ? routeByDesign.get(design.id) : undefined;
+        const out = Math.max(0, i.qtyOrdered - i.qtyReceived);
+        openByProduct.set(i.productId, (openByProduct.get(i.productId) ?? 0) + (route ? out * effectiveRatio(route) : out));
+      }
+    }
     if (outstanding.length === 0) continue;
     const orderLabel = j.order ? orderNo(j.order) : null;
     let av = avMap.get(j.vendorId);
@@ -328,7 +339,7 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
     const onOrder = openByProduct.get(pid) ?? 0;
     const stock = prod.stockQty || 0;
     const toProcure = dem - stock - onOrder;
-    if (toProcure > 1e-9) rollup.push({ productId: pid, name: prod.name, unit: prod.unit, demand: roundQty(dem), stock: roundQty(stock), onOrder: roundQty(onOrder), toProcure: roundQty(toProcure) });
+    if (toProcure > 0.05) rollup.push({ productId: pid, name: prod.name, unit: prod.unit, demand: roundQty(dem), stock: roundQty(stock), onOrder: roundQty(onOrder), toProcure: roundQty(toProcure) });
   }
   rollup.sort((a, b) => b.toProcure - a.toProcure);
 
