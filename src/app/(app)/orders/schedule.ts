@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { roundQty, orderNo } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
+import { routeForDesign, ratioToFinished } from "@/lib/routes";
 
 // Readiness of an unshipped line toward its delivery date.
 export type Readiness = "READY" | "MAKING" | "NOT_PROCURED";
@@ -49,7 +50,7 @@ export async function dueSoonSchedule(): Promise<Schedule> {
       items: {
         select: {
           productId: true, quantity: true, shippedQty: true, dueDate: true, unit: true,
-          product: { select: { name: true, stockQty: true, design: { select: { leadDays: true, vendor: { select: { leadDays: true } }, category: { select: { leadDays: true } } } } } },
+          product: { select: { name: true, stockQty: true, design: { select: { id: true, leadDays: true, vendor: { select: { leadDays: true } }, category: { select: { leadDays: true } } } } } },
         },
       },
     },
@@ -60,8 +61,24 @@ export async function dueSoonSchedule(): Promise<Schedule> {
   // binding (latest) job date.
   const jobs = await prisma.job.findMany({
     where: { status: { in: ["OPEN", "PARTIAL"] }, orderId: { not: null }, order: { isSample: false } },
-    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, dueDate: true, materials: { select: { id: true }, take: 1 } } } },
+    select: { id: true, number: true, seq: true, fyLabel: true, kind: true, dueDate: true, orderId: true, prevStageId: true, stageNo: true, items: { select: { productId: true, qtyOrdered: true, qtyReceived: true, dueDate: true, materials: { select: { id: true }, take: 1 } } } },
   });
+
+  // Routes for the designs in play, so a routed job's outstanding (in the dyer's
+  // kg) is converted to finished units before it's matched against the order line
+  // (in mtr). Without this a routed order looks un-made and lands as "behind".
+  const routeByProduct = new Map<string, Awaited<ReturnType<typeof routeForDesign>>>();
+  {
+    const designByProduct = new Map<string, string>();
+    for (const o of orders) for (const it of o.items) if (it.product.design?.id) designByProduct.set(it.productId, it.product.design.id);
+    const routeByDesign = new Map<string, Awaited<ReturnType<typeof routeForDesign>>>();
+    for (const designId of new Set(designByProduct.values())) {
+      const r = await routeForDesign(designId);
+      if (r.length >= 2) routeByDesign.set(designId, r);
+    }
+    for (const [pid, did] of designByProduct) { const r = routeByDesign.get(did); if (r) routeByProduct.set(pid, r); }
+  }
+
   // Each job LINE is a coverage entry with its OWN deadline (a job can carry
   // designs due on different dates). We keep them as a per-(order,product) queue,
   // sorted earliest-due first, and match deliveries to them earliest-first — so a
@@ -73,7 +90,10 @@ export async function dueSoonSchedule(): Promise<Schedule> {
     // only the first stage needs materials; later production stages are labour only.
     const jobMaterialsPending = j.kind === "JOB_WORK" && j.prevStageId == null && j.items.some((it) => it.materials.length === 0);
     for (const it of j.items) {
-      const out = it.qtyOrdered - it.qtyReceived;
+      const route = routeByProduct.get(it.productId);
+      // Convert a routed stage's outstanding to finished units (dyer kg → woven
+      // mtr) so it matches the order line's unit.
+      const out = (it.qtyOrdered - it.qtyReceived) * (route ? ratioToFinished(route, j.stageNo) : 1);
       if (out <= 0) continue;
       const k = `${j.orderId}:${it.productId}`;
       const arr = cover.get(k) ?? [];

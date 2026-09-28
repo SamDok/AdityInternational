@@ -56,3 +56,14 @@ export function effectiveRatio(steps: RouteStepDef[]): number {
   }
   return r > 0 ? r : 1;
 }
+
+// How many finished units come from 1 unit of the given stage's output — the
+// product of the conversion ratios for every step AFTER it. So a job at stage 1
+// (the dyer, in kg) converts by the whole chain, and the final stage by 1. Lets
+// a job's quantity, whatever stage/unit it's in, be expressed in finished units.
+export function ratioToFinished(steps: RouteStepDef[], stageNo: number | null): number {
+  const from = stageNo ?? 1;
+  let r = 1;
+  for (const s of steps) if (s.seq > from && s.ratioFromPrev && s.ratioFromPrev > 0) r *= s.ratioFromPrev;
+  return r > 0 ? r : 1;
+}
