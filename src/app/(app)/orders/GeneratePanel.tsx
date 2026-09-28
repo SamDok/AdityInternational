@@ -9,16 +9,19 @@ import { generateProcurement, assignDesignVendor, type GenJob } from "./actions"
 type Line = { productId: string; name: string; description: string | null; shortfall: number; needed: number; available: number; unit: string; rate: number | null };
 type Group = { vendorId: string; vendorName: string; kind: "JOB_WORK" | "PURCHASE"; jobDueDate: string | Date | null; lines: Line[] };
 type VendorOpt = { id: string; name: string; kind: string };
+type RoutedLine = { name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
 
 export default function GeneratePanel({
   orderId,
   groups,
+  routedLines = [],
   unassigned,
   vendors,
   existingCount,
 }: {
   orderId: string;
   groups: Group[];
+  routedLines?: RoutedLine[];
   unassigned: Line[];
   vendors: VendorOpt[];
   existingCount: number;
@@ -57,6 +60,19 @@ export default function GeneratePanel({
 
   return (
     <div className="space-y-3">
+      {routedLines.length > 0 && (
+        <div className="space-y-2 rounded-xl bg-indigo-50 p-3 ring-1 ring-inset ring-indigo-100">
+          <p className="text-xs font-medium text-indigo-900">These follow a production route — the first step is created for you:</p>
+          {routedLines.map((l, i) => (
+            <div key={i} className="rounded-lg bg-white/70 px-2.5 py-1.5">
+              <p className="truncate text-xs font-medium text-gray-900">{l.name}{l.description ? ` · ${l.description}` : ""} — {formatQty(l.finishedQty)} {l.finishedUnit}</p>
+              <p className="text-xs text-indigo-800">→ Step 1: <span className="font-semibold">{l.step1Name}</span> · {l.step1Vendor} · <span className="font-semibold">{formatQty(l.step1Qty)} {l.step1Unit}</span></p>
+              <p className="text-[11px] text-indigo-400">Route: {l.chain}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {groups.length > 0 && (
         <>
           <p className="text-xs text-gray-500">{existingCount > 0 ? "Still to make / buy — pick the maker and rate, then generate:" : "Pick the maker and rate for each, then generate:"}</p>
@@ -93,10 +109,13 @@ export default function GeneratePanel({
               </div>
             );
           })}
-          <button type="button" onClick={generate} disabled={isPending} className="btn-primary w-full">
-            {isPending ? "Generating…" : existingCount > 0 ? "Generate remaining jobs" : changed ? "Generate with chosen makers" : "Generate jobs & purchase orders"}
-          </button>
         </>
+      )}
+
+      {(groups.length > 0 || routedLines.length > 0) && (
+        <button type="button" onClick={generate} disabled={isPending} className="btn-primary w-full">
+          {isPending ? "Generating…" : existingCount > 0 ? "Generate remaining jobs" : changed ? "Generate with chosen makers" : "Generate jobs & purchase orders"}
+        </button>
       )}
 
       {unassigned.length > 0 && (

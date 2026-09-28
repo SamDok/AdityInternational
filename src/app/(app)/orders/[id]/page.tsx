@@ -6,6 +6,7 @@ import StagePicker from "../StagePicker";
 import DropLineButton from "../DropLineButton";
 import GeneratePanel from "../GeneratePanel";
 import { planProcurement } from "../procurement";
+import { routeForDesign, effectiveRatio } from "@/lib/routes";
 import { formatMoney, formatDate, fulfillmentOf, orderBadge, formatQty, roundQty, orderNo } from "@/lib/format";
 import { getFxRates, convert } from "@/lib/fx";
 import { DocumentIcon, ChevronRightIcon } from "@/components/Icons";
@@ -107,6 +108,43 @@ export default async function OrderDetailPage({
 
   const plan = await planProcurement(id);
   const openJobCount = plan?.existingJobs.filter((j) => j.status === "OPEN" || j.status === "PARTIAL").length ?? 0;
+
+  // Routed designs (a multi-step production route — e.g. dupion: dye → weave)
+  // don't go to their final maker as one job; the generator creates the FIRST
+  // step (the dyer, in kg). Surface that here so the preview matches what
+  // "Generate" actually does, and drop those lines from the plain maker groups.
+  type RoutedLine = { name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
+  const routedLines: RoutedLine[] = [];
+  let genGroups = plan?.groups ?? [];
+  if (plan && plan.groups.length > 0) {
+    const pids = [...new Set(plan.groups.flatMap((g) => g.lines.map((l) => l.productId)))];
+    const prods = await prisma.product.findMany({ where: { id: { in: pids } }, select: { id: true, designId: true } });
+    const designByProduct = new Map(prods.map((p) => [p.id, p.designId]));
+    const routeByDesign = new Map<string, Awaited<ReturnType<typeof routeForDesign>>>();
+    for (const designId of new Set([...designByProduct.values()].filter((d): d is string => !!d))) {
+      const r = await routeForDesign(designId);
+      if (r.length >= 2) routeByDesign.set(designId, r);
+    }
+    const isRouted = (pid: string) => { const d = designByProduct.get(pid); return d ? routeByDesign.get(d) : undefined; };
+
+    for (const g of plan.groups) for (const l of g.lines) {
+      const steps = isRouted(l.productId);
+      if (!steps) continue;
+      const s1 = steps[0];
+      routedLines.push({
+        name: l.name, description: l.description,
+        finishedQty: roundQty(l.shortfall), finishedUnit: l.unit,
+        step1Name: s1.name, step1Vendor: s1.vendorName ?? "— set a kaarigar —", step1Unit: s1.unit,
+        step1Qty: roundQty(l.shortfall / effectiveRatio(steps)),
+        chain: steps.map((s) => `${s.name} (${s.unit})`).join(" → "),
+      });
+    }
+    // Groups with only routed lines removed drop out of the maker picker.
+    genGroups = plan.groups
+      .map((g) => ({ ...g, lines: g.lines.filter((l) => !isRouted(l.productId)) }))
+      .filter((g) => g.lines.length > 0);
+  }
+
   // Vendors offered in the generate/assign controls (any active kaarigar or supplier).
   const vendors = await prisma.vendor.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
 
@@ -309,7 +347,8 @@ export default async function OrderDetailPage({
             {order.status === "CONFIRMED" && (plan.groups.length > 0 || plan.unassigned.length > 0) && (
               <GeneratePanel
                 orderId={order.id}
-                groups={plan.groups}
+                groups={genGroups}
+                routedLines={routedLines}
                 unassigned={plan.unassigned}
                 vendors={vendors}
                 existingCount={plan.existingJobs.length}
