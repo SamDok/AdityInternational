@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { fulfillmentOf, roundQty, orderNo } from "@/lib/format";
 import { jobDocNo } from "@/lib/jobNumber";
+import { routeForDesign, effectiveRatio } from "@/lib/routes";
 
 // One order line's procurement view: how much is needed, what's coverable from
 // stock (and jobs already raised for this order), and the shortfall to make/buy.
@@ -171,7 +172,7 @@ export async function planProcurement(orderId: string): Promise<ProcPlan | null>
 // Business-wide procurement board — computed from a fixed handful of bulk
 // queries (NOT per-order), so it stays fast with hundreds of live orders.
 
-export type NeedGroup = { vendorId: string; vendorName: string; kind: ProcKind; lines: { productId: string; name: string; shortfall: number; unit: string }[] };
+export type NeedGroup = { vendorId: string; vendorName: string; kind: ProcKind; lines: { productId: string; name: string; shortfall: number; unit: string; routeChain?: string }[] };
 export type OrderNeed = { orderId: string; number: number; label: string; customerId: string; customerName: string; dueDate: Date | null; groups: NeedGroup[]; unassignedCount: number; vendorIds: string[] };
 export type AwaitingItem = { productName: string; outstanding: number; unit: string; jobId: string; jobNumber: number; jobDocNo: string; orderLabel: string | null; orderId: string | null; dueDate: Date | null; overdue: boolean };
 export type AwaitingVendor = { vendorId: string; vendorName: string; items: AwaitingItem[]; anyOverdue: boolean };
@@ -207,10 +208,21 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
   const products = pidSet.size
     ? await prisma.product.findMany({
         where: { id: { in: [...pidSet] } },
-        select: { id: true, name: true, unit: true, stockQty: true, design: { select: { vendorId: true, sourcingType: true, vendor: { select: { id: true, name: true } } } } },
+        select: { id: true, name: true, unit: true, stockQty: true, design: { select: { id: true, vendorId: true, sourcingType: true, vendor: { select: { id: true, name: true } } } } },
       })
     : [];
   const pmap = new Map(products.map((p) => [p.id, p]));
+
+  // Production routes for the designs in play (≥2 steps = a real multi-step
+  // route). Routed designs are shown/grouped under their FIRST step (e.g. the
+  // dyer, in kg) — matching what "Generate" actually creates — not their final
+  // maker.
+  const designIds = [...new Set(products.map((p) => p.design?.id).filter((d): d is string => !!d))];
+  const routeByDesign = new Map<string, Awaited<ReturnType<typeof routeForDesign>>>();
+  for (const designId of designIds) {
+    const r = await routeForDesign(designId);
+    if (r.length >= 2) routeByDesign.set(designId, r);
+  }
 
   // All open/partial jobs (one query) — the "awaiting" side + aggregate on-order.
   const openJobs = await prisma.job.findMany({
@@ -231,6 +243,18 @@ export async function procurementBoard(): Promise<ProcurementBoard> {
       if (shortfall <= 1e-9) continue;
       const d = prod.design;
       if (!d?.vendorId || !d?.sourcingType) { unassignedCount++; continue; }
+      // Routed design → group under its first step (the dyer), quantity worked
+      // back through the chain to that step's unit (60 mtr ÷ 3 = 20 kg yarn).
+      const route = d.id ? routeByDesign.get(d.id) : undefined;
+      if (route) {
+        const s1 = route[0];
+        if (!s1.vendorId) { unassignedCount++; continue; } // route's first step has no kaarigar set
+        const gk = `${s1.vendorId}|JOB_WORK|route`;
+        let g = groups.get(gk);
+        if (!g) { g = { vendorId: s1.vendorId, vendorName: s1.vendorName ?? "Kaarigar", kind: "JOB_WORK", lines: [] }; groups.set(gk, g); }
+        g.lines.push({ productId: it.productId, name: prod.name, shortfall: roundQty(shortfall / effectiveRatio(route)), unit: s1.unit, routeChain: route.map((s) => `${s.name} (${s.unit})`).join(" → ") });
+        continue;
+      }
       const kind: ProcKind = d.sourcingType === "JOB_WORK" ? "JOB_WORK" : "PURCHASE";
       const gk = `${d.vendorId}|${kind}`;
       let g = groups.get(gk);

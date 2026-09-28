@@ -108,7 +108,10 @@ export default async function ProcurementPage({
                       <span className="text-gray-400"> · {g.kind === "JOB_WORK" ? "Job work" : "Purchase"}</span>
                       <ul className="mt-0.5">
                         {g.lines.map((l) => (
-                          <li key={l.productId} className="text-gray-600">{l.name} — <span className="font-medium text-gray-800">{l.shortfall} {l.unit}</span></li>
+                          <li key={l.productId} className="text-gray-600">
+                            {l.name} — <span className="font-medium text-gray-800">{l.shortfall} {l.unit}</span>
+                            {l.routeChain && <span className="ml-1 text-indigo-500">· route: {l.routeChain}</span>}
+                          </li>
                         ))}
                       </ul>
                     </div>
