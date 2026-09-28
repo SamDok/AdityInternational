@@ -113,7 +113,12 @@ export async function allocateShortfalls(): Promise<Map<string, number>> {
     const rem2 = remaining - fromStock;
     const fromLinked = Math.min(rem2, linkedPool.get(lkey)!);
     linkedPool.set(lkey, linkedPool.get(lkey)! - fromLinked);
-    shortfalls.set(it.id, roundQty(Math.max(0, rem2 - fromLinked)));
+    // Ignore sub-practical residuals (< 5 cm / 50 g). These come from rounding a
+    // routed job's quantity into a different unit — e.g. 99.49 mtr → 33.16 kg of
+    // yarn → 99.48 mtr back — and shouldn't keep an already-made order on the
+    // "still to procure" list.
+    const short = Math.max(0, rem2 - fromLinked);
+    shortfalls.set(it.id, short > 0.05 ? roundQty(short) : 0);
   }
   return shortfalls;
 }
