@@ -57,17 +57,26 @@ export function effectiveRatio(steps: RouteStepDef[]): number {
   return r > 0 ? r : 1;
 }
 
-// Persist a chosen kaarigar back to a route step as its new default, matched by
-// step name — the design's own route step if it has one, else the fabric type's.
-// Powers "save as default" from the order/generate flow, like updating a
-// customer's price from the order sheet.
-export async function saveRouteStepVendor(designId: string, stepName: string, vendorId: string): Promise<void> {
+// Persist a chosen kaarigar and/or rate back to a route step as its new default,
+// matched by step name — the design's own route step if it has one, else the
+// fabric type's. Powers "save as default" from the order/generate flow, like
+// updating a customer's price from the order sheet.
+export async function saveRouteStep(designId: string, stepName: string, data: { vendorId?: string; rate?: number | null }): Promise<void> {
+  const patch: { vendorId?: string; rate?: number | null } = {};
+  if (data.vendorId !== undefined) patch.vendorId = data.vendorId;
+  if (data.rate !== undefined) patch.rate = data.rate;
+  if (Object.keys(patch).length === 0) return;
   const own = await prisma.routeStep.findFirst({ where: { designId, name: stepName }, select: { id: true } });
-  if (own) { await prisma.routeStep.update({ where: { id: own.id }, data: { vendorId } }); return; }
+  if (own) { await prisma.routeStep.update({ where: { id: own.id }, data: patch }); return; }
   const design = await prisma.design.findUnique({ where: { id: designId }, select: { categoryId: true } });
   if (!design) return;
   const cat = await prisma.routeStep.findFirst({ where: { categoryId: design.categoryId, name: stepName }, select: { id: true } });
-  if (cat) await prisma.routeStep.update({ where: { id: cat.id }, data: { vendorId } });
+  if (cat) await prisma.routeStep.update({ where: { id: cat.id }, data: patch });
+}
+
+// Back-compat helper for saving just the vendor.
+export async function saveRouteStepVendor(designId: string, stepName: string, vendorId: string): Promise<void> {
+  return saveRouteStep(designId, stepName, { vendorId });
 }
 
 // How many finished units come from 1 unit of the given stage's output — the

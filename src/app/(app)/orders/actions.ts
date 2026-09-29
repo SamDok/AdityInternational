@@ -11,7 +11,7 @@ import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 import { allocateJobNumbers } from "../jobs/actions";
 import { shipmentDocNo, financialYearLabel } from "@/lib/jobNumber";
-import { routeForDesign, effectiveRatio, saveRouteStepVendor, type RouteStepDef } from "@/lib/routes";
+import { routeForDesign, effectiveRatio, saveRouteStep, type RouteStepDef } from "@/lib/routes";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -405,8 +405,20 @@ export type GenJob = { kind: "JOB_WORK" | "PURCHASE"; vendorId: string; lines: {
 // the order's shortfall. Quantities always come from the SERVER-side shortfall (so
 // the client can't inflate them); the client may only choose the vendor and rate
 // per group. With no `jobs` argument it falls back to the design-assigned vendors.
-export async function generateProcurement(orderId: string, jobs?: GenJob[], buyBase?: string[], routeVendor?: Record<string, string>, saveRouteVendor?: string[], saveVendor?: Record<string, string>) {
+export async function generateProcurement(
+  orderId: string,
+  jobs?: GenJob[],
+  opts?: {
+    buyBase?: string[];
+    routeVendor?: Record<string, string>;
+    routeRate?: Record<string, number>;
+    saveRouteVendor?: string[];
+    saveVendor?: Record<string, string>;
+    saveRate?: Record<string, number>;
+  },
+) {
   await requireUser();
+  const { buyBase, routeVendor, routeRate, saveRouteVendor, saveVendor, saveRate } = opts ?? {};
   const ord = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
   if (!ord) return { error: "Order not found." };
   if (ord.status !== "CONFIRMED") return { error: "Confirm the order before generating jobs." };
@@ -545,7 +557,7 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[], buyB
     const key = `${vendorId}|${s1.name}|${s1.unit}`;
     let g = routedGroups.get(key);
     if (!g) { g = { vendorId, stageName: s1.name, unit: s1.unit, items: [], dues: [], currency: "INR" }; routedGroups.set(key, g); }
-    g.items.push({ productId: l.productId, note: l.description || null, pieces: null, perPieceQty: q1, qtyOrdered: q1, rate: s1.rate ?? l.rate ?? null, dueDate: l.dueDate ?? null, unit: s1.unit });
+    g.items.push({ productId: l.productId, note: l.description || null, pieces: null, perPieceQty: q1, qtyOrdered: q1, rate: routeRate?.[l.productId] ?? s1.rate ?? l.rate ?? null, dueDate: l.dueDate ?? null, unit: s1.unit });
     if (l.dueDate) g.dues.push(l.dueDate);
     g.currency = l.currency;
   }
@@ -566,23 +578,28 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[], buyB
     count++;
   }
 
-  // Persist a first-step kaarigar change back to the route's default (design's
-  // own route step if it has one, else the fabric type's) — like updating a
-  // customer's price from the order sheet.
+  // Persist a first-step kaarigar and/or rate change back to the route's default
+  // (design's own route step if it has one, else the fabric type's) — like
+  // updating a customer's price from the order sheet.
   for (const pid of saveRouteVendor ?? []) {
-    const vendorId = routeVendor?.[pid];
     const designId = designByProduct.get(pid);
     const steps = designId ? routeByDesign.get(designId) : undefined;
-    if (!vendorId || !designId || !steps || !validVendor.has(vendorId)) continue;
-    await saveRouteStepVendor(designId, steps[0].name, vendorId);
+    if (!designId || !steps) continue;
+    const vendorId = routeVendor?.[pid];
+    if (vendorId && !validVendor.has(vendorId)) continue;
+    const rate = routeRate?.[pid];
+    await saveRouteStep(designId, steps[0].name, { ...(vendorId ? { vendorId } : {}), ...(rate != null ? { rate } : {}) });
   }
 
-  // Persist a plain (non-routed) design's maker change back to the design's
-  // default vendor for future orders.
+  // Persist a plain (non-routed) design's maker and/or rate change as its default.
   for (const [pid, vendorId] of Object.entries(saveVendor ?? {})) {
     const designId = designByProduct.get(pid);
     if (!designId || !validVendor.has(vendorId)) continue;
     await prisma.design.update({ where: { id: designId }, data: { vendorId } });
+  }
+  for (const [pid, rate] of Object.entries(saveRate ?? {})) {
+    if (rate == null) continue;
+    await prisma.product.update({ where: { id: pid }, data: { costPrice: rate } });
   }
 
   if (count === 0) {

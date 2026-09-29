@@ -8,7 +8,7 @@ import { applyMovements, type StockMove } from "@/lib/stock";
 import { applyMaterialMovements } from "@/lib/materials";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { financialYearLabel } from "@/lib/jobNumber";
-import { saveRouteStepVendor } from "@/lib/routes";
+import { saveRouteStep } from "@/lib/routes";
 
 // A line is entered piece-wise like an order line: `pieces` pieces of
 // `perPieceQty` each. qtyOrdered = (pieces || 1) × perPieceQty; pieces blank
@@ -320,11 +320,11 @@ export async function addNextStage(jobId: string, input: unknown) {
       items: { create: lines },
     },
   });
-  // Save the chosen kaarigar back to this step's route default, if it changed.
+  // Save the chosen kaarigar and/or rate back to this step's route default.
   if (d.saveVendorDefault && d.vendorId) {
     const pid = prev.items[0]?.productId;
     const prod = pid ? await prisma.product.findUnique({ where: { id: pid }, select: { designId: true } }) : null;
-    if (prod?.designId) await saveRouteStepVendor(prod.designId, d.stageName, d.vendorId);
+    if (prod?.designId) await saveRouteStep(prod.designId, d.stageName, { vendorId: d.vendorId, ...(d.rate != null ? { rate: d.rate } : {}) });
   }
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath(`/jobs/${created.id}`);

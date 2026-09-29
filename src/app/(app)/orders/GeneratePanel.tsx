@@ -9,7 +9,7 @@ import { generateProcurement, assignDesignVendor, type GenJob } from "./actions"
 type Line = { productId: string; name: string; description: string | null; shortfall: number; needed: number; available: number; unit: string; rate: number | null };
 type Group = { vendorId: string; vendorName: string; kind: "JOB_WORK" | "PURCHASE"; jobDueDate: string | Date | null; lines: Line[] };
 type VendorOpt = { id: string; name: string; kind: string };
-type RoutedLine = { productId: string; name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1VendorId: string | null; step1Unit: string; step1Qty: number; chain: string };
+type RoutedLine = { productId: string; name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1VendorId: string | null; step1Unit: string; step1Qty: number; step1Rate: number | null; chain: string };
 
 export default function GeneratePanel({
   orderId,
@@ -48,6 +48,7 @@ export default function GeneratePanel({
   // First-step kaarigar can be assigned/switched here (rates move), pre-filled
   // from the route; "save" writes the choice back as the route's default.
   const [routeVendorFor, setRouteVendorFor] = useState<Record<string, string>>(() => Object.fromEntries(routedLines.map((l) => [l.productId, l.step1VendorId ?? ""])));
+  const [routeRateFor, setRouteRateFor] = useState<Record<string, string>>(() => Object.fromEntries(routedLines.map((l) => [l.productId, l.step1Rate != null ? String(l.step1Rate) : ""])));
   const [saveRoute, setSaveRoute] = useState<Record<string, boolean>>({});
   const [saveGroup, setSaveGroup] = useState<Record<string, boolean>>({});
   const kaarigars = vendors.filter((v) => v.kind !== "SUPPLIER");
@@ -63,21 +64,30 @@ export default function GeneratePanel({
     }));
     const buy = routedLines.filter((l) => buyBase[l.productId]).map((l) => l.productId);
     const routeVendor: Record<string, string> = {};
+    const routeRate: Record<string, number> = {};
     const saveRouteVendor: string[] = [];
     for (const l of routedLines) {
       if (buyBase[l.productId]) continue;
       const v = routeVendorFor[l.productId];
       if (v) routeVendor[l.productId] = v;
-      if (saveRoute[l.productId] && v) saveRouteVendor.push(l.productId);
+      const r = routeRateFor[l.productId];
+      if (r !== "" && r != null) routeRate[l.productId] = Number(r);
+      if (saveRoute[l.productId]) saveRouteVendor.push(l.productId);
     }
-    // Save a plain design's changed maker back as its default.
+    // Save a plain design's changed maker and/or rate back as its default.
     const saveVendor: Record<string, string> = {};
+    const saveRate: Record<string, number> = {};
     for (const g of groups) {
+      if (!saveGroup[key(g)]) continue;
       const chosen = vendorFor[key(g)];
-      if (saveGroup[key(g)] && chosen && chosen !== g.vendorId) for (const l of g.lines) saveVendor[l.productId] = chosen;
+      for (const l of g.lines) {
+        if (chosen && chosen !== g.vendorId) saveVendor[l.productId] = chosen;
+        const r = rateFor[`${key(g)}:${l.productId}`];
+        if (r !== "" && r != null && Number(r) !== (l.rate ?? null)) saveRate[l.productId] = Number(r);
+      }
     }
     startTransition(async () => {
-      const res = await generateProcurement(orderId, jobs, buy, routeVendor, saveRouteVendor, saveVendor);
+      const res = await generateProcurement(orderId, jobs, { buyBase: buy, routeVendor, routeRate, saveRouteVendor, saveVendor, saveRate });
       if (res?.error) return toast(res.error, { kind: "error" });
       toast(`Created ${res?.count ?? 0} job${res?.count === 1 ? "" : "s"}`);
       router.refresh();
@@ -109,11 +119,16 @@ export default function GeneratePanel({
                       </select>
                       <span className="shrink-0 text-xs font-semibold text-indigo-800">{formatQty(l.step1Qty)} {l.step1Unit}</span>
                     </div>
-                    <p className="text-[11px] text-indigo-400">Route: {l.chain}</p>
-                    {routeVendorFor[l.productId] && routeVendorFor[l.productId] !== (l.step1VendorId ?? "") && (
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[11px] text-indigo-400">Route: {l.chain}</span>
+                      <span className="ml-auto text-[11px] text-gray-400">rate</span>
+                      <input value={routeRateFor[l.productId] ?? ""} onChange={(e) => setRouteRateFor((s) => ({ ...s, [l.productId]: e.target.value }))} type="number" inputMode="decimal" step="0.01" min="0" placeholder="0.00" className="w-20 rounded-lg border-0 bg-white px-2 py-1 text-right text-xs ring-1 ring-inset ring-indigo-200 focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                      <span className="text-[11px] text-gray-400">/{l.step1Unit}</span>
+                    </div>
+                    {((routeVendorFor[l.productId] && routeVendorFor[l.productId] !== (l.step1VendorId ?? "")) || (routeRateFor[l.productId] !== "" && Number(routeRateFor[l.productId]) !== (l.step1Rate ?? null))) && (
                       <label className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-600">
                         <input type="checkbox" checked={!!saveRoute[l.productId]} onChange={(e) => setSaveRoute((s) => ({ ...s, [l.productId]: e.target.checked }))} className="h-3.5 w-3.5" />
-                        Save as the default kaarigar for this step (future orders)
+                        Save kaarigar &amp; rate as this step&apos;s default (future orders)
                       </label>
                     )}
                   </>
@@ -145,12 +160,16 @@ export default function GeneratePanel({
                   </select>
                   <span className="shrink-0 text-xs text-gray-400">{g.kind === "JOB_WORK" ? "Job work" : "Purchase"}{g.jobDueDate ? ` · due ${formatDate(g.jobDueDate)}` : ""}</span>
                 </div>
-                {vendorFor[k] && vendorFor[k] !== g.vendorId && (
-                  <label className="mb-2 flex items-center gap-1.5 text-[11px] text-gray-600">
-                    <input type="checkbox" checked={!!saveGroup[k]} onChange={(e) => setSaveGroup((s) => ({ ...s, [k]: e.target.checked }))} className="h-3.5 w-3.5" />
-                    Save as the default {g.kind === "PURCHASE" ? "supplier" : "kaarigar"} for these designs (future orders)
-                  </label>
-                )}
+                {(() => {
+                  const vChanged = vendorFor[k] && vendorFor[k] !== g.vendorId;
+                  const rChanged = g.lines.some((l) => { const r = rateFor[`${k}:${l.productId}`]; return r !== "" && r != null && Number(r) !== (l.rate ?? null); });
+                  return (vChanged || rChanged) ? (
+                    <label className="mb-2 flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <input type="checkbox" checked={!!saveGroup[k]} onChange={(e) => setSaveGroup((s) => ({ ...s, [k]: e.target.checked }))} className="h-3.5 w-3.5" />
+                      Save {g.kind === "PURCHASE" ? "supplier" : "kaarigar"} &amp; rate as the default for these designs (future orders)
+                    </label>
+                  ) : null;
+                })()}
                 <ul className="space-y-1.5">
                   {g.lines.map((l) => (
                     <li key={l.productId} className="flex items-center gap-2">

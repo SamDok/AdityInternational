@@ -56,14 +56,14 @@ export default async function JobPage({ params, searchParams }: { params: Promis
 
   // If this job sits on a configured production route, pre-fill the next step
   // (who, unit, conversion) so sending it onward is one tap.
-  let nextStep: { name: string; vendorId: string | null; unit: string; ratioFromPrev: number | null; isFinal: boolean } | null = null;
+  let nextStep: { name: string; vendorId: string | null; unit: string; ratioFromPrev: number | null; rate: number | null; isFinal: boolean } | null = null;
   if (!job.isFinalStage && job.nextStages.length === 0 && job.items[0]?.product.design) {
     const route = await routeForDesign(job.items[0].product.design.id);
     if (route.length >= 2) {
       const idx = route.findIndex((s) => s.seq === (job.stageNo ?? 1));
       if (idx >= 0 && idx + 1 < route.length) {
         const ns = route[idx + 1];
-        nextStep = { name: ns.name, vendorId: ns.vendorId, unit: ns.unit, ratioFromPrev: ns.ratioFromPrev, isFinal: idx + 1 === route.length - 1 };
+        nextStep = { name: ns.name, vendorId: ns.vendorId, unit: ns.unit, ratioFromPrev: ns.ratioFromPrev, rate: ns.rate, isFinal: idx + 1 === route.length - 1 };
       }
     }
   }

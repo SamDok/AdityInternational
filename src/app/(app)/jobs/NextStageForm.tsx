@@ -9,7 +9,7 @@ type Vendor = { id: string; name: string };
 
 const UNITS = ["mtr", "kg", "pcs", "sq mtr", "gm", "yd"];
 
-type Prefill = { name: string; vendorId: string | null; unit: string; ratioFromPrev: number | null; isFinal: boolean } | null;
+type Prefill = { name: string; vendorId: string | null; unit: string; ratioFromPrev: number | null; rate: number | null; isFinal: boolean } | null;
 
 export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill }: { jobId: string; vendors: Vendor[]; wipQty: number; inUnit: string; prefill?: Prefill }) {
   const toast = useToast();
@@ -18,7 +18,7 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
   const [open, setOpen] = useState(false);
   const [vendorId, setVendorId] = useState(p?.vendorId ?? "");
   const [stageName, setStageName] = useState(p?.name ?? "");
-  const [rate, setRate] = useState("");
+  const [rate, setRate] = useState(p?.rate != null ? String(p.rate) : "");
   const [dueDate, setDueDate] = useState("");
   const [alsoNext, setAlsoNext] = useState(p ? !p.isFinal : false);
   const [convert, setConvert] = useState(preConvert);
@@ -33,6 +33,8 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
   // differs from what the route pre-filled.
   const [saveDefault, setSaveDefault] = useState(false);
   const vendorChanged = !!p && !!vendorId && vendorId !== (p.vendorId ?? "");
+  const rateChanged = !!p && rate !== "" && Number(rate) !== (p.rate ?? null);
+  const canSaveDefault = vendorChanged || rateChanged;
 
   function submit() {
     if (!vendorId) return toast("Choose a kaarigar for the next step", { kind: "error" });
@@ -46,7 +48,7 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
         sendToNextProcess: alsoNext,
         outUnit: convert ? outUnit : null,
         convRatio: convert ? ratioNum : 1,
-        saveVendorDefault: saveDefault && vendorChanged,
+        saveVendorDefault: saveDefault && canSaveDefault,
       });
       // On success the action redirects; only an error comes back here.
       if (res?.error) toast(res.error, { kind: "error" });
@@ -82,10 +84,10 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
           <option value="">Choose…</option>
           {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
         </select>
-        {vendorChanged && (
+        {canSaveDefault && (
           <label className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
             <input type="checkbox" checked={saveDefault} onChange={(e) => setSaveDefault(e.target.checked)} className="h-3.5 w-3.5" />
-            Save as the default kaarigar for this step (future orders)
+            Save kaarigar &amp; rate as this step&apos;s default (future orders)
           </label>
         )}
       </div>
