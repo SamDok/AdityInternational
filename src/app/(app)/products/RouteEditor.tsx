@@ -108,10 +108,23 @@ export default function RouteEditor({
                 <input value={r.rate} onChange={(e) => setRow(i, { rate: e.target.value })} type="number" step="any" min="0" inputMode="decimal" className="field-input !h-9 !py-1 text-sm" placeholder="charge" />
               </div>
             </div>
+            {i > 0 && r.unit !== rows[i - 1].unit && (r.ratioFromPrev === "" || Number(r.ratioFromPrev) === 1) && (
+              <p className="text-[11px] font-medium text-amber-700">⚠ Unit changes {rows[i - 1].unit} → {r.unit}. Enter how many {r.unit} come from 1 {rows[i - 1].unit} above, or the quantity won&apos;t convert (it will carry {rows[i - 1].unit} numbers straight into {r.unit}).</p>
+            )}
+            {r.name.trim() && r.rate === "" && (
+              <p className="text-[11px] font-medium text-amber-700">⚠ No rate set — this step&apos;s job will fall back to the design&apos;s cost. Set the kaarigar&apos;s rate per {r.unit}.</p>
+            )}
+            {i === 0 && rows.length > 1 && (
+              <p className="text-[11px] text-gray-500">Materials are issued at this first step — measure it in the material&apos;s own unit (e.g. <b>kg</b> for yarn), not the finished metres.</p>
+            )}
           </div>
         );
       })}
 
+      {(() => {
+        const n = rows.filter((r, i) => r.name.trim() && ((i > 0 && r.unit !== rows[i - 1].unit && (r.ratioFromPrev === "" || Number(r.ratioFromPrev) === 1)) || r.rate === "")).length;
+        return n > 0 ? <p className="text-[11px] font-medium text-amber-700">⚠ {n} step{n > 1 ? "s" : ""} may fall back to the design&apos;s metres or cost until you set a conversion and/or rate above.</p> : null;
+      })()}
       <div className="flex gap-2">
         <button type="button" onClick={addRow} className="btn-secondary flex-1 !py-2 text-sm">+ Add step</button>
         <button type="button" disabled={isPending} onClick={save} className="btn-primary flex-1 !py-2 text-sm">{isPending ? "Saving…" : "Save route"}</button>
