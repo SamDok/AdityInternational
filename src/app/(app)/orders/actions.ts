@@ -405,7 +405,7 @@ export type GenJob = { kind: "JOB_WORK" | "PURCHASE"; vendorId: string; lines: {
 // the order's shortfall. Quantities always come from the SERVER-side shortfall (so
 // the client can't inflate them); the client may only choose the vendor and rate
 // per group. With no `jobs` argument it falls back to the design-assigned vendors.
-export async function generateProcurement(orderId: string, jobs?: GenJob[], buyBase?: string[]) {
+export async function generateProcurement(orderId: string, jobs?: GenJob[], buyBase?: string[], routeVendor?: Record<string, string>, saveRouteVendor?: string[]) {
   await requireUser();
   const ord = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
   if (!ord) return { error: "Order not found." };
@@ -473,7 +473,7 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[], buyB
     return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
   }
 
-  const routedVendorIds = routedLines.map((r) => r.steps[0]?.vendorId).filter((v): v is string => !!v);
+  const routedVendorIds = routedLines.map((r) => routeVendor?.[r.l.productId] || r.steps[0]?.vendorId).filter((v): v is string => !!v);
   const vendorIds = [...new Set([...chosen.map((j) => j.vendorId), ...routedVendorIds])];
   const validVendor = new Set((await prisma.vendor.findMany({ where: { id: { in: vendorIds }, archived: false }, select: { id: true } })).map((v) => v.id));
 
@@ -536,12 +536,15 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[], buyB
   const routedGroups = new Map<string, { vendorId: string; stageName: string; unit: string; items: JobItemData[]; dues: Date[]; currency: string }>();
   for (const { l, steps } of routedLines) {
     const s1 = steps[0];
-    if (!s1.vendorId || !validVendor.has(s1.vendorId)) { routedSkipped = true; continue; }
+    // The first-step kaarigar can be reassigned at generate time (rates move);
+    // fall back to the route's stored default.
+    const vendorId = routeVendor?.[l.productId] || s1.vendorId;
+    if (!vendorId || !validVendor.has(vendorId)) { routedSkipped = true; continue; }
     const q1 = round2(l.shortfall / effectiveRatio(steps));
     if (q1 <= 0) continue;
-    const key = `${s1.vendorId}|${s1.name}|${s1.unit}`;
+    const key = `${vendorId}|${s1.name}|${s1.unit}`;
     let g = routedGroups.get(key);
-    if (!g) { g = { vendorId: s1.vendorId, stageName: s1.name, unit: s1.unit, items: [], dues: [], currency: "INR" }; routedGroups.set(key, g); }
+    if (!g) { g = { vendorId, stageName: s1.name, unit: s1.unit, items: [], dues: [], currency: "INR" }; routedGroups.set(key, g); }
     g.items.push({ productId: l.productId, note: l.description || null, pieces: null, perPieceQty: q1, qtyOrdered: q1, rate: s1.rate ?? l.rate ?? null, dueDate: l.dueDate ?? null, unit: s1.unit });
     if (l.dueDate) g.dues.push(l.dueDate);
     g.currency = l.currency;
@@ -561,6 +564,24 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[], buyB
     });
     await prisma.job.update({ where: { id: created.id }, data: { routeId: created.id } });
     count++;
+  }
+
+  // Persist a first-step kaarigar change back to the route's default (design's
+  // own route step if it has one, else the fabric type's) — like updating a
+  // customer's price from the order sheet.
+  for (const pid of saveRouteVendor ?? []) {
+    const vendorId = routeVendor?.[pid];
+    const designId = designByProduct.get(pid);
+    if (!vendorId || !designId || !validVendor.has(vendorId)) continue;
+    const own = await prisma.routeStep.findFirst({ where: { designId }, orderBy: { seq: "asc" }, select: { id: true } });
+    if (own) {
+      await prisma.routeStep.update({ where: { id: own.id }, data: { vendorId } });
+    } else {
+      const design = await prisma.product.findFirst({ where: { id: pid }, select: { design: { select: { categoryId: true } } } });
+      const catId = design?.design?.categoryId;
+      const cat = catId ? await prisma.routeStep.findFirst({ where: { categoryId: catId }, orderBy: { seq: "asc" }, select: { id: true } }) : null;
+      if (cat) await prisma.routeStep.update({ where: { id: cat.id }, data: { vendorId } });
+    }
   }
 
   if (count === 0) {

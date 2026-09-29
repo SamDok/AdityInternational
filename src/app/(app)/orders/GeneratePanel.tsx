@@ -9,7 +9,7 @@ import { generateProcurement, assignDesignVendor, type GenJob } from "./actions"
 type Line = { productId: string; name: string; description: string | null; shortfall: number; needed: number; available: number; unit: string; rate: number | null };
 type Group = { vendorId: string; vendorName: string; kind: "JOB_WORK" | "PURCHASE"; jobDueDate: string | Date | null; lines: Line[] };
 type VendorOpt = { id: string; name: string; kind: string };
-type RoutedLine = { productId: string; name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
+type RoutedLine = { productId: string; name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1VendorId: string | null; step1Unit: string; step1Qty: number; chain: string };
 
 export default function GeneratePanel({
   orderId,
@@ -45,6 +45,11 @@ export default function GeneratePanel({
   // line to "buy the base" per order — then it generates as a plain job to the
   // final kaarigar with the purchased base fabric issued.
   const [buyBase, setBuyBase] = useState<Record<string, boolean>>({});
+  // First-step kaarigar can be assigned/switched here (rates move), pre-filled
+  // from the route; "save" writes the choice back as the route's default.
+  const [routeVendorFor, setRouteVendorFor] = useState<Record<string, string>>(() => Object.fromEntries(routedLines.map((l) => [l.productId, l.step1VendorId ?? ""])));
+  const [saveRoute, setSaveRoute] = useState<Record<string, boolean>>({});
+  const kaarigars = vendors.filter((v) => v.kind !== "SUPPLIER");
 
   function generate() {
     const jobs: GenJob[] = groups.map((g) => ({
@@ -56,8 +61,16 @@ export default function GeneratePanel({
       }),
     }));
     const buy = routedLines.filter((l) => buyBase[l.productId]).map((l) => l.productId);
+    const routeVendor: Record<string, string> = {};
+    const saveRouteVendor: string[] = [];
+    for (const l of routedLines) {
+      if (buyBase[l.productId]) continue;
+      const v = routeVendorFor[l.productId];
+      if (v) routeVendor[l.productId] = v;
+      if (saveRoute[l.productId] && v) saveRouteVendor.push(l.productId);
+    }
     startTransition(async () => {
-      const res = await generateProcurement(orderId, jobs, buy);
+      const res = await generateProcurement(orderId, jobs, buy, routeVendor, saveRouteVendor);
       if (res?.error) return toast(res.error, { kind: "error" });
       toast(`Created ${res?.count ?? 0} job${res?.count === 1 ? "" : "s"}`);
       router.refresh();
@@ -78,8 +91,24 @@ export default function GeneratePanel({
                   <p className="text-xs text-gray-700">→ Buy the base &amp; embroider · one job for {formatQty(l.finishedQty)} {l.finishedUnit} · issue the purchased base fabric</p>
                 ) : (
                   <>
-                    <p className="text-xs text-indigo-800">→ Step 1: <span className="font-semibold">{l.step1Name}</span> · {l.step1Vendor} · <span className="font-semibold">{formatQty(l.step1Qty)} {l.step1Unit}</span></p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="shrink-0 text-xs text-indigo-800">→ Step 1: <span className="font-semibold">{l.step1Name}</span> ·</span>
+                      <select
+                        value={routeVendorFor[l.productId] ?? ""}
+                        onChange={(e) => setRouteVendorFor((s) => ({ ...s, [l.productId]: e.target.value }))}
+                        className="min-w-0 flex-1 rounded-lg border-0 bg-white px-2 py-1 text-xs font-medium text-gray-900 ring-1 ring-inset ring-indigo-200 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <option value="">Choose kaarigar…</option>
+                        {kaarigars.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                      <span className="shrink-0 text-xs font-semibold text-indigo-800">{formatQty(l.step1Qty)} {l.step1Unit}</span>
+                    </div>
                     <p className="text-[11px] text-indigo-400">Route: {l.chain}</p>
+                    {routeVendorFor[l.productId] && routeVendorFor[l.productId] !== (l.step1VendorId ?? "") && (
+                      <label className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-600">
+                        <input type="checkbox" checked={!!saveRoute[l.productId]} onChange={(e) => setSaveRoute((s) => ({ ...s, [l.productId]: e.target.checked }))} className="h-3.5 w-3.5" />
+                        Save as the default kaarigar for this step (future orders)
+                      </label>
+                    )}
                   </>
                 )}
                 <div className="mt-1 flex gap-1 text-[11px]">
