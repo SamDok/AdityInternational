@@ -405,7 +405,7 @@ export type GenJob = { kind: "JOB_WORK" | "PURCHASE"; vendorId: string; lines: {
 // the order's shortfall. Quantities always come from the SERVER-side shortfall (so
 // the client can't inflate them); the client may only choose the vendor and rate
 // per group. With no `jobs` argument it falls back to the design-assigned vendors.
-export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
+export async function generateProcurement(orderId: string, jobs?: GenJob[], buyBase?: string[]) {
   await requireUser();
   const ord = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
   if (!ord) return { error: "Order not found." };
@@ -440,7 +440,12 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
     if (r.length >= 2) routeByDesign.set(designId, r); // only multi-step routes reroute
   }
   const routedLines: { l: Proc; steps: RouteStepDef[] }[] = [];
+  // Products the caller chose to make the base for in-house use the route; the
+  // rest (buy the base) fall through to a plain single job to the embroidery
+  // kaarigar, where the purchased base fabric is issued as a normal material.
+  const buyBaseSet = new Set(buyBase ?? []);
   for (const pid of shortPids) {
+    if (buyBaseSet.has(pid)) continue; // buy the base → normal job, keep in shortByProduct
     const designId = designByProduct.get(pid);
     const steps = designId ? routeByDesign.get(designId) : undefined;
     if (!steps) continue;
@@ -452,6 +457,18 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[]) {
   const chosen: GenJob[] = jobs && jobs.length
     ? jobs
     : plan.groups.map((g) => ({ kind: g.kind, vendorId: g.vendorId, lines: g.lines.map((l) => ({ productId: l.productId, rate: l.rate })) }));
+
+  // Buy-the-base products are shown in the route block in the UI, so a reviewed
+  // `jobs` list won't include them. Add them back from their design-assigned
+  // grouping (the embroidery kaarigar) so they generate as a plain job.
+  if (buyBaseSet.size) {
+    const referenced = new Set(chosen.flatMap((j) => j.lines.map((l) => l.productId)));
+    for (const g of plan.groups) {
+      const missing = g.lines.filter((l) => buyBaseSet.has(l.productId) && !referenced.has(l.productId) && shortByProduct.has(l.productId));
+      if (missing.length) chosen.push({ kind: g.kind, vendorId: g.vendorId, lines: missing.map((l) => ({ productId: l.productId, rate: l.rate })) });
+    }
+  }
+
   if (chosen.length === 0 && routedLines.length === 0) {
     return { error: "Nothing to generate — every line is covered by stock or has no vendor assigned." };
   }

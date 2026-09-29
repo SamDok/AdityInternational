@@ -113,7 +113,7 @@ export default async function OrderDetailPage({
   // don't go to their final maker as one job; the generator creates the FIRST
   // step (the dyer, in kg). Surface that here so the preview matches what
   // "Generate" actually does, and drop those lines from the plain maker groups.
-  type RoutedLine = { name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
+  type RoutedLine = { productId: string; name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
   const routedLines: RoutedLine[] = [];
   let genGroups = plan?.groups ?? [];
   if (plan && plan.groups.length > 0) {
@@ -132,6 +132,7 @@ export default async function OrderDetailPage({
       if (!steps) continue;
       const s1 = steps[0];
       routedLines.push({
+        productId: l.productId,
         name: l.name, description: l.description,
         finishedQty: roundQty(l.shortfall), finishedUnit: l.unit,
         step1Name: s1.name, step1Vendor: s1.vendorName ?? "— set a kaarigar —", step1Unit: s1.unit,

@@ -9,7 +9,7 @@ import { generateProcurement, assignDesignVendor, type GenJob } from "./actions"
 type Line = { productId: string; name: string; description: string | null; shortfall: number; needed: number; available: number; unit: string; rate: number | null };
 type Group = { vendorId: string; vendorName: string; kind: "JOB_WORK" | "PURCHASE"; jobDueDate: string | Date | null; lines: Line[] };
 type VendorOpt = { id: string; name: string; kind: string };
-type RoutedLine = { name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
+type RoutedLine = { productId: string; name: string; description: string | null; finishedQty: number; finishedUnit: string; step1Name: string; step1Vendor: string; step1Unit: string; step1Qty: number; chain: string };
 
 export default function GeneratePanel({
   orderId,
@@ -41,6 +41,11 @@ export default function GeneratePanel({
 
   const changed = useMemo(() => groups.some((g) => vendorFor[key(g)] !== g.vendorId), [groups, vendorFor]);
 
+  // Routed lines default to "make the base" (run the route). The owner can flip a
+  // line to "buy the base" per order — then it generates as a plain job to the
+  // final kaarigar with the purchased base fabric issued.
+  const [buyBase, setBuyBase] = useState<Record<string, boolean>>({});
+
   function generate() {
     const jobs: GenJob[] = groups.map((g) => ({
       kind: g.kind,
@@ -50,8 +55,9 @@ export default function GeneratePanel({
         return { productId: l.productId, rate: r === "" || r == null ? null : Number(r) };
       }),
     }));
+    const buy = routedLines.filter((l) => buyBase[l.productId]).map((l) => l.productId);
     startTransition(async () => {
-      const res = await generateProcurement(orderId, jobs);
+      const res = await generateProcurement(orderId, jobs, buy);
       if (res?.error) return toast(res.error, { kind: "error" });
       toast(`Created ${res?.count ?? 0} job${res?.count === 1 ? "" : "s"}`);
       router.refresh();
@@ -62,14 +68,27 @@ export default function GeneratePanel({
     <div className="space-y-3">
       {routedLines.length > 0 && (
         <div className="space-y-2 rounded-xl bg-indigo-50 p-3 ring-1 ring-inset ring-indigo-100">
-          <p className="text-xs font-medium text-indigo-900">These follow a production route — the first step is created for you:</p>
-          {routedLines.map((l, i) => (
-            <div key={i} className="rounded-lg bg-white/70 px-2.5 py-1.5">
-              <p className="truncate text-xs font-medium text-gray-900">{l.name}{l.description ? ` · ${l.description}` : ""} — {formatQty(l.finishedQty)} {l.finishedUnit}</p>
-              <p className="text-xs text-indigo-800">→ Step 1: <span className="font-semibold">{l.step1Name}</span> · {l.step1Vendor} · <span className="font-semibold">{formatQty(l.step1Qty)} {l.step1Unit}</span></p>
-              <p className="text-[11px] text-indigo-400">Route: {l.chain}</p>
-            </div>
-          ))}
+          <p className="text-xs font-medium text-indigo-900">Made through a production route — or choose to buy the base per line:</p>
+          {routedLines.map((l, i) => {
+            const buy = !!buyBase[l.productId];
+            return (
+              <div key={i} className="rounded-lg bg-white/70 px-2.5 py-1.5">
+                <p className="truncate text-xs font-medium text-gray-900">{l.name}{l.description ? ` · ${l.description}` : ""} — {formatQty(l.finishedQty)} {l.finishedUnit}</p>
+                {buy ? (
+                  <p className="text-xs text-gray-700">→ Buy the base &amp; embroider · one job for {formatQty(l.finishedQty)} {l.finishedUnit} · issue the purchased base fabric</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-indigo-800">→ Step 1: <span className="font-semibold">{l.step1Name}</span> · {l.step1Vendor} · <span className="font-semibold">{formatQty(l.step1Qty)} {l.step1Unit}</span></p>
+                    <p className="text-[11px] text-indigo-400">Route: {l.chain}</p>
+                  </>
+                )}
+                <div className="mt-1 flex gap-1 text-[11px]">
+                  <button type="button" onClick={() => setBuyBase((s) => ({ ...s, [l.productId]: false }))} className={`rounded-full px-2 py-0.5 font-medium ${!buy ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"}`}>Make base</button>
+                  <button type="button" onClick={() => setBuyBase((s) => ({ ...s, [l.productId]: true }))} className={`rounded-full px-2 py-0.5 font-medium ${buy ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"}`}>Buy base</button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
