@@ -48,10 +48,12 @@ export async function nextMaterialCode(): Promise<string> {
 
 export type MaterialDefault = { materialId: string; name: string; unit: string; kind: string; qtyPerPiece: number | null };
 
-// The materials a design normally uses: its own overrides if any, else its
-// fabric-type defaults. Powers the pre-filled issue form so the owner never has
-// to remember which materials a design needs.
-export async function defaultMaterialsForDesign(designId: string): Promise<MaterialDefault[]> {
+// The materials a design normally uses at a given production step: its own
+// overrides if any, else its fabric-type defaults. Powers the pre-filled issue
+// form so the owner never has to remember which materials a step needs.
+//   - stageName set (a routed job like "Dyeing") → materials tagged for that step
+//   - stageName null (a plain, non-routed job) → materials with no step tag
+export async function defaultMaterialsForDesign(designId: string, stageName?: string | null): Promise<MaterialDefault[]> {
   const design = await prisma.design.findUnique({
     where: { id: designId },
     select: {
@@ -69,8 +71,9 @@ export async function defaultMaterialsForDesign(designId: string): Promise<Mater
           include: { material: { select: { id: true, name: true, unit: true, kind: true } } },
         });
 
+  const step = stageName ?? null;
   return rows
-    .filter((r) => !!r.material)
+    .filter((r) => !!r.material && (r.stepName ?? null) === step) // only this step's materials
     .map((r) => ({
       materialId: r.material.id,
       name: r.material.name,

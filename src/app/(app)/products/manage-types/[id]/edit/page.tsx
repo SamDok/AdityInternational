@@ -14,7 +14,7 @@ export default async function EditTypePage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const [category, defaults, materials, routeSteps, kaarigars] = await Promise.all([
     prisma.productCategory.findUnique({ where: { id } }),
-    prisma.categoryMaterial.findMany({ where: { categoryId: id }, select: { materialId: true, qtyPerPiece: true } }),
+    prisma.categoryMaterial.findMany({ where: { categoryId: id }, select: { materialId: true, qtyPerPiece: true, stepName: true } }),
     prisma.rawMaterial.findMany({ where: { archived: false }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, name: true, unit: true } }),
     prisma.routeStep.findMany({ where: { categoryId: id }, orderBy: { seq: "asc" }, select: { name: true, vendorId: true, unit: true, ratioFromPrev: true, rate: true } }),
     prisma.vendor.findMany({ where: { archived: false, kind: { in: ["KAARIGAR", "BOTH"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -32,6 +32,7 @@ export default async function EditTypePage({ params }: { params: Promise<{ id: s
           title="Default materials for this type"
           hint="Set the base fabric / materials every design of this type is made on. They pre-fill when you issue materials to a kaarigar."
           materials={materials}
+          steps={routeSteps.map((s) => s.name)}
           initial={defaults}
           action={setCategoryMaterials.bind(null, id)}
         />

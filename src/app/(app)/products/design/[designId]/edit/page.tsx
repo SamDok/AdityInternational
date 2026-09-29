@@ -18,7 +18,7 @@ export default async function EditDesignPage({ params }: { params: Promise<{ des
     prisma.design.findUnique({ where: { id: designId }, include: { image: { select: { designId: true } }, category: { select: { id: true, name: true, materialDefaults: { include: { material: { select: { name: true } } } }, routeSteps: { orderBy: { seq: "asc" }, select: { name: true, unit: true } } } } } }),
     prisma.productCategory.findMany({ where: { archived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
     prisma.vendor.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.designMaterial.findMany({ where: { designId }, select: { materialId: true, qtyPerPiece: true } }),
+    prisma.designMaterial.findMany({ where: { designId }, select: { materialId: true, qtyPerPiece: true, stepName: true } }),
     prisma.rawMaterial.findMany({ where: { archived: false }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, name: true, unit: true } }),
     prisma.routeStep.findMany({ where: { designId }, orderBy: { seq: "asc" }, select: { name: true, vendorId: true, unit: true, ratioFromPrev: true, rate: true } }),
     prisma.vendor.findMany({ where: { archived: false, kind: { in: ["KAARIGAR", "BOTH"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -35,6 +35,9 @@ export default async function EditDesignPage({ params }: { params: Promise<{ des
     ? `Leave empty to use the ${design.category.name} route: ${typeRoute}. Set steps here only if this design flows differently.`
     : `A multi-step route just for this design (dye → weave etc.). Leave empty for a normal single-job design.`;
 
+  // Effective route for THIS design: its own override, else the type's route.
+  const effectiveRouteSteps = routeOverride.length ? routeOverride.map((s) => s.name) : design.category.routeSteps.map((s) => s.name);
+
   return (
     <div>
       <PageHeader title={`Edit ${design.code}`} backHref={`/products/design/${design.id}`} />
@@ -44,6 +47,7 @@ export default async function EditDesignPage({ params }: { params: Promise<{ des
           title="Materials for this design"
           hint={hint}
           materials={materials}
+          steps={effectiveRouteSteps}
           initial={overrides}
           action={setDesignMaterials.bind(null, designId)}
         />

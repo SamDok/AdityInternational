@@ -680,9 +680,10 @@ model CategoryMaterial {
   material    RawMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
   materialId  String
   qtyPerPiece Float? // optional suggested quantity per piece
+  stepName    String? // the production-route step this material is issued at (blank = a plain, non-routed job)
   note        String?
 
-  @@unique([categoryId, materialId])
+  @@unique([categoryId, materialId, stepName])
 }
 
 // One step in a design's / fabric-type's production route, in order. Lets a
@@ -717,9 +718,10 @@ model DesignMaterial {
   material    RawMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
   materialId  String
   qtyPerPiece Float?
+  stepName    String? // the production-route step this material is issued at (blank = a plain, non-routed job)
   note        String?
 
-  @@unique([designId, materialId])
+  @@unique([designId, materialId, stepName])
 }
 
 // Reference exchange rates so export orders (foreign sale, INR cost) can show an

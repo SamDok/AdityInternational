@@ -80,7 +80,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
           label: it.product.name,
           orderedQty: it.qtyOrdered,
           issued: it.materials.map((m) => ({ id: m.id, name: m.material.name, unit: m.material.unit, qtyIssued: m.qtyIssued, qtyReturned: m.qtyReturned })),
-          defaults: it.product.design ? await defaultMaterialsForDesign(it.product.design.id) : [],
+          defaults: it.product.design ? await defaultMaterialsForDesign(it.product.design.id, job.stageName) : [],
         })),
       )
     : [];
