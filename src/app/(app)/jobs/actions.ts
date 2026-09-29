@@ -8,6 +8,7 @@ import { applyMovements, type StockMove } from "@/lib/stock";
 import { applyMaterialMovements } from "@/lib/materials";
 import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { financialYearLabel } from "@/lib/jobNumber";
+import { saveRouteStepVendor } from "@/lib/routes";
 
 // A line is entered piece-wise like an order line: `pieces` pieces of
 // `perPieceQty` each. qtyOrdered = (pieces || 1) × perPieceQty; pieces blank
@@ -245,6 +246,7 @@ const NextStageSchema = z.object({
   // input unit (20 kg × 3 = 60 mtr).
   outUnit: z.string().trim().optional().nullable(),
   convRatio: z.preprocess((v) => (v === "" || v == null ? 1 : v), z.coerce.number().positive().optional().default(1)),
+  saveVendorDefault: z.boolean().optional().default(false),
 });
 
 // Hand this stage's work-in-progress on to the next kaarigar: creates the next
@@ -318,6 +320,12 @@ export async function addNextStage(jobId: string, input: unknown) {
       items: { create: lines },
     },
   });
+  // Save the chosen kaarigar back to this step's route default, if it changed.
+  if (d.saveVendorDefault && d.vendorId) {
+    const pid = prev.items[0]?.productId;
+    const prod = pid ? await prisma.product.findUnique({ where: { id: pid }, select: { designId: true } }) : null;
+    if (prod?.designId) await saveRouteStepVendor(prod.designId, d.stageName, d.vendorId);
+  }
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath(`/jobs/${created.id}`);
   revalidatePath("/jobs");

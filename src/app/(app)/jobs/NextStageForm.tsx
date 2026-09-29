@@ -29,6 +29,10 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
   const ratioNum = parseFloat(ratio) || 0;
   const previewOut = convert ? Math.round(wipQty * ratioNum * 100) / 100 : wipQty;
   const effOutUnit = convert ? outUnit : inUnit;
+  // Save the chosen kaarigar back to the route's default for this step, when it
+  // differs from what the route pre-filled.
+  const [saveDefault, setSaveDefault] = useState(false);
+  const vendorChanged = !!p && !!vendorId && vendorId !== (p.vendorId ?? "");
 
   function submit() {
     if (!vendorId) return toast("Choose a kaarigar for the next step", { kind: "error" });
@@ -42,6 +46,7 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
         sendToNextProcess: alsoNext,
         outUnit: convert ? outUnit : null,
         convRatio: convert ? ratioNum : 1,
+        saveVendorDefault: saveDefault && vendorChanged,
       });
       // On success the action redirects; only an error comes back here.
       if (res?.error) toast(res.error, { kind: "error" });
@@ -77,6 +82,12 @@ export default function NextStageForm({ jobId, vendors, wipQty, inUnit, prefill 
           <option value="">Choose…</option>
           {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
         </select>
+        {vendorChanged && (
+          <label className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
+            <input type="checkbox" checked={saveDefault} onChange={(e) => setSaveDefault(e.target.checked)} className="h-3.5 w-3.5" />
+            Save as the default kaarigar for this step (future orders)
+          </label>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

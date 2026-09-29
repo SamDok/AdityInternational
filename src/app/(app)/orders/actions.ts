@@ -11,7 +11,7 @@ import { getCurrentUser, requireUser, isOwner } from "@/lib/auth";
 import { planProcurement } from "./procurement";
 import { allocateJobNumbers } from "../jobs/actions";
 import { shipmentDocNo, financialYearLabel } from "@/lib/jobNumber";
-import { routeForDesign, effectiveRatio, type RouteStepDef } from "@/lib/routes";
+import { routeForDesign, effectiveRatio, saveRouteStepVendor, type RouteStepDef } from "@/lib/routes";
 
 // A line is `pieces` pieces of `perPieceQty` metres each. Total (priced)
 // quantity = (pieces || 1) × perPieceQty; pieces blank means loose metres.
@@ -405,7 +405,7 @@ export type GenJob = { kind: "JOB_WORK" | "PURCHASE"; vendorId: string; lines: {
 // the order's shortfall. Quantities always come from the SERVER-side shortfall (so
 // the client can't inflate them); the client may only choose the vendor and rate
 // per group. With no `jobs` argument it falls back to the design-assigned vendors.
-export async function generateProcurement(orderId: string, jobs?: GenJob[], buyBase?: string[], routeVendor?: Record<string, string>, saveRouteVendor?: string[]) {
+export async function generateProcurement(orderId: string, jobs?: GenJob[], buyBase?: string[], routeVendor?: Record<string, string>, saveRouteVendor?: string[], saveVendor?: Record<string, string>) {
   await requireUser();
   const ord = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
   if (!ord) return { error: "Order not found." };
@@ -572,16 +572,17 @@ export async function generateProcurement(orderId: string, jobs?: GenJob[], buyB
   for (const pid of saveRouteVendor ?? []) {
     const vendorId = routeVendor?.[pid];
     const designId = designByProduct.get(pid);
-    if (!vendorId || !designId || !validVendor.has(vendorId)) continue;
-    const own = await prisma.routeStep.findFirst({ where: { designId }, orderBy: { seq: "asc" }, select: { id: true } });
-    if (own) {
-      await prisma.routeStep.update({ where: { id: own.id }, data: { vendorId } });
-    } else {
-      const design = await prisma.product.findFirst({ where: { id: pid }, select: { design: { select: { categoryId: true } } } });
-      const catId = design?.design?.categoryId;
-      const cat = catId ? await prisma.routeStep.findFirst({ where: { categoryId: catId }, orderBy: { seq: "asc" }, select: { id: true } }) : null;
-      if (cat) await prisma.routeStep.update({ where: { id: cat.id }, data: { vendorId } });
-    }
+    const steps = designId ? routeByDesign.get(designId) : undefined;
+    if (!vendorId || !designId || !steps || !validVendor.has(vendorId)) continue;
+    await saveRouteStepVendor(designId, steps[0].name, vendorId);
+  }
+
+  // Persist a plain (non-routed) design's maker change back to the design's
+  // default vendor for future orders.
+  for (const [pid, vendorId] of Object.entries(saveVendor ?? {})) {
+    const designId = designByProduct.get(pid);
+    if (!designId || !validVendor.has(vendorId)) continue;
+    await prisma.design.update({ where: { id: designId }, data: { vendorId } });
   }
 
   if (count === 0) {

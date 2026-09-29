@@ -49,6 +49,7 @@ export default function GeneratePanel({
   // from the route; "save" writes the choice back as the route's default.
   const [routeVendorFor, setRouteVendorFor] = useState<Record<string, string>>(() => Object.fromEntries(routedLines.map((l) => [l.productId, l.step1VendorId ?? ""])));
   const [saveRoute, setSaveRoute] = useState<Record<string, boolean>>({});
+  const [saveGroup, setSaveGroup] = useState<Record<string, boolean>>({});
   const kaarigars = vendors.filter((v) => v.kind !== "SUPPLIER");
 
   function generate() {
@@ -69,8 +70,14 @@ export default function GeneratePanel({
       if (v) routeVendor[l.productId] = v;
       if (saveRoute[l.productId] && v) saveRouteVendor.push(l.productId);
     }
+    // Save a plain design's changed maker back as its default.
+    const saveVendor: Record<string, string> = {};
+    for (const g of groups) {
+      const chosen = vendorFor[key(g)];
+      if (saveGroup[key(g)] && chosen && chosen !== g.vendorId) for (const l of g.lines) saveVendor[l.productId] = chosen;
+    }
     startTransition(async () => {
-      const res = await generateProcurement(orderId, jobs, buy, routeVendor, saveRouteVendor);
+      const res = await generateProcurement(orderId, jobs, buy, routeVendor, saveRouteVendor, saveVendor);
       if (res?.error) return toast(res.error, { kind: "error" });
       toast(`Created ${res?.count ?? 0} job${res?.count === 1 ? "" : "s"}`);
       router.refresh();
@@ -138,6 +145,12 @@ export default function GeneratePanel({
                   </select>
                   <span className="shrink-0 text-xs text-gray-400">{g.kind === "JOB_WORK" ? "Job work" : "Purchase"}{g.jobDueDate ? ` · due ${formatDate(g.jobDueDate)}` : ""}</span>
                 </div>
+                {vendorFor[k] && vendorFor[k] !== g.vendorId && (
+                  <label className="mb-2 flex items-center gap-1.5 text-[11px] text-gray-600">
+                    <input type="checkbox" checked={!!saveGroup[k]} onChange={(e) => setSaveGroup((s) => ({ ...s, [k]: e.target.checked }))} className="h-3.5 w-3.5" />
+                    Save as the default {g.kind === "PURCHASE" ? "supplier" : "kaarigar"} for these designs (future orders)
+                  </label>
+                )}
                 <ul className="space-y-1.5">
                   {g.lines.map((l) => (
                     <li key={l.productId} className="flex items-center gap-2">
