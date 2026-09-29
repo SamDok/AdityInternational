@@ -37,6 +37,11 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const company = await getCompanyProfile();
 
   const isPurchase = job.kind === "PURCHASE";
+  // An intermediate route stage (dyeing, weaving…) is described by its OPERATION,
+  // not the final design — the kaarigar only needs to know what to do and return.
+  // The final stage (and any plain job) shows the design as usual.
+  const isIntermediate = job.kind === "JOB_WORK" && !job.isFinalStage;
+  const stageLabel = job.stageName || (job.stageNo != null ? `Stage ${job.stageNo}` : null);
   const title = isPurchase ? "Purchase Order" : "Job Work Order";
   const docNo = jobDocNo(job);
   const total = job.items.reduce((s, i) => s + roundMoney((i.rate ?? 0) * i.qtyOrdered), 0);
@@ -80,7 +85,10 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
 
         {/* Title + meta */}
         <div className="mt-5 flex items-end justify-between">
-          <h1 className="text-lg font-bold uppercase tracking-wide">{title}</h1>
+          <div>
+            <h1 className="text-lg font-bold uppercase tracking-wide">{title}</h1>
+            {isIntermediate && stageLabel && <p className="text-sm font-semibold text-gray-600">{stageLabel}</p>}
+          </div>
           <div className="text-right text-xs">
             <p><span className="text-gray-500">No.:</span> <span className="font-semibold">{docNo}</span></p>
             <p><span className="text-gray-500">Date:</span> {formatDate(job.issueDate)}</p>
@@ -114,7 +122,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <tr className="bg-gray-100 text-left">
               <th className="border border-gray-300 px-2 py-1.5 text-center">#</th>
               <th className="border border-gray-300 px-2 py-1.5">Description</th>
-              <th className="border border-gray-300 px-2 py-1.5 text-right">Qty</th>
+              <th className="border border-gray-300 px-2 py-1.5 text-right">{isIntermediate ? "To return" : "Qty"}</th>
               <th className="border border-gray-300 px-2 py-1.5 text-right">Pcs</th>
               <th className="border border-gray-300 px-2 py-1.5 text-center">Due by</th>
               {hasRates && <th className="border border-gray-300 px-2 py-1.5 text-right">Rate</th>}
@@ -126,16 +134,24 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               <tr key={it.id} className="align-top">
                 <td className="border border-gray-300 px-2 py-1.5 text-center">{i + 1}</td>
                 <td className="border border-gray-300 px-2 py-1.5">
-                  <div className="flex items-start gap-2">
-                    {it.product.design?.image && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/designs/${it.product.design.id}/image`} alt="" className="h-12 w-12 shrink-0 rounded bg-gray-50 object-contain ring-1 ring-gray-200" />
-                    )}
+                  {isIntermediate ? (
                     <div>
-                      <p className="font-medium">{it.product.name}</p>
-                      {it.note && <p className="text-gray-600">{it.note}</p>}
+                      <p className="font-medium">{stageLabel ?? "Job work"}</p>
+                      <p className="text-gray-600">{job.prevStageId != null ? "On the goods received from the previous kaarigar" : "On the material given with this order (below)"}</p>
+                      {it.note && <p className="text-gray-700">Instruction: {it.note}</p>}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      {it.product.design?.image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/designs/${it.product.design.id}/image`} alt="" className="h-12 w-12 shrink-0 rounded bg-gray-50 object-contain ring-1 ring-gray-200" />
+                      )}
+                      <div>
+                        <p className="font-medium">{it.product.name}</p>
+                        {it.note && <p className="text-gray-600">{it.note}</p>}
+                      </div>
+                    </div>
+                  )}
                 </td>
                 <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">
                   {formatQty(it.qtyOrdered)} {it.unit}
@@ -166,11 +182,11 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         {/* Materials issued to the kaarigar */}
         {materialLines.length > 0 && (
           <div className="mt-5">
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">Materials issued with this job</p>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">{isIntermediate ? "Material given to you for this job" : "Materials issued with this job"}</p>
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-100 text-left">
-                  <th className="border border-gray-300 px-2 py-1.5">Design</th>
+                  {!isIntermediate && <th className="border border-gray-300 px-2 py-1.5">Design</th>}
                   <th className="border border-gray-300 px-2 py-1.5">Material</th>
                   <th className="border border-gray-300 px-2 py-1.5 text-right">Quantity</th>
                 </tr>
@@ -179,7 +195,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 {materialLines.map((l) =>
                   l.mats.map((m, mi) => (
                     <tr key={m.id} className="align-top">
-                      {mi === 0 && <td className="border border-gray-300 px-2 py-1.5 font-medium" rowSpan={l.mats.length}>{l.label}</td>}
+                      {!isIntermediate && mi === 0 && <td className="border border-gray-300 px-2 py-1.5 font-medium" rowSpan={l.mats.length}>{l.label}</td>}
                       <td className="border border-gray-300 px-2 py-1.5">{m.material.name}</td>
                       <td className="border border-gray-300 px-2 py-1.5 text-right whitespace-nowrap">{formatQty(m.qtyIssued - m.qtyReturned)} {m.unit}</td>
                     </tr>
